@@ -1,0 +1,211 @@
+/* Simple student layout with blue accents and clear status colors. */
+.student-app {
+  --paper: #f4f7fb;
+  --panel: #fff;
+  --ink: #293b50;
+  --muted: #5e7083;
+  --line: #d5dfeb;
+  --accent: #316bb4;
+  --accent-hover: #26548e;
+  --green: var(--accent);
+  --green-dark: var(--accent-hover);
+  --primary-bg: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --sky: #e5effc;
+  --sky-soft: #eff5fd;
+  --sky-border: #bfd2eb;
+  --sky-ink: #2c5d98;
+  --mint: #75b08a;
+  --mint-soft: #edf7ef;
+  --mint-ink: #36734a;
+  --coral: #e6af56;
+  --coral-soft: #fff5e5;
+  --coral-ink: #95611c;
+  --card-shadow: none;
+  --card-hover-shadow: none;
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Arial, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.student-app .flow-layout { background: var(--paper); }
+.student-app .flow-layout .sidebar { width: 215px; padding: 0 12px; background: #e8f0fb; border-color: #c8d8ec; box-shadow: none; }
+.student-app .flow-sidebar-brand { height: 65px; padding: 0 8px; margin-bottom: 14px; border-color: var(--line); }
+.student-app .flow-sidebar-brand .brand { font-size: 20px; font-weight: 600; letter-spacing: 0; color: #26548e; }
+.student-app .flow-layout .nav-item { padding: 10px; margin-bottom: 3px; border-radius: 3px; color: #3d5777; font-size: 14px; }
+.student-app .flow-layout .nav-item:hover { background: #d9e7f8; color: #254e80; }
+.student-app .flow-layout .nav-item.active,
+.student-app .flow-layout .nav-item.active:hover { background: var(--accent); color: #fff; box-shadow: none; font-weight: 600; }
+.student-app .flow-space-tree { margin-top: 24px; }
+.student-app .flow-tree-caption { padding: 0 5px 8px; }
+.student-app .flow-tree-caption > span { font-size: 12px; letter-spacing: 0; color: #365d8a; }
+.student-semester-link { display: block; padding: 6px 5px; font-size: 13px; color: #365d8a; }
+.student-semester-link:hover { text-decoration: underline; }
+.student-app .flow-subject-tree { margin: 4px 0 0; padding-left: 0; border: 0; }
+.student-app .flow-subject-link { padding: 8px 5px; color: #3d5777; }
+.student-app .flow-subject-link > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.student-app .flow-subject-link.active { background: var(--accent); color: #fff; box-shadow: none; font-weight: 600; }
+.student-app .flow-subject-link.active > small { color: #fff; }
+.student-app .flow-no-subjects, .student-app .flow-new-list { padding-inline: 5px; font-size: 12px; color: var(--muted); }
+.student-app .flow-sidebar-tools { padding-inline: 0; border-color: var(--line); }
+.student-app .flow-sidebar-tools > a { padding: 8px 5px; font-size: 13px; color: #3d5777; }
+.student-app .flow-sidebar-tools > a:not(.active) > svg { color: var(--accent); }
+.student-app .flow-layout .sidebar-profile { border-color: var(--line); }
+.student-app .flow-layout .avatar { background: #d4e4f9; border: 1px solid #adc5e5; color: #26548e; }
+.student-app .flow-layout .sidebar-profile strong { font-size: 13px; }
+.student-app .flow-layout .sidebar-profile div > span { font-size: 11px; }
+.student-app .student-profile-link { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 8px; border-radius: 3px; }
+.student-app .student-profile-link:hover { background: #d9e7f8; }
+.student-app .student-profile-info { min-width: 0; }
+.student-app .student-profile-link strong { font-weight: 400; }
+.student-app .student-profile-info small { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
+.student-app .student-profile-link.active { background: var(--accent); color: #fff; }
+.student-app .student-profile-link.active strong { font-weight: 600; color: #fff; }
+.student-app .student-profile-link.active small { color: #fff; }
+.student-app .flow-layout .topbar { min-height: 57px; height: 57px; padding-inline: 24px; background: #fff; box-shadow: none; border-color: var(--line); }
+.student-app .student-notifications { position: relative; flex-shrink: 0; }
+.student-app .student-notification-bell { position: relative; display: grid; place-items: center; width: 35px; height: 35px; padding: 0; border: 1px solid transparent; border-radius: 3px; color: var(--accent); background: transparent; }
+.student-app .student-notification-bell:hover, .student-app .student-notification-bell.active { background: #e5effc; border-color: #bfd2eb; }
+.student-app .student-notification-count { position: absolute; top: -2px; right: -4px; min-width: 17px; padding: 1px 4px; border-radius: 9px; background: #b9433f; color: #fff; font-size: 10px; line-height: 15px; }
+.student-app .student-notification-popup { position: absolute; top: calc(100% + 10px); right: 0; z-index: 40; width: 330px; max-width: calc(100vw - 32px); border: 1px solid #bfd2eb; border-radius: 4px; background: #fff; box-shadow: 0 3px 12px #233e5b18; }
+.student-app .student-notification-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); background: #eff5fd; }
+.student-app .student-notification-heading h2 { font-size: 15px; font-weight: 600; color: #26548e; }
+.student-app .student-notification-list { max-height: min(340px, calc(100dvh - 150px)); overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.student-app .student-notification-list li + li { border-top: 1px solid var(--line); }
+.student-app .student-notification-item { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; padding: 13px 14px; border: 0; background: #fff; color: var(--ink); text-align: left; }
+.student-app .student-notification-item:hover { background: #f4f8fe; }
+.student-app .student-notification-item strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.student-app .student-notification-item small { font-size: 11px; color: var(--muted); }
+.student-app .student-notification-kind { font-size: 11px; color: #95611c; }
+.student-app .student-notification-kind.overdue { color: #b13e36; }
+.student-app .student-notification-empty { padding: 26px 22px; color: var(--muted); text-align: center; }
+.student-app .student-notification-empty > svg { color: #6c8eb8; }
+.student-app .student-notification-empty p { margin: 10px 0 6px; color: var(--ink); font-size: 14px; }
+.student-app .student-notification-empty small { display: block; font-size: 12px; line-height: 1.6; }
+.student-app .flow-top-location > strong { font-size: 14px; font-weight: 400; color: #365d8a; }
+.student-app .flow-layout .search-box { background: #fff; border: 1px solid #c3d2e5; border-radius: 3px; }
+.student-app .flow-layout .search-box:focus-within { border-color: var(--accent); box-shadow: none; }
+.student-app .flow-layout .search-box input { width: 170px; font-size: 13px; }
+.student-app .flow-active-semester select { font-size: 12px; }
+.student-app .flow-layout main { padding: 24px; }
+.student-app .flow-layout.workspace-mode main { padding: 0; }
+
+.student-app .flow-layout h1 { font-size: 24px; font-weight: 600; letter-spacing: 0; color: #26548e; }
+.student-app .flow-layout .page-intro { padding-bottom: 16px; margin-bottom: 20px; border-color: #c8d8ec; }
+.student-app .flow-layout .page-intro > div:first-child::before { display: none; }
+.student-app .flow-layout .intro-description { margin-top: 6px; font-size: 13px; line-height: 1.6; }
+.student-app .button, .student-app .flow-button { border-radius: 3px; box-shadow: none; font-size: 13px; font-weight: 400; transition: background .15s; }
+.student-app .button-primary, .student-app .flow-button { background: var(--accent); border-color: var(--accent); color: #fff; }
+.student-app .button-primary:hover, .student-app .flow-button:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: none; }
+.student-app .button-secondary, .student-app .flow-layout .button-secondary { background: #f5f9ff; border-color: #b9cee9; color: #2c5d98; border-radius: 3px; }
+.student-app .button-secondary:hover, .student-app .flow-layout .button-secondary:hover { background: #e5effc; }
+.student-app .icon-button { border-radius: 3px; }
+.student-app .text-button, .student-app .flow-text-button { font-size: 13px; }
+
+.student-app .task-workspace { background: #fff; }
+.student-app .flow-space-heading { padding: 20px 24px 16px; background: #edf4fd; border-bottom: 1px solid #d5e2f3; }
+.student-app .flow-space-heading h1 { font-size: 24px; }
+.student-app .flow-breadcrumb { font-size: 12px; margin-top: 5px; }
+.student-app .flow-view-bar { min-height: 48px; padding-inline: 24px; }
+.student-app .flow-view-tabs { gap: 20px; }
+.student-app .flow-view-tabs > button { font-size: 14px; }
+.student-app .flow-view-tabs > button.active { background: none; border-bottom-width: 2px; font-weight: 400; }
+.student-app .flow-filter-bar { padding: 12px 24px; background: #f6f9fd; gap: 10px; }
+.student-app .flow-find-task { flex: 1; min-width: 165px; padding: 3px 8px; background: #fff; border: 1px solid #c3d2e5; border-radius: 3px; }
+.student-app .flow-find-task input { width: 100%; font-size: 13px; }
+.student-app .flow-filter-chips button { font-size: 12px; padding: 5px 7px; border-radius: 3px; }
+.student-app .flow-filter-chips button.active { background: #dceafa; color: #26548e; box-shadow: none; }
+.student-app .flow-group-picker select { font-size: 12px; }
+.student-app .flow-work-content { padding: 20px 24px; }
+.student-app .flow-setup-notice { padding: 11px 13px; margin-bottom: 20px; background: #eff5fd; border: 1px solid #c8d8ec; border-radius: 3px; }
+.student-app .flow-setup-notice strong { color: #3c5c81; font-size: 13px; font-weight: 400; }
+.student-app .flow-setup-notice .flow-button { background: #fff; border-color: #afc7e8; color: #2c5d98; }
+.student-app .flow-list-group { padding: 0; margin-bottom: 22px; border: 0; border-radius: 0; box-shadow: none; }
+.student-app .flow-group-heading { margin-bottom: 8px; }
+.student-app .flow-group-label { padding: 4px 8px; font-size: 14px; font-weight: 600; }
+.student-app .flow-group-label.flow-label-todo { background: #e5effc; color: #2c5d98; }
+.student-app .flow-group-label.flow-label-doing { background: var(--coral-soft); color: var(--coral-ink); }
+.student-app .flow-group-label.flow-label-done { background: var(--mint-soft); color: var(--mint-ink); }
+.student-app .flow-group-label.flow-label-subject { background: #eee8f8; color: #69508e; }
+.student-app .flow-column-labels { background: #edf3fb; border-radius: 0; color: #47617f; font-size: 12px; }
+.student-app .flow-list-task { background: #fff; font-size: 13px; }
+.student-app .flow-list-task:hover { background: #f4f8fe; box-shadow: none; }
+.student-app .flow-inline-add { font-size: 12px; }
+.student-app .flow-workspace-footer { padding-inline: 24px; font-size: 11px; color: #666; }
+.student-app .flow-workspace-footer > span:first-child { color: var(--mint-ink); }
+.student-app .flow-work-content.layout-board { background: #fff; }
+.student-app .flow-board-column { background: #edf4fc; border: 1px solid #c8d8ec; border-top: 3px solid var(--accent); border-radius: 3px; }
+.student-app .flow-board-column:nth-child(2) { background: #fff6e9; border-color: #ebd5b5; border-top-color: #d69a35; }
+.student-app .flow-board-column:nth-child(3) { background: #eef7f0; border-color: #c4ddcc; border-top-color: #5c9b6c; }
+.student-app .flow-board-card, .student-app .flow-board-card:hover { background: #fff; border-color: #ccc; border-radius: 3px; box-shadow: none; }
+.student-app .flow-board-empty { border-color: #ccc; border-radius: 3px; }
+
+.student-app :is(.paper-panel, .student-task-list, .subject-study-card, .today-agenda-panel, .subject-next-lessons, .next-class-card, .deadline-panel, .student-remember-panel) {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  box-shadow: none;
+}
+.student-app .subject-study-card:hover { box-shadow: none; border-color: #aaa; }
+.student-app .subject-study-card { padding: 20px; border-top: 3px solid var(--subject-accent); }
+.student-app .subject-study-card-top .subject-symbol { background: var(--subject-bg); border: 1px solid var(--subject-border); border-radius: 3px; color: var(--subject-ink); box-shadow: none; }
+.student-app .subject-study-card h2 { margin-top: 15px; font-size: 18px; letter-spacing: 0; }
+.student-app .subject-next-class { margin-top: 16px; padding: 10px; background: var(--subject-bg); border: 0; border-radius: 3px; }
+.student-app .subject-next-class > strong { color: var(--subject-ink); }
+.student-app .subject-enter { font-weight: 400; }
+.student-app .subject-enter > svg { background: none; border-radius: 0; }
+.student-app .selected-semester { border-color: var(--accent); box-shadow: none; }
+.student-app .student-today-grid { gap: 22px; }
+.student-app .next-class-card { padding: 20px; background: #edf4fd; border-color: #c8d8ec; border-left: 3px solid var(--accent); }
+.student-app .next-class-content h2, .student-app .next-class-empty h2 { font-size: 20px; color: #26548e; letter-spacing: 0; font-weight: 600; }
+.student-app .next-class-time { padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+.student-app .next-class-time > strong { font-size: 28px; color: #26548e; letter-spacing: 0; }
+.student-app .student-section-heading h2 { font-size: 18px; letter-spacing: 0; }
+.student-app .student-remember-panel { padding: 20px; background: #fff8ec; border-color: #ecd9b7; border-left: 3px solid #d69a35; }
+.student-app .student-remember-panel h2 { margin-top: 0; font-size: 18px; color: #8a5d22; letter-spacing: 0; }
+.student-app .student-remember-panel > p { color: #796345; font-size: 12px; }
+.student-app .today-clear { padding: 18px; background: var(--mint-soft); border: 1px solid #c4ddcc; border-radius: 3px; color: var(--mint-ink); }
+.student-app .today-clear strong { color: var(--mint-ink); font-size: 14px; }
+.student-app .empty-state { padding: 32px 20px; }
+.student-app .empty-state h3 { font-size: 14px; font-weight: 400; }
+.student-app .empty-state p { font-size: 12px; }
+
+.student-app :is(.search-results, .action-menu-items, .flow-filter-popover > div, .session-dialog, .quick-task-form) { border-radius: 4px; border-color: #ccc; box-shadow: none; background: #fff; }
+.student-app .session-dialog { box-shadow: 0 3px 15px #0002; }
+.student-app .session-dialog::backdrop { background: #0004; }
+.student-app .side-dialog { border-radius: 0; }
+.student-app .session-form label { font-size: 13px; color: #444; }
+.student-app .session-form input, .student-app .session-form select, .student-app .session-form textarea,
+.student-app .auth-page .session-form input, .student-app .session-dialog .session-form input,
+.student-app .session-dialog .session-form select, .student-app .session-dialog .session-form textarea { border: 1px solid #ccc; border-radius: 3px; background: #fff; color: #292929; font-size: 14px; }
+.student-app .task-menu-shortcuts > button[aria-pressed='true'],
+.student-app .task-menu-priorities > button[aria-pressed='true'] { background: #e6edf5; border-color: #a9bdd5; box-shadow: none; }
+.student-app .profile-large-avatar { width: 56px; height: 56px; border: 1px solid #b8cde7; background: #e5effc; color: #26548e; font-size: 20px; }
+.student-app .profile-summary { border-top: 3px solid var(--accent); }
+.student-app .profile-summary .button { font-size: 13px; }
+.student-app .profile-summary h2 { font-size: 18px; }
+.student-app .profile-summary > p, .student-app .profile-summary dd { font-size: 12px; }
+.student-app .profile-summary dt { font-size: 11px; }
+.student-app .analytics-filters { background: #edf4fd; border-radius: 3px; }
+.student-app .metric-grid strong { font-size: 28px; font-weight: 500; letter-spacing: 0; }
+.student-app .segmented-control { border-radius: 3px; background: #eff5fd; }
+.student-app .segmented-control button { font-size: 12px; box-shadow: none; }
+.student-app .data-table th { font-size: 12px; background: #eaf2fc; color: #365d8a; }
+.student-app .panel-heading { background: #f0f5fc; border-color: #d5e2f3; }
+.student-app .data-table td { font-size: 13px; }
+.student-app .flow-calendar-day.is-today { background: #e5effc; box-shadow: none; }
+.student-app .flow-calendar-day.is-today .flow-calendar-day-heading > button:first-child { border-radius: 3px; }
+
+.student-app .auth-page { background: #eaf2fc; font-family: inherit; }
+.student-app .auth-main { padding: 40px 20px; }
+.student-app .auth-form-container { width: 370px; padding: 28px; border: 1px solid #c8d8ec; border-top: 4px solid var(--accent); border-radius: 4px; background: #fff; }
+.student-app .auth-form-container > .brand { font-size: 20px; font-weight: 600; letter-spacing: 0; margin-bottom: 24px; color: var(--accent); }
+.student-app .auth-form-container > h1 { font-size: 24px; font-weight: 500; line-height: 1.4; color: #293b50; }
+.student-app .auth-form-container > .session-form { margin-top: 20px; }
+.student-app .auth-page .session-form input { min-height: 40px; }
+.student-app .auth-submit { min-height: 40px; padding-block: 9px; }
+.student-app .auth-form-container .auth-switch { margin-top: 20px; font-size: 13px; line-height: 1.6; }

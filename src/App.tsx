@@ -1,122 +1,59 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { PlannerProvider, usePlanner } from './contexts/PlannerContext'
+import { AppLayout } from './layouts/AppLayout'
+import { TaskEditor } from './components/TaskEditor'
+import { ConfirmDelete } from './components/PlannerUI'
+import { Icon } from './components/Icon'
+import { Dashboard } from './pages/Dashboard/Dashboard'
+import { SemestersPage, SubjectsPage } from './pages/AcademicPages'
+import { SubjectDetailPage } from './pages/SubjectDetailPage'
+import { TaskDetails } from './components/StudentTasks'
+import { TasksPage } from './pages/Tasks/TasksPage'
+import { SchedulePage } from './pages/Schedule/SchedulePage'
+import { CalendarPage } from './pages/Calendar/CalendarPage'
+import { StatisticsPage } from './pages/StatisticsPage'
+import { ProfilePage } from './pages/Profile/ProfilePage'
+import { AuthPage } from './pages/Auth/AuthPage'
+import { AdminRoutes } from './admin/AdminRoutes'
 import './App.css'
+import './planner.css'
+import './student.css'
+import './workspace.css'
+import './theme.css'
+import './task-menu.css'
+import './student-simple.css'
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function AppRoutes() {
+  const { data, taskEditor, taskSubjectId, closeTask, loggedIn } = usePlanner()
+  const location = useLocation()
+  const content = <>
+    <Routes>
+      <Route index element={<Navigate to={loggedIn ? '/tasks' + location.search : '/login'} replace />} />
+      <Route path="login" element={<AuthPage key="login" />} />
+      <Route path="register" element={<AuthPage key="register" register />} />
+      <Route path="admin/*" element={<AdminRoutes />} />
+      <Route element={<AppLayout />}>
+        <Route path="today" element={<Dashboard />} />
+        <Route path="semesters" element={<SemestersPage />} />
+        <Route path="subjects" element={<SubjectsPage key={data.selectedSemesterId} />} />
+        <Route path="subjects/:subjectId" element={<SubjectDetailPage key={data.selectedSemesterId} />} />
+        <Route path="schedule" element={<SchedulePage key={data.selectedSemesterId} />} />
+        <Route path="tasks" element={<TasksPage key={data.selectedSemesterId} />} />
+        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="notifications" element={<Navigate to="/tasks" replace />} />
+        <Route path="statistics" element={<StatisticsPage key={data.selectedSemesterId} />} />
+        <Route path="priorities" element={<Navigate to="/tasks?view=priority" replace />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="plans" element={<Navigate to="/tasks" replace />} />
+        <Route path="*" element={<section className="empty-page"><h1>Không tìm thấy trang</h1><Link to="/" className="button button-primary">Trang chủ<Icon name="arrow-right" size={17} /></Link></section>} />
+      </Route>
+    </Routes>
+    {taskEditor !== undefined && <TaskEditor task={taskEditor} initialSubjectId={taskSubjectId} onClose={closeTask} />}
+    <TaskDetails />
+    <ConfirmDelete />
+  </>
+  const isAdmin = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  return isAdmin ? content : <div className="student-app">{content}</div>
 }
 
-export default App
+export default function App() { return <PlannerProvider><AppRoutes /></PlannerProvider> }
