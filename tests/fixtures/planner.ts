@@ -11,7 +11,7 @@ export function createPlannerFixture(): PlannerData {
   const doneAt = (offset: number) => `${day(offset)}T10:00:00+07:00`
   const data: PlannerData = {
     version: 1,
-    profile: { name: 'Minh Anh', email: 'minhanh@example.com', studentId: 'SV2026001', school: 'Trường Đại học', major: 'Công nghệ thông tin', year: 'Năm 2', goal: 'Hoàn thành nhiệm vụ đúng hạn và dành thời gian ôn tập mỗi tuần.' },
+    profile: { name: 'Minh Anh', email: 'minhanh@example.com', studentId: 'SV2026001', school: 'Trường Đại học', major: 'Công nghệ thông tin', className: 'CNTT02' },
     semesters: [
       { id: 'semester-1', name: `Học kỳ ${firstSemester ? 'I' : 'II'} · ${academicYear}–${academicYear + 1}`, startDate: firstSemester ? `${academicYear}-07-01` : `${year}-02-01`, endDate: firstSemester ? `${academicYear + 1}-01-31` : `${year}-06-30` },
       { id: 'semester-2', name: firstSemester ? `Học kỳ II · ${academicYear}–${academicYear + 1}` : `Học kỳ I · ${year}–${year + 1}`, startDate: firstSemester ? `${academicYear + 1}-02-01` : `${year}-07-01`, endDate: firstSemester ? `${academicYear + 1}-06-30` : `${year + 1}-01-31` },

@@ -3,7 +3,7 @@ import type { Dispatch, ReactNode } from 'react'
 import { createEmptyPlannerData } from '../data/planner'
 import type { PlannerAction, PlannerData, PlannerTask } from '../types/planner'
 import { dueAlerts, plannerReducer, semesterTasks } from '../utils/planner'
-import { DEMO_ACCOUNT, hasDemoSession, matchesDemoAccount, saveDemoSession } from '../utils/demoAuth'
+import { useAuth } from './AuthContext'
 
 interface Confirmation { title: string; message: string; confirm: () => void }
 interface PlannerContextValue {
@@ -25,18 +25,18 @@ interface PlannerContextValue {
   closeConfirmation: () => void
   canMutate: boolean
   loggedIn: boolean
-  loginDemo: (email: string, password: string) => boolean
   logout: () => void
 }
 const PlannerContext = createContext<PlannerContextValue | null>(null)
 
 export function PlannerProvider({ children }: { children: ReactNode }) {
-  const [loggedIn, setLoggedIn] = useState(hasDemoSession)
-  const [data, updateData] = useReducer(plannerReducer, undefined, () => {
-    const initial = createEmptyPlannerData()
-    if (loggedIn) initial.profile = { ...initial.profile, name: DEMO_ACCOUNT.name, email: DEMO_ACCOUNT.email }
-    return initial
-  })
+  const auth = useAuth()
+  const loggedIn = auth.status === 'authenticated'
+  const [plannerData, updateData] = useReducer(plannerReducer, undefined, createEmptyPlannerData)
+  const data = { ...plannerData, profile: auth.user ? {
+    name: auth.user.name, email: auth.user.email, studentId: auth.user.studentId,
+    school: auth.user.school, className: auth.user.className, major: auth.user.major,
+  } : plannerData.profile }
   // Enable writes only after replacing local mutations with confirmed API responses.
   const canMutate = false
   const dispatch: Dispatch<PlannerAction> = (action) => {
@@ -50,18 +50,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const tasks = semesterTasks(data)
   const alerts = dueAlerts(tasks, now)
 
-  function loginDemo(email: string, password: string) {
-    if (!matchesDemoAccount(email, password)) return false
-    updateData({ type: 'profile', value: { ...data.profile, name: DEMO_ACCOUNT.name, email: DEMO_ACCOUNT.email } })
-    saveDemoSession(true)
-    setLoggedIn(true)
-    return true
-  }
-
   function logout() {
-    saveDemoSession(false)
-    setLoggedIn(false)
-    updateData({ type: 'profile', value: createEmptyPlannerData().profile })
+    auth.logout()
     setTaskEditor(undefined)
     setDetailId(undefined)
     setConfirmation(null)
@@ -107,7 +97,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     setTaskEditor(task)
   }
 
-  return <PlannerContext.Provider value={{ data, dispatch, now, tasks, alerts, taskEditor, openTask, editTask, createTask, taskSubjectId, taskDetails: data.tasks.find((task) => task.id === detailId), closeDetails: () => setDetailId(undefined), closeTask: () => setTaskEditor(undefined), confirmation, requestDelete, closeConfirmation: () => setConfirmation(null), canMutate, loggedIn, loginDemo, logout }}>{children}</PlannerContext.Provider>
+  return <PlannerContext.Provider value={{ data, dispatch, now, tasks, alerts, taskEditor, openTask, editTask, createTask, taskSubjectId, taskDetails: data.tasks.find((task) => task.id === detailId), closeDetails: () => setDetailId(undefined), closeTask: () => setTaskEditor(undefined), confirmation, requestDelete, closeConfirmation: () => setConfirmation(null), canMutate, loggedIn, logout }}>{children}</PlannerContext.Provider>
 }
 export function usePlanner() {
   const context = useContext(PlannerContext)

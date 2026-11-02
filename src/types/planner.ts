@@ -10,8 +10,7 @@ export interface Profile {
   studentId: string
   school: string
   major: string
-  year: string
-  goal: string
+  className: string
 }
 
 export interface Semester { id: string; name: string; startDate: string; endDate: string }

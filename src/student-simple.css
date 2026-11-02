@@ -35,6 +35,10 @@
 .student-app .flow-layout .sidebar { width: 215px; padding: 0 12px; background: #e8f0fb; border-color: #c8d8ec; box-shadow: none; }
 .student-app .flow-sidebar-brand { height: 65px; padding: 0 8px; margin-bottom: 14px; border-color: var(--line); }
 .student-app .flow-sidebar-brand .brand { font-size: 20px; font-weight: 600; letter-spacing: 0; color: #26548e; }
+.student-app .study-brand { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.student-app .study-brand-image { display: block; flex-shrink: 0; object-fit: contain; }
+.student-app .study-brand-sidebar { font-size: 17px; line-height: 1.3; white-space: nowrap; }
+.student-app .study-brand-auth { flex-direction: column; width: 100%; gap: 8px; text-align: center; }
 .student-app .flow-layout .nav-item { padding: 10px; margin-bottom: 3px; border-radius: 3px; color: #3d5777; font-size: 14px; }
 .student-app .flow-layout .nav-item:hover { background: #d9e7f8; color: #254e80; }
 .student-app .flow-layout .nav-item.active,
@@ -203,9 +207,21 @@
 .student-app .auth-page { background: #eaf2fc; font-family: inherit; }
 .student-app .auth-main { padding: 40px 20px; }
 .student-app .auth-form-container { width: 370px; padding: 28px; border: 1px solid #c8d8ec; border-top: 4px solid var(--accent); border-radius: 4px; background: #fff; }
+.student-app .auth-register-container { width: 640px; }
+@media (max-width: 540px) {
+  .student-app .auth-register-container .form-grid { grid-template-columns: minmax(0, 1fr); }
+}
 .student-app .auth-form-container > .brand { font-size: 20px; font-weight: 600; letter-spacing: 0; margin-bottom: 24px; color: var(--accent); }
 .student-app .auth-form-container > h1 { font-size: 24px; font-weight: 500; line-height: 1.4; color: #293b50; }
 .student-app .auth-form-container > .session-form { margin-top: 20px; }
 .student-app .auth-page .session-form input { min-height: 40px; }
 .student-app .auth-submit { min-height: 40px; padding-block: 9px; }
 .student-app .auth-form-container .auth-switch { margin-top: 20px; font-size: 13px; line-height: 1.6; }
+
+.auth-notice { padding: 10px 12px; border: 1px solid #c4ddcc; border-radius: 3px; background: #eef7f0; color: #2f6844; font-size: 13px; line-height: 1.5; }
+.auth-session-state { padding: 48px 24px; text-align: center; }
+.auth-session-state .button { margin: 8px; }
+.session-form fieldset:disabled { opacity: .7; }
+.student-app .session-form input:read-only { background: #f0f3f7; color: #617085; }
+.student-app .profile-sections { display: grid; align-content: start; gap: 24px; min-width: 0; }
+.student-app .profile-password-note { color: #617085; font-size: 13px; margin: 0 25px 20px; }

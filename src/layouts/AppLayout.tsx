@@ -5,10 +5,11 @@ import type { IconName } from '../components/Icon'
 import { usePlanner } from '../contexts/PlannerContext'
 import { SubjectEditor } from '../pages/AcademicPages'
 import { NotificationBell } from '../components/NotificationBell'
+import { Brand } from '../components/Brand'
 
 const destinations: { path: string; title: string; icon: IconName }[] = [
-  { path: '/tasks', title: 'Nhiệm vụ của tôi', icon: 'list' },
   { path: '/today', title: 'Hôm nay', icon: 'sun' },
+  { path: '/tasks', title: 'Nhiệm vụ của tôi', icon: 'list' },
   { path: '/calendar', title: 'Lịch học', icon: 'calendar' },
 ]
 const secondaryDestinations: typeof destinations = [
@@ -59,7 +60,7 @@ export function AppLayout() {
   return <div className={'app-layout student-layout flow-layout' + (workspaceMode ? ' workspace-mode' : '')}>
     <a className="skip-link" href="#main-content">Đến nội dung chính</a>
     <aside className="sidebar" aria-label="Không gian học tập">
-      <div className="flow-sidebar-brand"><Link to="/" className="brand" aria-label="Study Planner – Nhiệm vụ của tôi">Study Planner</Link></div>
+      <div className="flow-sidebar-brand"><Link to="/" className="brand" aria-label="Study Planner – Hôm nay"><Brand /></Link></div>
       <nav aria-label="Menu chính">{destinations.map((page) => <NavLink key={page.path} to={page.path} className={sidebarLinkClass}><Icon name={page.icon} size={17} /><span className="sidebar-label">{page.title}</span></NavLink>)}</nav>
       <section className="flow-space-tree sidebar-label" aria-label="Danh sách môn học">
         <div className="flow-tree-caption"><span>Môn học trong kỳ</span></div>

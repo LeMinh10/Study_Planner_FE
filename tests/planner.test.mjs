@@ -5,18 +5,26 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
-const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
 after(async () => { await server.close(); delete globalThis.localStorage; delete globalThis.sessionStorage })
 const model = await server.ssrLoadModule('/src/utils/planner.ts')
 const storage = await server.ssrLoadModule('/src/data/planner.ts')
-const demoAuth = await server.ssrLoadModule('/src/utils/demoAuth.ts')
-const adminAuth = await server.ssrLoadModule('/src/admin/adminAuth.ts')
 const fixtures = await server.ssrLoadModule('/tests/fixtures/planner.ts')
 const student = await server.ssrLoadModule('/src/utils/studentView.ts')
 const workspace = await server.ssrLoadModule('/src/utils/workspace.ts')
 const { TaskEditor } = await server.ssrLoadModule('/src/components/TaskEditor.tsx')
 const { PlannerProvider } = await server.ssrLoadModule('/src/contexts/PlannerContext.tsx')
-const { default: App } = await server.ssrLoadModule('/src/App.tsx')
+const { default: RealApp, AppRoutes } = await server.ssrLoadModule('/src/App.tsx')
+const { AuthContext } = await server.ssrLoadModule('/src/contexts/AuthContext.ts')
+const fixtureAuth = {
+  user: { ...storage.createEmptyPlannerData().profile, role: 'sinhvien', isActive: true },
+  isDemo: false, status: 'authenticated', notice: '', error: '', login: async () => {}, register: async () => {},
+  saveProfile: async () => {}, changePassword: async () => {}, logout: () => {}, retry: () => {},
+}
+// Inject a verified identity for page rendering; production auth is exercised separately.
+function App({ auth = fixtureAuth } = {}) {
+  return createElement(AuthContext.Provider, { value: auth }, createElement(PlannerProvider, null, createElement(AppRoutes)))
+}
 const now = Date.parse('2026-10-15T12:00:00+07:00')
 const task = (overrides = {}) => ({ id: 'test', subjectId: 'math', title: 'Nhiệm vụ thử', description: '', kind: 'assignment', dueDate: '2026-10-15', dueTime: '12:00', status: 'todo', importance: 'normal', subtasks: [], ...overrides })
 
@@ -145,57 +153,25 @@ test('storage accepts valid data and rejects damaged relationships, statuses and
   assert(!storage.isPlannerData(null))
 })
 
-test('startup keeps an empty planner when browser storage is unavailable', () => {
-  const fail = () => { throw new Error('Browser storage must not be used') }
+test('anonymous startup cannot render protected pages when storage is unavailable', () => {
+  const fail = () => { throw new Error('Browser storage unavailable') }
   globalThis.localStorage = { getItem: fail, setItem: fail }
   globalThis.sessionStorage = { getItem: fail, setItem: fail }
   try {
-    const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/tasks'] }, createElement(App)))
-    assert(markup.includes('Chưa đăng nhập'))
-    assert(markup.includes('Chưa có học kỳ'))
-    assert(!markup.includes('Minh Anh'))
-    assert(!markup.includes('Toán cao cấp'))
-    assert(!markup.includes('Đăng xuất'))
+    for (const path of ['/tasks', '/today', '/profile', '/admin/students']) {
+      const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(RealApp)))
+      assert(!markup.includes('id="main-content"'), path)
+      assert(!markup.includes('admin-students-table'), path)
+      assert(!markup.includes('Đăng xuất'), path)
+    }
+    assert(renderToString(createElement(MemoryRouter, { initialEntries: ['/login'] }, createElement(RealApp))).includes('Đăng nhập'))
   } finally { delete globalThis.localStorage; delete globalThis.sessionStorage }
-})
-
-test('demo login accepts only the sample credentials and normalizes email', () => {
-  assert(demoAuth.matchesDemoAccount('demo@studyplanner.vn', '123456'))
-  assert(demoAuth.matchesDemoAccount('  DEMO@studyplanner.vn  ', '123456'))
-  assert(!demoAuth.matchesDemoAccount('other@example.com', '123456'))
-  assert(!demoAuth.matchesDemoAccount('demo@studyplanner.vn', 'wrong-password'))
-  assert(!demoAuth.matchesDemoAccount('demo@studyplanner.vn', '123456 '))
-  assert(!demoAuth.matchesDemoAccount('', ''))
-})
-
-test('demo session restores the profile and logout clears it without storing the password', () => {
-  const entries = new Map()
-  globalThis.sessionStorage = {
-    getItem: (key) => entries.get(key) ?? null,
-    setItem: (key, value) => entries.set(key, value),
-    removeItem: (key) => entries.delete(key),
-  }
-  const render = () => renderToString(createElement(MemoryRouter, { initialEntries: ['/tasks'] }, createElement(App)))
-  try {
-    assert(!demoAuth.hasDemoSession())
-    demoAuth.saveDemoSession(true)
-    assert(demoAuth.hasDemoSession())
-    assert(![...entries.values()].includes(demoAuth.DEMO_ACCOUNT.password))
-    const signedIn = render()
-    assert(signedIn.includes(demoAuth.DEMO_ACCOUNT.name))
-    assert(signedIn.includes('Đăng xuất'))
-    assert(!signedIn.includes('Chưa đăng nhập'))
-    demoAuth.saveDemoSession(false)
-    assert(!demoAuth.hasDemoSession())
-    assert.equal(entries.size, 0)
-    assert(render().includes('Chưa đăng nhập'))
-  } finally { delete globalThis.sessionStorage }
 })
 
 test('admin entry renders its own login without the student navigation or account helpers', () => {
   const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/admin'] }, createElement(App)))
   assert(markup.includes('Đăng nhập admin'))
-  assert(markup.includes('Email quản trị'))
+  assert(markup.includes('Tài khoản quản trị'))
   assert(!markup.includes('Menu chính'))
   assert(!markup.includes('id="main-content"'))
   assert(!markup.includes('Điền tài khoản mẫu'))
@@ -203,48 +179,29 @@ test('admin entry renders its own login without the student navigation or accoun
   assert(!markup.includes('admin-students-table'))
 })
 
-test('admin credentials are distinct from the student account', () => {
-  assert(adminAuth.matchesAdminAccount('admin@studyplanner.vn', '123456'))
-  assert(adminAuth.matchesAdminAccount(' ADMIN@studyplanner.vn ', '123456'))
-  assert(!adminAuth.matchesAdminAccount(demoAuth.DEMO_ACCOUNT.email, demoAuth.DEMO_ACCOUNT.password))
-  assert(!adminAuth.matchesAdminAccount('admin@studyplanner.vn', 'wrong-password'))
-  assert(!adminAuth.matchesAdminAccount('', ''))
-  assert(!demoAuth.matchesDemoAccount(adminAuth.ADMIN_ACCOUNT.email, adminAuth.ADMIN_ACCOUNT.password))
+test('admin account management requires the admin role and starts empty', () => {
+  const render = (path, auth) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App, { auth })))
+  assert(!render('/admin/students', fixtureAuth).includes('admin-students-table'))
+  const admin = { ...fixtureAuth, user: { ...fixtureAuth.user, name: 'Quản trị', email: 'manager@example.com', role: 'admin' } }
+  const markup = render('/admin/students', admin)
+  assert(markup.includes('Menu quản trị'))
+  assert(markup.includes('manager@example.com'))
+  assert(markup.includes('admin-students-table'))
+  assert(markup.includes('Chưa có tài khoản sinh viên'))
+  assert(markup.replaceAll('<!-- -->', '').includes('0 tài khoản'))
+  assert(markup.includes('Đăng xuất'))
+  assert(!markup.includes('Menu chính'))
+  assert(!render('/tasks', admin).includes('id="main-content"'))
 })
 
-test('admin student list requires an independent admin session and starts empty', () => {
-  const entries = new Map()
-  globalThis.sessionStorage = {
-    getItem: (key) => entries.get(key) ?? null,
-    setItem: (key, value) => entries.set(key, value),
-    removeItem: (key) => entries.delete(key),
+test('unverified and failed sessions show verification or retry without protected content', () => {
+  for (const status of ['loading', 'error']) {
+    const auth = { ...fixtureAuth, user: null, status, error: 'Không thể kết nối máy chủ.' }
+    const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/profile'] }, createElement(App, { auth })))
+    assert(!markup.includes('id="main-content"'))
+    assert(!markup.includes('name="newPassword"'))
+    assert(markup.includes(status === 'loading' ? 'Đang kiểm tra' : 'Thử lại'))
   }
-  const render = (path) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
-  try {
-    assert(!render('/admin/students').includes('admin-students-table'))
-    demoAuth.saveDemoSession(true)
-    assert(!adminAuth.hasAdminSession())
-    assert(!render('/admin/students').includes('admin-students-table'))
-    adminAuth.saveAdminSession(true)
-    assert(adminAuth.hasAdminSession())
-    assert(demoAuth.hasDemoSession())
-    assert.equal(entries.size, 2)
-    assert(![...entries.values()].includes(adminAuth.ADMIN_ACCOUNT.password))
-    const markup = render('/admin/students')
-    assert(markup.includes('Menu quản trị'))
-    assert(markup.includes('admin-students-table'))
-    assert(markup.includes('Chưa có tài khoản sinh viên'))
-    assert(markup.replaceAll('<!-- -->', '').includes('0 tài khoản'))
-    assert(markup.includes('Đăng xuất'))
-    assert(!markup.includes(demoAuth.DEMO_ACCOUNT.email))
-    assert(!markup.includes('Menu chính'))
-    assert(render('/admin').includes('Đăng nhập admin'))
-    adminAuth.saveAdminSession(false)
-    assert(!adminAuth.hasAdminSession())
-    assert(demoAuth.hasDemoSession())
-    assert(!render('/admin/students').includes('admin-students-table'))
-    assert(render('/tasks').includes(demoAuth.DEMO_ACCOUNT.name))
-  } finally { delete globalThis.sessionStorage }
 })
 
 test('initial planner has no personal information, seeded records or selection', () => {
@@ -274,7 +231,7 @@ test('workspace sidebar shows empty academic data and retains navigation', () =>
   const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/tasks'] }, createElement(App)))
   const navigation = markup.match(/<nav aria-label="Menu chính">([\s\S]*?)<\/nav>/)?.[1]
   assert(navigation)
-  assert.deepEqual([...navigation.matchAll(/href="([^"]+)"/g)].map((match) => match[1]), ['/tasks', '/today', '/calendar'])
+  assert.deepEqual([...navigation.matchAll(/href="([^"]+)"/g)].map((match) => match[1]), ['/today', '/tasks', '/calendar'])
   assert(!markup.includes('href="/?subject=math"'))
   assert(!markup.includes('href="/?subject=web"'))
   assert(markup.includes('Chưa có môn học.'))
@@ -350,7 +307,7 @@ test('authentication and create controls remain enabled without opening dialogs 
     assert(createButtons.every(([, attributes]) => !attributes.includes('disabled=""')), path + ': create controls enabled')
     assert(!markup.includes('<dialog'), path + ': no dialog')
   }
-  const editor = renderToString(createElement(PlannerProvider, null, createElement(TaskEditor, { task: null, onClose: () => {} })))
+  const editor = renderToString(createElement(AuthContext.Provider, { value: fixtureAuth }, createElement(PlannerProvider, null, createElement(TaskEditor, { task: null, onClose: () => {} }))))
   assert.match(editor, /<button type="submit" class="button button-primary"/)
 })
 
@@ -389,7 +346,7 @@ test('stale browser records cannot reappear on any study page', () => {
   globalThis.localStorage = { getItem: () => JSON.stringify(data) }
   globalThis.sessionStorage = { getItem: () => 'true' }
   try {
-    for (const path of ['/semesters', '/subjects', '/schedule', '/tasks', '/calendar', '/notifications', '/statistics', '/priorities', '/profile']) {
+    for (const path of ['/semesters', '/subjects', '/schedule', '/tasks', '/calendar', '/statistics', '/priorities', '/profile']) {
       const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
       assert(markup.includes('id="main-content"'), path)
       assert(!markup.includes('NaN'), path)
@@ -397,7 +354,7 @@ test('stale browser records cannot reappear on any study page', () => {
       assert(!markup.includes('Minh Anh'), path)
       assert(!markup.includes('Toán cao cấp'), path)
       assert(!markup.includes('Hoàn thành bài tập chương 3'), path)
-      assert(!markup.includes('Đăng xuất'), path)
+      assert(markup.includes('Đăng xuất'), path)
     }
   } finally { delete globalThis.localStorage; delete globalThis.sessionStorage }
 })

@@ -15,6 +15,10 @@ import { StatisticsPage } from './pages/StatisticsPage'
 import { ProfilePage } from './pages/Profile/ProfilePage'
 import { AuthPage } from './pages/Auth/AuthPage'
 import { AdminRoutes } from './admin/AdminRoutes'
+import { AuthProvider } from './contexts/AuthProvider'
+import { useAuth } from './contexts/AuthContext'
+import { RequireAuth } from './components/RequireAuth'
+import { roleHome } from './auth/session'
 import './App.css'
 import './planner.css'
 import './student.css'
@@ -23,16 +27,18 @@ import './theme.css'
 import './task-menu.css'
 import './student-simple.css'
 
-function AppRoutes() {
+export function AppRoutes() {
   const { data, taskEditor, taskSubjectId, closeTask, loggedIn } = usePlanner()
+  const auth = useAuth()
   const location = useLocation()
   const content = <>
     <Routes>
-      <Route index element={<Navigate to={loggedIn ? '/tasks' + location.search : '/login'} replace />} />
+      <Route index element={auth.status === 'loading' ? <p role="status">Đang kiểm tra phiên đăng nhập…</p> : <Navigate to={auth.user ? roleHome(auth.user.role) + location.search : '/login'} replace />} />
       <Route path="login" element={<AuthPage key="login" />} />
       <Route path="register" element={<AuthPage key="register" register />} />
       <Route path="admin/*" element={<AdminRoutes />} />
-      <Route element={<AppLayout />}>
+      <Route element={<RequireAuth role="sinhvien" />}>
+       <Route element={<AppLayout />}>
         <Route path="today" element={<Dashboard />} />
         <Route path="semesters" element={<SemestersPage />} />
         <Route path="subjects" element={<SubjectsPage key={data.selectedSemesterId} />} />
@@ -47,13 +53,20 @@ function AppRoutes() {
         <Route path="plans" element={<Navigate to="/tasks" replace />} />
         <Route path="*" element={<section className="empty-page"><h1>Không tìm thấy trang</h1><Link to="/" className="button button-primary">Trang chủ<Icon name="arrow-right" size={17} /></Link></section>} />
       </Route>
+      </Route>
     </Routes>
-    {taskEditor !== undefined && <TaskEditor task={taskEditor} initialSubjectId={taskSubjectId} onClose={closeTask} />}
-    <TaskDetails />
-    <ConfirmDelete />
+    {loggedIn && auth.user?.role === 'sinhvien' && <>
+      {taskEditor !== undefined && <TaskEditor task={taskEditor} initialSubjectId={taskSubjectId} onClose={closeTask} />}
+      <TaskDetails />
+      <ConfirmDelete />
+    </>}
   </>
   const isAdmin = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
   return isAdmin ? content : <div className="student-app">{content}</div>
 }
 
-export default function App() { return <PlannerProvider><AppRoutes /></PlannerProvider> }
+function PlannerApp() {
+  const { user } = useAuth()
+  return <PlannerProvider key={user?.email ?? 'anonymous'}><AppRoutes /></PlannerProvider>
+}
+export default function App() { return <AuthProvider><PlannerApp /></AuthProvider> }

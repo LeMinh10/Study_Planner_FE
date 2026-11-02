@@ -4,7 +4,7 @@ import type { PlannerData } from '../types/planner'
 export function createEmptyPlannerData(): PlannerData {
   return {
     version: 1,
-    profile: { name: '', email: '', studentId: '', school: '', major: '', year: '', goal: '' },
+    profile: { name: '', email: '', studentId: '', school: '', major: '', className: '' },
     semesters: [],
     selectedSemesterId: '',
     subjects: [],
@@ -19,7 +19,7 @@ function isTime(value: unknown): value is string { return typeof value === 'stri
 export function isPlannerData(value: unknown): value is PlannerData {
   if (!value || typeof value !== 'object') return false
   const data = value as PlannerData
-  if (data.version !== 1 || !data.profile || !['name', 'email', 'studentId', 'school', 'major', 'year', 'goal'].every((key) => typeof data.profile[key as keyof typeof data.profile] === 'string')) return false
+  if (data.version !== 1 || !data.profile || !['name', 'email', 'studentId', 'school', 'major', 'className'].every((key) => typeof data.profile[key as keyof typeof data.profile] === 'string')) return false
   if (!Array.isArray(data.semesters) || !data.semesters.every((s) => s && typeof s.id === 'string' && typeof s.name === 'string' && isDate(s.startDate) && isDate(s.endDate) && s.endDate >= s.startDate)) return false
   if (!Array.isArray(data.subjects) || !data.subjects.every((s) => s && typeof s.id === 'string' && data.semesters.some((semester) => semester.id === s.semesterId) && ['name', 'code', 'teacher'].every((key) => typeof s[key as keyof typeof s] === 'string') && Number.isInteger(s.credits) && s.credits > 0 && ['sage', 'clay', 'lavender', 'blue'].includes(s.color))) return false
   const subjectExists = (id: string) => data.subjects.some((s) => s.id === id)
