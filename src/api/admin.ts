@@ -16,12 +16,12 @@ function userId(value: string) {
 function parseUser(value: unknown): ManagedUser {
   const user = unwrap(value)
   const role = normalizeRole(user.vaiTro)
-  const optionalFields = ['maSinhVien', 'tenTruong', 'tenLop', 'nganhHoc']
+  const optionalFields = ['maSoSinhVien', 'tenTruong', 'tenLop', 'nganhHoc']
   if (!validInteger(user.ma, 1, 2147483647) || typeof user.hoTen !== 'string' || typeof user.email !== 'string' || !role || typeof user.dangHoatDong !== 'boolean' ||
     typeof user.ngayTao !== 'string' || !Number.isFinite(Date.parse(user.ngayTao)) || typeof user.ngayCapNhat !== 'string' || !Number.isFinite(Date.parse(user.ngayCapNhat)) ||
     optionalFields.some((key) => user[key] != null && typeof user[key] !== 'string')) throw new ApiError('Dữ liệu người dùng do máy chủ trả về chưa hợp lệ.')
   return {
-    id: String(user.ma), name: user.hoTen, email: user.email, studentId: text(user.maSinhVien), schoolName: text(user.tenTruong),
+    id: String(user.ma), name: user.hoTen, email: user.email, studentId: text(user.maSoSinhVien), schoolName: text(user.tenTruong),
     className: text(user.tenLop), major: text(user.nganhHoc), role, status: user.dangHoatDong ? 'active' : 'locked',
     createdAt: user.ngayTao, updatedAt: user.ngayCapNhat,
   }

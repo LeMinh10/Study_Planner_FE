@@ -7,6 +7,7 @@ import { Icon } from './components/Icon'
 import { Dashboard } from './pages/Dashboard/Dashboard'
 import { SemestersPage, SubjectsPage } from './pages/AcademicPages'
 import { SubjectDetailPage } from './pages/SubjectDetailPage'
+import { CreateSubjectPage } from './pages/CreateSubjectPage'
 import { TaskDetails } from './components/StudentTasks'
 import { TasksPage } from './pages/Tasks/TasksPage'
 import { SchedulePage } from './pages/Schedule/SchedulePage'
@@ -26,6 +27,7 @@ import './workspace.css'
 import './theme.css'
 import './task-menu.css'
 import './student-simple.css'
+import './subjects.css'
 
 export function AppRoutes() {
   const { data, taskEditor, taskSubjectId, closeTask, loggedIn } = usePlanner()
@@ -42,9 +44,10 @@ export function AppRoutes() {
         <Route path="today" element={<Dashboard />} />
         <Route path="semesters" element={<SemestersPage />} />
         <Route path="subjects" element={<SubjectsPage key={data.selectedSemesterId} />} />
+        <Route path="subjects/new" element={<CreateSubjectPage />} />
         <Route path="subjects/:subjectId" element={<SubjectDetailPage key={data.selectedSemesterId} />} />
         <Route path="schedule" element={<SchedulePage key={data.selectedSemesterId} />} />
-        <Route path="tasks" element={<TasksPage key={data.selectedSemesterId} />} />
+        <Route path="tasks" element={<TasksPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="notifications" element={<Navigate to="/tasks" replace />} />
         <Route path="statistics" element={<StatisticsPage key={data.selectedSemesterId} />} />

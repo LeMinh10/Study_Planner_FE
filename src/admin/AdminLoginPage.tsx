@@ -32,10 +32,10 @@ export function AdminLoginPage({ onLogin }: { onLogin: (taiKhoan: string, passwo
         {notice && <p className="auth-notice" role="status">{notice}</p>}
         <form className="session-form" onSubmit={submit} noValidate aria-busy={pending}>
           <fieldset className="form-fields" disabled={pending || status === 'loading'}>
-            <label>Tài khoản quản trị<input name="taiKhoan" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Nhập email hoặc MSSV" maxLength={150} required value={taiKhoan} onChange={(event) => { setTaiKhoan(event.target.value); setError('') }} /></label>
+            <label>Tài khoản quản trị<input name="taiKhoan" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Nhập email hoặc MSSV" maxLength={320} required value={taiKhoan} onChange={(event) => { setTaiKhoan(event.target.value); setError('') }} /></label>
             <label>Mật khẩu<input name="password" type="password" autoComplete="current-password" placeholder="Nhập mật khẩu" maxLength={128} required value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} /></label>
             {error && <p className="auth-error" role="alert">{error}</p>}
-            <button type="submit" className="button button-primary auth-submit">{pending ? 'Đang đăng nhập…' : 'Đăng nhập'}<Icon name="arrow-right" size={17} /></button>
+            <button type="submit" className="button button-primary auth-submit">{pending ? 'Đang đăng nhập…' : 'Đăng nhập'}</button>
           </fieldset>
         </form>
       </div>

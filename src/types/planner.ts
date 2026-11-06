@@ -14,7 +14,7 @@ export interface Profile {
 }
 
 export interface Semester { id: string; name: string; startDate: string; endDate: string }
-export interface Subject { id: string; semesterId: string; code: string; name: string; credits: number; teacher: string; color: SubjectColor }
+export interface Subject { id: string; semesterId: string; code: string; name: string; credits: number; teacher: string; color: SubjectColor; colorHex?: string }
 export interface ScheduleSlot {
   id: string
   subjectId: string
@@ -52,6 +52,8 @@ export interface PlannerData {
 }
 
 export type PlannerAction =
+  | { type: 'load-academic'; semesters: Semester[]; subjects: Subject[] }
+  | { type: 'reset' }
   | { type: 'profile'; value: Profile }
   | { type: 'select-semester'; id: string }
   | { type: 'save-semester'; value: Semester }

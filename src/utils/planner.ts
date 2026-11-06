@@ -82,10 +82,11 @@ export function slotsOnDate(data: PlannerData, date: Date) {
 export function plannerReducer(data: PlannerData, action: PlannerAction): PlannerData {
   function upsert<T extends { id: string }>(items: T[], value: T) { return items.some((item) => item.id === value.id) ? items.map((item) => item.id === value.id ? value : item) : [...items, value] }
   function removeSubjects(ids: Set<string>): PlannerData {
-    const taskIds = new Set(data.tasks.filter((task) => ids.has(task.subjectId)).map((task) => task.id))
-    return { ...data, subjects: data.subjects.filter((s) => !ids.has(s.id)), schedule: data.schedule.filter((s) => !ids.has(s.subjectId)), tasks: data.tasks.filter((t) => !ids.has(t.subjectId)), readAlerts: data.readAlerts.filter((key) => ![...taskIds].some((id) => key.startsWith(`${id}:`))) }
+    return { ...data, subjects: data.subjects.filter((s) => !ids.has(s.id)), schedule: data.schedule.filter((s) => !ids.has(s.subjectId)), tasks: data.tasks.map((task) => ids.has(task.subjectId) ? { ...task, subjectId: '' } : task) }
   }
   switch (action.type) {
+    case 'reset': return { ...data, semesters: [], subjects: [], tasks: [], schedule: [], selectedSemesterId: '', readAlerts: [] }
+    case 'load-academic': return { ...data, semesters: action.semesters, subjects: action.subjects, selectedSemesterId: action.semesters.some((item) => item.id === data.selectedSemesterId) ? data.selectedSemesterId : action.semesters[0]?.id ?? '' }
     case 'profile': return { ...data, profile: action.value }
     case 'select-semester': return data.semesters.some((s) => s.id === action.id) ? { ...data, selectedSemesterId: action.id } : data
     case 'save-semester': return { ...data, semesters: upsert(data.semesters, action.value), selectedSemesterId: data.selectedSemesterId || action.value.id }
@@ -93,7 +94,7 @@ export function plannerReducer(data: PlannerData, action: PlannerAction): Planne
       const remaining = data.semesters.filter((s) => s.id !== action.id)
       return { ...removeSubjects(new Set(data.subjects.filter((s) => s.semesterId === action.id).map((s) => s.id))), semesters: remaining, selectedSemesterId: data.selectedSemesterId === action.id ? remaining[0]?.id ?? '' : data.selectedSemesterId }
     }
-    case 'save-subject': return { ...data, subjects: upsert(data.subjects, action.value) }
+    case 'save-subject': return data.subjects.some((item) => item.id === action.value.id && item.semesterId !== action.value.semesterId) ? data : { ...data, subjects: upsert(data.subjects, action.value) }
     case 'delete-subject': return removeSubjects(new Set([action.id]))
     case 'save-slot': return { ...data, schedule: upsert(data.schedule, action.value) }
     case 'delete-slot': return { ...data, schedule: data.schedule.filter((s) => s.id !== action.id) }

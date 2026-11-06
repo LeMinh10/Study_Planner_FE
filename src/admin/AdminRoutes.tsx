@@ -7,7 +7,6 @@ import { AdminOverviewPage } from './AdminOverviewPage'
 import { AdminPriorityRulesPage } from './AdminPriorityRulesPage'
 import { useAuth } from '../contexts/AuthContext'
 import { RequireAuth } from '../components/RequireAuth'
-import { demoStudents } from './studentAccounts'
 import './admin.css'
 
 export function AdminRoutes() {
@@ -29,8 +28,8 @@ export function AdminRoutes() {
     <Route element={<RequireAuth role="admin" />}>
      <Route element={<AdminLayout onLogout={logout} />}>
       <Route path="overview" element={<AdminOverviewPage />} />
-      <Route path="students" element={<StudentAccountsPage students={auth.isDemo ? demoStudents : undefined} />} />
-      <Route path="students/:studentId" element={<StudentDetailsPage students={auth.isDemo ? demoStudents : undefined} />} />
+      <Route path="students" element={<StudentAccountsPage />} />
+      <Route path="students/:studentId" element={<StudentDetailsPage />} />
       <Route path="priority-rules" element={<AdminPriorityRulesPage />} />
     </Route>
     </Route>

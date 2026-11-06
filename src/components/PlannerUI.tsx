@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Icon } from './Icon'
@@ -24,8 +24,8 @@ export function Modal({ title, children, onClose, wide = false, side = false }: 
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose()
   }}><div className="dialog-heading"><h2 id="active-dialog-title">{title}</h2><button type="button" className="icon-button" aria-label="Đóng hộp thoại" onClick={onClose}><Icon name="close" /></button></div>{children}</dialog>
 }
-export function FormActions({ onClose, label = 'Lưu thay đổi' }: { onClose: () => void; label?: string }) {
-  return <div className="dialog-actions"><button type="button" className="button button-secondary" onClick={onClose}>Hủy</button><button type="submit" className="button button-primary">{label}<Icon name="check" size={16} /></button></div>
+export function FormActions({ onClose, label = 'Lưu thay đổi', disabled = false }: { onClose: () => void; label?: string; disabled?: boolean }) {
+  return <div className="dialog-actions"><button disabled={disabled} type="button" className="button button-secondary" onClick={onClose}>Hủy</button><button disabled={disabled} type="submit" className="button button-primary">{label}<Icon name="check" size={16} /></button></div>
 }
 export function EmptyState({ title = 'Chưa có dữ liệu', description, children }: { title?: string; description?: string; children?: ReactNode }) {
   return <div className="empty-state"><h3>{title}</h3>{description && <p>{description}</p>}{children}</div>
@@ -51,7 +51,9 @@ export function CalendarNav() {
   return <nav className="student-calendar-nav" aria-label="Lịch và thời khóa biểu"><NavLink to="/calendar"><Icon name="calendar" size={16} />Lịch của tôi</NavLink><NavLink to="/schedule"><Icon name="clock" size={16} />Thời khóa biểu</NavLink></nav>
 }
 export function ConfirmDelete() {
-  const { confirmation, closeConfirmation, canMutate } = usePlanner()
+  const { confirmation, closeConfirmation, academicBusy } = usePlanner()
+  const [error, setError] = useState('')
+  useEffect(() => setError(''), [confirmation])
   if (!confirmation) return null
-  return <Modal title={confirmation.title} onClose={closeConfirmation}><p className="confirm-description">{confirmation.message}</p><div className="dialog-actions"><button className="button button-secondary" onClick={closeConfirmation}>Giữ lại</button><button className="button button-danger" onClick={() => { if (canMutate) confirmation.confirm() }}>Xác nhận xóa</button></div></Modal>
+  return <Modal title={confirmation.title} onClose={closeConfirmation}><p className="confirm-description">{confirmation.message}</p>{error && <p role="alert" className="form-error">{error}</p>}<div className="dialog-actions"><button disabled={academicBusy} className="button button-secondary" onClick={closeConfirmation}>Giữ lại</button><button disabled={academicBusy} className="button button-danger" onClick={() => { setError(''); void confirmation.confirm().catch((reason) => setError(reason instanceof Error ? reason.message : 'Không xóa được dữ liệu.')) }}>Xác nhận xóa</button></div></Modal>
 }

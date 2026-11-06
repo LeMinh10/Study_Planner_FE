@@ -79,15 +79,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveAuthCredentials(credentials)
     setState({ credentials, user: session.user, isDemo: useMockApi, status: 'authenticated', notice: '', error: '' })
   }
-  function requireSession() {
+  const requireSession = useCallback(() => {
     const current = state
-    if (current.isDemo && !current.credentials) throw new ApiError('Tài khoản mẫu chỉ dùng để xem giao diện. Vui lòng đăng nhập tài khoản đã đăng ký để lưu hồ sơ hoặc đổi mật khẩu.')
+    if (current.isDemo && !current.credentials) throw new ApiError('Tài khoản mẫu chỉ dùng để xem giao diện. Vui lòng đăng nhập tài khoản có phiên xác thực để sử dụng chức năng này.')
     if (current.status !== 'authenticated' || !current.credentials || current.credentials.expiresAt <= Date.now()) {
       endSession('Vui lòng đăng nhập lại để tiếp tục.')
       throw new ApiError('Vui lòng đăng nhập lại để tiếp tục.', 401)
     }
     return current.credentials.token
-  }
+  }, [state, endSession])
   async function saveProfile(profile: Profile) {
     const token = requireSession()
     const currentVersion = version.current

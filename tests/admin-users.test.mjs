@@ -28,7 +28,7 @@ after(async () => {
   else delete globalThis.localStorage
 })
 
-const dto = { ma: 7, hoTen: 'Lê Công Minh', email: '0306231307@caothang.edu.vn', maSinhVien: '0306231307', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: true, ngayTao: '2026-10-30T08:00:00Z', ngayCapNhat: '2026-10-31T08:00:00Z' }
+const dto = { ma: 7, hoTen: 'Lê Công Minh', email: '0306231307@caothang.edu.vn', maSoSinhVien: '0306231307', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: true, ngayTao: '2026-10-30T08:00:00Z', ngayCapNhat: '2026-10-31T08:00:00Z' }
 const registration = { fullName: 'Sinh viên mới', email: 'new-user@example.com', password: 'Student123!', studentCode: '0306239998', schoolName: 'Cao đẳng Kỹ Thuật Cao Thắng', className: 'CDTH23WEBC', major: 'Công nghệ thông tin' }
 function fakeFetch(replies) {
   const calls = []
@@ -65,11 +65,11 @@ test('admin list uses Swagger query names, bearer authentication and pagination 
   assert.equal(calls[0].headers.Authorization, 'Bearer admin-token')
   assert.equal(calls[0].signal, controller.signal)
   assert.deepEqual({ page: result.page, pageSize: result.pageSize, total: result.total }, { page: 2, pageSize: 5, total: 6 })
-  assert.deepEqual(result.items[0], { id: '7', name: dto.hoTen, email: dto.email, studentId: dto.maSinhVien, schoolName: dto.tenTruong, className: dto.tenLop, major: dto.nganhHoc, role: 'sinhvien', status: 'active', createdAt: dto.ngayTao, updatedAt: dto.ngayCapNhat })
+  assert.deepEqual(result.items[0], { id: '7', name: dto.hoTen, email: dto.email, studentId: dto.maSoSinhVien, schoolName: dto.tenTruong, className: dto.tenLop, major: dto.nganhHoc, role: 'sinhvien', status: 'active', createdAt: dto.ngayTao, updatedAt: dto.ngayCapNhat })
 })
 
 test('admin detail supports nullable administrator profile fields and never depends on selected list data', async () => {
-  const adminDto = { ...dto, ma: 3, vaiTro: 'Admin', maSinhVien: null, tenTruong: null, tenLop: null, nganhHoc: null, dangHoatDong: false }
+  const adminDto = { ...dto, ma: 3, vaiTro: 'Admin', maSoSinhVien: null, tenTruong: null, tenLop: null, nganhHoc: null, dangHoatDong: false }
   const calls = fakeFetch([[200, adminDto]])
   const detail = await httpApi.getUser('admin-token', '3')
   assert.equal(calls[0].url, '/api/v1/admin/users/3')
@@ -159,7 +159,7 @@ test('deactivation revokes existing sessions, blocks login, and activation allow
   assert.deepEqual(result, { message: 'Vô hiệu hóa tài khoản thành công.', isActive: false })
   assert.equal((await mockApi.getUser(admin.token, target.id)).status, 'locked')
   for (const token of [first.token, second.token]) await assert.rejects(auth.getCurrentUser(token), (error) => [401, 403].includes(error.status))
-  await assert.rejects(auth.loginAccount(registration.email, registration.password, 'sinhvien'), (error) => error.status === 403)
+  await assert.rejects(auth.loginAccount(registration.email, registration.password, 'sinhvien'), (error) => error.status === 401)
   assert.equal((await auth.getCurrentUser(admin.token)).role, 'admin')
   assert.deepEqual(await mockApi.setUserActive(admin.token, target.id, true), { message: 'Kích hoạt tài khoản thành công.', isActive: true })
   assert.equal((await mockApi.getUser(admin.token, target.id)).status, 'active')
@@ -184,4 +184,87 @@ test('admin state changes persist across a fresh module instance without overwri
     await api.setUserActive(admin.token, target.id, true)
     assert.equal((await mockApi.getUser(admin.token, target.id)).status, 'active')
   } finally { await reloadedServer.close() }
+})
+
+test('sample accounts share the auth database and match the existing student identities', async () => {
+  const admin = await auth.loginAccount('admin@caothang.edu.vn', '0306231303', 'admin')
+  const listed = await mockApi.listUsers(admin.token)
+  const minh = listed.items.find((user) => user.email === '0306231307@caothang.edu.vn')
+  const ky = listed.items.find((user) => user.email === '0306231303@caothang.edu.vn')
+  assert.equal(minh.name, 'Lê Công Minh')
+  assert.equal(ky.name, 'Trần Hồng Kỳ')
+  for (const user of [minh, ky]) {
+    assert.equal(user.studentId, user.email.split('@')[0])
+    assert.equal(user.schoolName, 'Cao đẳng Kỹ Thuật Cao Thắng')
+    assert.equal(user.className, 'CDTH23WEBC')
+    assert.equal(user.major, 'Công nghệ thông tin')
+    assert.equal(user.role, 'sinhvien')
+  }
+  assert.equal(minh.status, 'active')
+  assert.equal(ky.status, 'locked')
+  const signedIn = await auth.loginAccount(minh.studentId, '123456', 'sinhvien')
+  assert.equal(signedIn.user.email, minh.email)
+  await assert.rejects(auth.loginAccount(ky.email, '123456', 'sinhvien'), (error) => error.status === 401)
+  assert.equal(new Set(listed.items.map((user) => user.id)).size, listed.total)
+})
+
+test('admin seed migration preserves registered accounts, changed passwords and active sessions', async () => {
+  const admin = await adminSession()
+  const registered = await registerSession()
+  const user = (await mockApi.listUsers(admin.token, { search: registration.email })).items[0]
+  await auth.updateCurrentUser(registered.token, { ...registered.user, name: 'Tên giữ nguyên khi nâng cấp' })
+  await auth.changeCurrentPassword(registered.token, { currentPassword: registration.password, newPassword: 'Persisted456!' })
+  const updatedSession = await auth.loginAccount(registration.studentCode, 'Persisted456!', 'sinhvien')
+  const key = 'studyplanner.mock-auth.v1'
+  const saved = JSON.parse(entries.get(key))
+  saved.accounts = saved.accounts.filter(({ user: item }) => [1, 2, Number(user.id)].includes(item.ma))
+  delete saved.adminSeedVersion
+  entries.set(key, JSON.stringify(saved))
+
+  const reloadedServer = await createServer(options(true))
+  try {
+    const api = await reloadedServer.ssrLoadModule('/src/api/admin.ts')
+    const currentAuth = await reloadedServer.ssrLoadModule('/src/api/auth.ts')
+    const migrated = await api.listUsers(admin.token)
+    assert.equal(migrated.total, 6)
+    const preserved = await api.getUser(admin.token, user.id)
+    assert.equal(preserved.name, 'Tên giữ nguyên khi nâng cấp')
+    assert.equal(preserved.email, registration.email)
+    assert.equal((await currentAuth.getCurrentUser(updatedSession.token)).email, registration.email)
+    await assert.rejects(currentAuth.loginAccount(registration.email, registration.password, 'sinhvien'), (error) => error.status === 401)
+    assert.equal((await currentAuth.loginAccount(registration.email, 'Persisted456!', 'sinhvien')).user.email, registration.email)
+    const afterSecondRead = await api.listUsers(admin.token)
+    assert.equal(afterSecondRead.total, 6, 'Seeds must not be appended again on each request')
+    assert.equal(new Set(afterSecondRead.items.map((account) => account.id)).size, 6)
+  } finally { await reloadedServer.close() }
+})
+
+test('mock admin rejects invalid query parameters and unsupported mutation methods', async () => {
+  const admin = await adminSession()
+  for (const query of ['Trang=0', 'Trang=-1', 'Trang=1.5', 'KichThuocTrang=0', 'KichThuocTrang=101', 'DangHoatDong=maybe']) {
+    assert.equal((await mockAuthRequest('/admin/users?' + query, { token: admin.token })).status, 400, query)
+  }
+  const target = (await mockApi.listUsers(admin.token, { search: '0306231307@caothang.edu.vn' })).items[0]
+  assert.equal((await mockAuthRequest('/admin/users/' + target.id + '/deactivate', { method: 'POST', token: admin.token })).status, 405)
+  assert.equal((await mockApi.getUser(admin.token, target.id)).status, 'active')
+})
+
+test('deactivating an administrator invalidates that administrator session immediately', async () => {
+  const admin = await adminSession()
+  const otherAdmin = await auth.loginAccount('admin@caothang.edu.vn', '0306231303', 'admin')
+  const target = (await mockApi.listUsers(admin.token, { search: otherAdmin.user.email })).items[0]
+  await mockApi.setUserActive(otherAdmin.token, target.id, false)
+  await assert.rejects(mockApi.listUsers(otherAdmin.token), (error) => error.status === 401)
+  await assert.rejects(auth.loginAccount(otherAdmin.user.email, '0306231303', 'admin'), (error) => error.status === 401)
+  assert.equal((await mockApi.getUser(admin.token, target.id)).status, 'locked')
+})
+
+test('mock preserves the backend restriction on disabling the last active administrator', async () => {
+  const admin = await adminSession()
+  const listed = await mockApi.listUsers(admin.token)
+  const other = listed.items.find((user) => user.role === 'admin' && user.email !== admin.user.email)
+  await mockApi.setUserActive(admin.token, other.id, false)
+  const self = listed.items.find((user) => user.email === admin.user.email)
+  await assert.rejects(mockApi.setUserActive(admin.token, self.id, false), (error) => error.status === 409 && error.code === 'LAST_ACTIVE_ADMIN')
+  assert.equal((await mockApi.getUser(admin.token, self.id)).status, 'active')
 })

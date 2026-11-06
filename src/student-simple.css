@@ -33,6 +33,18 @@
 
 .student-app .flow-layout { background: var(--paper); }
 .student-app .flow-layout .sidebar { width: 215px; padding: 0 12px; background: #e8f0fb; border-color: #c8d8ec; box-shadow: none; }
+.student-app .sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; margin-right: 5px; flex-shrink: 0; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #365d8a; }
+.student-app .sidebar-toggle:hover { background: var(--sky); border-color: var(--sky-border); }
+.student-app .flow-layout.sidebar-collapsed .sidebar { width: 68px; padding-inline: 10px; }
+.student-app .flow-layout.sidebar-collapsed .flow-sidebar-brand { flex-direction: row; justify-content: center; height: 65px; padding: 0; gap: 0; }
+.student-app .flow-layout.sidebar-collapsed .study-brand-sidebar > span,
+.student-app .flow-layout.sidebar-collapsed .student-profile-info { display: none; }
+.student-app .flow-layout.sidebar-collapsed .sidebar nav { margin-top: 0; }
+.student-app .flow-layout.sidebar-collapsed .nav-item { justify-content: center; padding-inline: 0; }
+.student-app .flow-layout.sidebar-collapsed .flow-sidebar-tools { padding-inline: 0; }
+.student-app .flow-layout.sidebar-collapsed .sidebar-profile { flex-direction: column; align-items: center; gap: 10px; padding-inline: 0; }
+.student-app .flow-layout.sidebar-collapsed .student-profile-link { flex: none; justify-content: center; padding: 7px; }
+.student-app .flow-layout.sidebar-collapsed .flow-sign-in { padding: 7px; }
 .student-app .flow-sidebar-brand { height: 65px; padding: 0 8px; margin-bottom: 14px; border-color: var(--line); }
 .student-app .flow-sidebar-brand .brand { font-size: 20px; font-weight: 600; letter-spacing: 0; color: #26548e; }
 .student-app .study-brand { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
@@ -46,6 +58,12 @@
 .student-app .flow-space-tree { margin-top: 24px; }
 .student-app .flow-tree-caption { padding: 0 5px 8px; }
 .student-app .flow-tree-caption > span { font-size: 12px; letter-spacing: 0; color: #365d8a; }
+.student-app .flow-space-tree { flex-shrink: 0; }
+.student-app .sidebar-subject-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 4px 0; border: 0; background: transparent; color: #365d8a; font: inherit; font-size: 12px; text-align: left; }
+.student-app .sidebar-subject-toggle:hover { color: var(--accent); }
+.sidebar-subject-toggle[aria-expanded='true'] > svg { transform: rotate(-90deg); }
+.flow-subject-tree-panel[hidden] { display: none; }
+.student-app .flow-layout .sidebar-bottom { flex-shrink: 0; }
 .student-semester-link { display: block; padding: 6px 5px; font-size: 13px; color: #365d8a; }
 .student-semester-link:hover { text-decoration: underline; }
 .student-app .flow-subject-tree { margin: 4px 0 0; padding-left: 0; border: 0; }

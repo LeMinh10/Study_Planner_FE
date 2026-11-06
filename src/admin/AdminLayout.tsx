@@ -1,9 +1,10 @@
-import { Link, NavLink, Outlet, useMatch } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../contexts/AuthContext'
 
 export function AdminLayout({ onLogout }: { onLogout: () => void }) {
   const { user } = useAuth()
+  const { search } = useLocation()
   const isOverview = useMatch('/admin/overview')
   const isPriorityRules = useMatch('/admin/priority-rules')
   const isStudentDetails = useMatch('/admin/students/:studentId')
@@ -25,7 +26,7 @@ export function AdminLayout({ onLogout }: { onLogout: () => void }) {
       <header className="admin-topbar">
         <nav className="admin-breadcrumb" aria-label="Đường dẫn quản trị">
           <span>Quản trị</span><span aria-hidden="true">/</span>
-          {isStudentDetails && <><Link to="/admin/students">Tài khoản sinh viên</Link><span aria-hidden="true">/</span></>}
+          {isStudentDetails && <><Link to={'/admin/students' + search}>Tài khoản sinh viên</Link><span aria-hidden="true">/</span></>}
           <strong aria-current="page">{pageTitle}</strong>
         </nav>
       </header>

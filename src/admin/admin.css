@@ -65,6 +65,32 @@
 .admin-empty-state h3 { font-size: 15px; font-weight: 600; }
 .admin-empty-state p { max-width: 360px; margin-top: 8px; font-size: 11px; color: var(--muted); line-height: 1.9; }
 .admin-empty-state .button { margin-top: 18px; }
+.admin-account-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 220px; }
+.admin-status-button { padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: 11px; white-space: nowrap; }
+.admin-status-button.activate { color: var(--mint-ink); background: var(--mint-soft); }
+.admin-status-button.deactivate { color: var(--coral-ink); background: var(--coral-soft); }
+.admin-status-button:disabled, .admin-pagination button:disabled { cursor: default; opacity: .5; }
+.admin-status-button:focus-visible, .admin-pagination button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.admin-action-error { max-width: 240px; margin-top: 6px; color: var(--coral-ink); font-size: 11px; }
+.admin-table-message { padding: 28px 20px; color: var(--muted); text-align: center; font-size: 13px; }
+.admin-table-message [role="alert"] { color: var(--coral-ink); }
+.admin-table-message .button { margin-top: 14px; }
+.admin-feedback { margin-top: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--mint-soft); color: var(--mint-ink); font-size: 13px; }
+.admin-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 16px 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.admin-page-size { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.admin-page-size select { padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); }
+.admin-pagination > div { display: flex; gap: 8px; }
+.admin-pagination button { display: inline-flex; align-items: center; gap: 4px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--accent); }
+.admin-student-details > .admin-status-action { margin-top: 20px; }
+
+@media (max-width: 700px) {
+  .admin-sidebar { width: 190px; padding-inline: 10px; }
+  .admin-workspace > main, .admin-topbar { padding-inline: 16px; }
+  .admin-filters { flex-wrap: wrap; padding: 16px; }
+  .admin-status-filter { margin-left: 0; }
+  .admin-student-details dl > div { grid-template-columns: 1fr; gap: 6px; }
+  .admin-list-heading, .admin-pagination { padding-inline: 16px; }
+}
 
 @media (max-width: 1100px) {
   .admin-sidebar { width: 225px; padding-inline: 15px; }

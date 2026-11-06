@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { after, afterEach, test } from 'node:test'
 import { createServer } from 'vite'
 
-const server = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': JSON.stringify('false') }, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
+const server = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': JSON.stringify('false'), 'import.meta.env.VITE_ENABLE_DEMO_AUTH': JSON.stringify('true') }, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
 const api = await server.ssrLoadModule('/src/api/auth.ts')
 const { apiRequest, ApiError, SESSION_INVALID_EVENT } = await server.ssrLoadModule('/src/api/client.ts')
 const session = await server.ssrLoadModule('/src/auth/session.ts')
@@ -13,7 +13,7 @@ after(async () => { await server.close() })
 afterEach(() => { globalThis.fetch = originalFetch; delete globalThis.sessionStorage; delete globalThis.window })
 
 const jwt = (claims = {}) => 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600, role: 'sinhvien', ...claims })).toString('base64url') + '.test-signature'
-const profile = { ma: 2, hoTen: 'Nguyễn An', email: 'an@example.com', maSinhVien: '0306231307', tenTruong: 'Đại học', tenLop: 'CNTT01', nganhHoc: 'CNTT', vaiTro: 'Student', dangHoatDong: true, muiGio: 'Asia/Ho_Chi_Minh', nhacTruocGio: 24, ngayTao: '2026-10-31T08:00:00Z', ngayCapNhat: '2026-10-31T08:00:00Z' }
+const profile = { ma: 2, hoTen: 'Nguyễn An', email: 'an@example.com', maSoSinhVien: '0306231307', tenTruong: 'Đại học', tenLop: 'CNTT01', nganhHoc: 'CNTT', vaiTro: 'Student', dangHoatDong: true, muiGio: 'Asia/Ho_Chi_Minh', nhacTruocGio: 24, ngayTao: '2026-10-31T08:00:00Z', ngayCapNhat: '2026-10-31T08:00:00Z' }
 const registration = { fullName: 'Nguyễn An', email: 'an@example.com', password: 'Strong123!', studentCode: '0306231307', schoolName: 'Cao đẳng Kỹ Thuật Cao Thắng', className: 'CDTH23WEBC', major: 'Công nghệ thông tin' }
 function mockFetch(replies) {
   const calls = []
@@ -43,7 +43,7 @@ test('registration sends the seven required fields without role/status; duplicat
   await api.registerStudent(input)
   assert.equal(calls[0].method, 'POST')
   assert.equal(calls[0].url, '/api/v1/auth/register')
-  assert.deepEqual(calls[0].payload, { email: registration.email, hoTen: registration.fullName, matKhau: registration.password, maSinhVien: registration.studentCode, tenTruong: registration.schoolName, tenLop: registration.className, nganhHoc: registration.major })
+  assert.deepEqual(calls[0].payload, { email: registration.email, hoTen: registration.fullName, matKhau: registration.password, maSoSinhVien: registration.studentCode, tenTruong: registration.schoolName, tenLop: registration.className, nganhHoc: registration.major })
   await assert.rejects(api.registerStudent(input), (error) => error instanceof ApiError && error.status === 409 && error.message === 'Email đã tồn tại.')
 })
 
@@ -57,7 +57,7 @@ test('login verifies the JWT against the current-user API before accepting a stu
   assert.equal(calls[1].url, '/api/v1/users/me')
   assert.equal(calls[1].headers.Authorization, 'Bearer ' + token)
   assert.equal(result.user.name, profile.hoTen)
-  assert.equal(result.user.studentId, profile.maSinhVien)
+  assert.equal(result.user.studentId, profile.maSoSinhVien)
   assert.equal(result.user.school, profile.tenTruong)
   assert.equal(result.user.className, profile.tenLop)
   assert.equal(result.user.major, profile.nganhHoc)
@@ -101,15 +101,15 @@ test('wrong passwords, disabled accounts, unknown roles and expired tokens never
 
 test('profile update whitelists editable fields and reloads the server-confirmed profile', async () => {
   const token = jwt()
-  const updated = { ...profile, hoTen: 'Tên mới', tenLop: 'CNTT02' }
+  const updated = { ...profile, hoTen: 'Tên mới', maSoSinhVien: 'SV01', tenLop: 'CNTT02' }
   const calls = mockFetch([[200, updated], [200, updated]])
   const result = await api.updateCurrentUser(token, { name: ' Tên mới ', email: 'hacker@example.com', studentId: ' SV01 ', school: ' Đại học ', className: ' CNTT02 ', major: ' CNTT ', role: 'admin', isActive: false })
   assert.equal(calls[0].method, 'PATCH')
   assert.equal(calls[0].headers.Authorization, 'Bearer ' + token)
-  assert.deepEqual(calls[0].payload, { hoTen: 'Tên mới', tenTruong: 'Đại học', tenLop: 'CNTT02', nganhHoc: 'CNTT' })
+  assert.deepEqual(calls[0].payload, { hoTen: 'Tên mới', maSoSinhVien: 'SV01', tenTruong: 'Đại học', tenLop: 'CNTT02', nganhHoc: 'CNTT' })
   assert.equal(calls[1].method, 'GET')
   assert.equal(result.name, updated.hoTen)
-  assert.equal(result.studentId, profile.maSinhVien)
+  assert.equal(result.studentId, updated.maSoSinhVien)
   assert.equal(result.email, profile.email)
   assert.equal(result.role, 'sinhvien')
 })
@@ -177,8 +177,34 @@ test('registration requires every field, rejects whitespace-only values and chec
   assert(validation.registrationError({ ...registration, email: 'bad-email' }, registration.password))
   assert(validation.registrationError(registration, 'different'))
   assert(validation.newPasswordError('123', '123'))
+  assert(validation.newPasswordError('1234567', '1234567'))
+  assert.equal(validation.newPasswordError('12345678', '12345678'), '')
+  assert.equal(validation.newPasswordError('a'.repeat(128), 'a'.repeat(128)), '')
+  assert(validation.newPasswordError('a'.repeat(129), 'a'.repeat(129)))
   assert(validation.newPasswordError('Strong123!', 'different'))
   assert.equal(validation.registrationError(registration, registration.password), '')
+  for (const [field, maximum] of [['fullName', 200], ['email', 320], ['studentCode', 50], ['schoolName', 200], ['className', 200], ['major', 200]]) {
+    assert(validation.registrationError({ ...registration, [field]: 'a'.repeat(maximum + 1) }, registration.password), field)
+  }
+})
+
+test('real API mode cannot accept or restore a fake demo session by default', async () => {
+  const live = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': '""', 'import.meta.env.VITE_ENABLE_DEMO_AUTH': '""' }, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
+  try {
+    const settings = await live.ssrLoadModule('/src/api/config.ts')
+    const disabledDemo = await live.ssrLoadModule('/src/auth/demo.ts')
+    storage().set('studyplanner.demo.v1', 'admin')
+    assert.equal(settings.useMockApi, false)
+    assert.equal(disabledDemo.demoEnabled, false)
+    assert.equal(disabledDemo.tryDemoLogin('admin@studyplanner.vn', '123456', 'admin'), null)
+    assert.equal(disabledDemo.readDemoSession(), null)
+  } finally { await live.close() }
+})
+
+test('profile payload permits clearing optional fields and sends only backend-editable keys', () => {
+  assert.deepEqual(api.profilePayload({ name: ' Tên mới ', email: 'keep@example.com', studentId: ' ', school: '', className: ' ', major: '', role: 'admin', isActive: false }), {
+    hoTen: 'Tên mới', maSoSinhVien: null, tenTruong: null, tenLop: null, nganhHoc: null,
+  })
 })
 
 test('demo login accepts only the sample password and student role, without a JWT', () => {

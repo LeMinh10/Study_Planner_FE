@@ -19,7 +19,7 @@ const { AuthContext } = await server.ssrLoadModule('/src/contexts/AuthContext.ts
 const fixtureAuth = {
   user: { ...storage.createEmptyPlannerData().profile, role: 'sinhvien', isActive: true },
   isDemo: false, status: 'authenticated', notice: '', error: '', login: async () => {}, register: async () => {},
-  saveProfile: async () => {}, changePassword: async () => {}, logout: () => {}, retry: () => {},
+  saveProfile: async () => {}, changePassword: async () => {}, logout: () => {}, retry: () => {}, getAccessToken: () => 'fixture-token',
 }
 // Inject a verified identity for page rendering; production auth is exercised separately.
 function App({ auth = fixtureAuth } = {}) {
@@ -76,15 +76,17 @@ test('task status completion finishes subtasks and keeps the first completion ti
   assert.equal(data.tasks.find((item) => item.id === 'task-project').completedAt, result.completedAt)
 })
 
-test('subject deletion removes linked tasks, schedule and read markers without touching other subjects', () => {
+test('subject deletion preserves tasks and read markers, clears course links and removes schedule', () => {
   let data = fixtures.createPlannerFixture()
+  const originalTasks = data.tasks
   const unrelated = data.tasks.filter((item) => item.subjectId !== 'math')
   data.readAlerts = ['task-math:2026-10-15:12:00:soon', 'task-project:2026-10-15:12:00:soon']
   data = model.plannerReducer(data, { type: 'delete-subject', id: 'math' })
   assert(!data.subjects.some((item) => item.id === 'math'))
   assert(!data.schedule.some((item) => item.subjectId === 'math'))
-  assert.deepEqual(data.tasks, unrelated)
-  assert.deepEqual(data.readAlerts, ['task-project:2026-10-15:12:00:soon'])
+  assert.deepEqual(data.tasks.filter((item) => item.subjectId), unrelated)
+  assert.deepEqual(data.tasks, originalTasks.map((item) => item.subjectId === 'math' ? { ...item, subjectId: '' } : item))
+  assert.deepEqual(data.readAlerts, ['task-math:2026-10-15:12:00:soon', 'task-project:2026-10-15:12:00:soon'])
   assert(storage.isPlannerData(data))
 })
 
@@ -93,7 +95,8 @@ test('semester CRUD selects a valid replacement and handles an entirely empty pl
   data = model.plannerReducer(data, { type: 'delete-semester', id: 'semester-1' })
   assert.equal(data.selectedSemesterId, 'semester-2')
   assert.equal(data.subjects.length, 0)
-  assert.equal(data.tasks.length, 0)
+  assert.equal(data.tasks.length, fixtures.createPlannerFixture().tasks.length)
+  assert(data.tasks.every((item) => item.subjectId === ''))
   data = model.plannerReducer(data, { type: 'delete-semester', id: 'semester-2' })
   assert.equal(data.selectedSemesterId, '')
   assert(storage.isPlannerData(data))
@@ -103,14 +106,13 @@ test('semester CRUD selects a valid replacement and handles an entirely empty pl
   assert(storage.isPlannerData(data))
 })
 
-test('moving a subject between semesters moves its tasks into that semester scope', () => {
+test('editing a subject cannot move it into another semester', () => {
   let data = fixtures.createPlannerFixture()
   const math = data.subjects.find((item) => item.id === 'math')
   data = model.plannerReducer(data, { type: 'save-subject', value: { ...math, semesterId: 'semester-2' } })
-  assert(!model.semesterTasks(data).some((item) => item.subjectId === 'math'))
+  assert(model.semesterTasks(data).some((item) => item.subjectId === 'math'))
   data = model.plannerReducer(data, { type: 'select-semester', id: 'semester-2' })
-  assert(model.semesterTasks(data).every((item) => item.subjectId === 'math'))
-  assert(model.semesterTasks(data).length > 0)
+  assert(!model.semesterTasks(data).some((item) => item.subjectId === 'math'))
 })
 
 test('schedule rejects actual overlaps but permits adjacent times and separate dates', () => {
@@ -179,7 +181,7 @@ test('admin entry renders its own login without the student navigation or accoun
   assert(!markup.includes('admin-students-table'))
 })
 
-test('admin account management requires the admin role and starts empty', () => {
+test('admin account management requires the admin role and waits for API data', () => {
   const render = (path, auth) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App, { auth })))
   assert(!render('/admin/students', fixtureAuth).includes('admin-students-table'))
   const admin = { ...fixtureAuth, user: { ...fixtureAuth.user, name: 'Quản trị', email: 'manager@example.com', role: 'admin' } }
@@ -187,8 +189,12 @@ test('admin account management requires the admin role and starts empty', () => 
   assert(markup.includes('Menu quản trị'))
   assert(markup.includes('manager@example.com'))
   assert(markup.includes('admin-students-table'))
-  assert(markup.includes('Chưa có tài khoản sinh viên'))
-  assert(markup.replaceAll('<!-- -->', '').includes('0 tài khoản'))
+  assert(markup.includes('role="status"'))
+  assert(markup.includes('Đang tải danh sách tài khoản'))
+  assert(!markup.includes('Chưa có tài khoản sinh viên'))
+  assert(!markup.includes('0 tài khoản'))
+  assert(!markup.includes('Lê Công Minh'))
+  assert(!markup.includes('Trần Hồng Kỳ'))
   assert(markup.includes('Đăng xuất'))
   assert(!markup.includes('Menu chính'))
   assert(!render('/tasks', admin).includes('id="main-content"'))
@@ -216,7 +222,7 @@ test('initial planner has no personal information, seeded records or selection',
 })
 
 test('all proposal pages render correct content and the desktop shell', () => {
-  const routes = { '/today': 'Hôm nay', '/tasks?subject=math': 'Nhiệm vụ của tôi', '/semesters': 'Học kỳ', '/subjects': 'Môn học', '/subjects/math': 'Không tìm thấy môn học', '/subjects/missing': 'Không tìm thấy môn học', '/schedule': 'Thời khóa biểu', '/tasks': 'Nhiệm vụ của tôi', '/tasks?view=priority': 'Nhiệm vụ quá hạn, hạn gần', '/tasks?layout=board': 'Bảng trạng thái nhiệm vụ', '/tasks?layout=calendar': 'flow-calendar-days', '/calendar': 'Lịch', '/statistics': 'Tiến độ', '/profile': 'Hồ sơ cá nhân', '/login': 'Đăng nhập', '/register': 'Đăng ký', '/missing': 'Không tìm thấy trang' }
+  const routes = { '/today': 'Hôm nay', '/tasks?subject=math': 'Nhiệm vụ', '/semesters': 'Học kỳ', '/subjects': 'Môn học', '/tasks?subject=missing': 'Không tìm thấy môn học', '/schedule': 'Thời khóa biểu', '/tasks': 'Nhiệm vụ', '/tasks?view=priority': 'Nhiệm vụ quá hạn, hạn gần', '/tasks?layout=board': 'Bảng trạng thái nhiệm vụ', '/tasks?layout=calendar': 'flow-calendar-days', '/calendar': 'Lịch', '/statistics': 'Tiến độ', '/profile': 'Hồ sơ cá nhân', '/login': 'Đăng nhập', '/register': 'Đăng ký', '/missing': 'Không tìm thấy trang' }
   for (const [path, heading] of Object.entries(routes)) {
     const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
     assert(markup.includes(heading), `${path}: heading`)
@@ -238,6 +244,24 @@ test('workspace sidebar shows empty academic data and retains navigation', () =>
   assert(markup.includes('aria-label="Mở hồ sơ của tôi"'))
 })
 
+test('an unknown subject never falls back to the unfiltered task workspace', () => {
+  for (const path of ['/tasks?subject=missing', '/tasks?subject=']) {
+    const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
+    assert(markup.includes('<h1>Không tìm thấy môn học</h1>'), path)
+    assert(!markup.includes('class="task-workspace"'), path)
+    assert(!markup.includes('Thông tin môn</button>'), path)
+  }
+})
+
+test('subject creation has a dedicated route and requires a semester before showing the form', () => {
+  const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/subjects/new'] }, createElement(App)))
+  assert(markup.includes('class="courses-page course-create-page"'))
+  assert(markup.includes('<h1>Thêm môn học</h1>'))
+  assert(markup.includes('Bạn cần có học kỳ trước'))
+  assert(!markup.includes('Không tìm thấy môn học'))
+  assert(!markup.includes('<dialog'))
+})
+
 test('sidebar marks the current page consistently across main, academic and profile links', () => {
   const routes = [
     ['/tasks', '/tasks'],
@@ -254,7 +278,7 @@ test('sidebar marks the current page consistently across main, academic and prof
   ]
   for (const [path, expected] of routes) {
     const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
-    const sidebar = markup.match(/<aside class="sidebar"[^>]*>([\s\S]*?)<\/aside>/)?.[1]
+    const sidebar = markup.match(/<aside\b[^>]*class="sidebar"[^>]*>([\s\S]*?)<\/aside>/)?.[1]
     assert(sidebar, path + ': sidebar exists')
     const selected = [...sidebar.matchAll(/<a\b([^>]*)>/g)].filter(([, attributes]) => attributes.includes('aria-current="page"'))
     assert.equal(selected.length, 1, path + ': exactly one current destination')
@@ -277,9 +301,9 @@ test('notifications use a collapsed header bell before search instead of a sideb
 
 test('academic and statistics pages display empty states instead of seeded records or charts', () => {
   const render = (path) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
-  assert(render('/subjects').includes('Chưa có môn học'))
+  assert(render('/subjects').includes('Bắt đầu với một học kỳ'))
   assert(render('/semesters').includes('Chưa có học kỳ'))
-  assert(render('/subjects/math').includes('Không tìm thấy môn học'))
+  assert(render('/tasks?subject=math').includes('Không tìm thấy môn học'))
   const statistics = render('/statistics')
   assert(statistics.includes('Chưa có dữ liệu thống kê'))
   assert(!statistics.includes('status-chart'))
@@ -290,7 +314,7 @@ test('academic and statistics pages display empty states instead of seeded recor
   assert(!profile.includes('Đã lưu hồ sơ.'))
 })
 
-test('authentication and create controls remain enabled without opening dialogs or claiming success', () => {
+test('authentication stays enabled; academic writes wait for successful API reads', () => {
   const render = (path) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
   for (const path of ['/login', '/register']) {
     const markup = render(path)
@@ -304,7 +328,7 @@ test('authentication and create controls remain enabled without opening dialogs 
     const buttons = [...markup.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
     const createButtons = buttons.filter(([, attributes, body]) => attributes.includes(label) || body.includes(label))
     assert(createButtons.length, path + ': create controls exist')
-    assert(createButtons.every(([, attributes]) => !attributes.includes('disabled=""')), path + ': create controls enabled')
+    assert(createButtons.every(([, attributes]) => attributes.includes('disabled=""')), path + ': writes wait for the API')
     assert(!markup.includes('<dialog'), path + ': no dialog')
   }
   const editor = renderToString(createElement(AuthContext.Provider, { value: fixtureAuth }, createElement(PlannerProvider, null, createElement(TaskEditor, { task: null, onClose: () => {} }))))

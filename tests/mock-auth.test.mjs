@@ -28,7 +28,7 @@ after(async () => {
 
 const registration = {
   email: 'student@example.com', hoTen: 'Nguyễn An', matKhau: 'Strong123!',
-  maSinhVien: '0306239991', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng',
+  maSoSinhVien: '0306239991', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng',
   tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin',
 }
 const register = (body = registration) => mockAuthRequest('/auth/register', { method: 'POST', body })
@@ -41,7 +41,7 @@ async function session(taiKhoan = registration.email, matKhau = registration.mat
 }
 function safeProfile(profile) {
   assert.equal(typeof profile.ma, 'number')
-  for (const field of ['email', 'hoTen', 'maSinhVien', 'tenTruong', 'tenLop', 'nganhHoc', 'vaiTro', 'ngayTao', 'ngayCapNhat']) assert.equal(typeof profile[field], 'string', field)
+  for (const field of ['email', 'hoTen', 'maSoSinhVien', 'tenTruong', 'tenLop', 'nganhHoc', 'vaiTro', 'ngayTao', 'ngayCapNhat']) assert.equal(typeof profile[field], 'string', field)
   assert.equal(typeof profile.dangHoatDong, 'boolean')
   for (const field of Object.keys(profile)) assert(!/matkhau|password|hash|salt/i.test(field), field + ' must not be exposed')
 }
@@ -53,7 +53,7 @@ test('mock register returns 201 and a safe student profile using the Swagger DTO
   safeProfile(profile)
   assert.equal(profile.email, registration.email)
   assert.equal(profile.hoTen, registration.hoTen)
-  assert.equal(profile.maSinhVien, registration.maSinhVien)
+  assert.equal(profile.maSoSinhVien, registration.maSoSinhVien)
   assert.equal(profile.tenTruong, registration.tenTruong)
   assert.equal(profile.tenLop, registration.tenLop)
   assert.equal(profile.nganhHoc, registration.nganhHoc)
@@ -65,9 +65,9 @@ test('mock register returns 201 and a safe student profile using the Swagger DTO
 
 test('mock register rejects duplicate emails and MSSV and serializes simultaneous registrations', async () => {
   assert.equal((await register()).status, 201)
-  assert.equal((await register({ ...registration, email: ' STUDENT@EXAMPLE.COM ', maSinhVien: '0306239999' })).status, 409)
+  assert.equal((await register({ ...registration, email: ' STUDENT@EXAMPLE.COM ', maSoSinhVien: '0306239999' })).status, 409)
   assert.equal((await register({ ...registration, email: 'other@example.com' })).status, 409)
-  const candidate = { ...registration, email: 'parallel@example.com', maSinhVien: '0306238888' }
+  const candidate = { ...registration, email: 'parallel@example.com', maSoSinhVien: '0306238888' }
   const replies = await Promise.all([register(candidate), register(candidate)])
   assert.deepEqual(replies.map((reply) => reply.status).sort(), [201, 409])
 })
@@ -82,7 +82,7 @@ test('mock register requires all seven fields and rejects whitespace-only values
 
 test('mock login accepts email or MSSV and returns JWT, expiry and the current user', async () => {
   assert.equal((await register()).status, 201)
-  for (const taiKhoan of [' STUDENT@EXAMPLE.COM ', '0306231307']) {
+  for (const taiKhoan of [' STUDENT@EXAMPLE.COM ', registration.maSoSinhVien]) {
     const result = await session(taiKhoan)
     assert.equal(result.loaiToken, 'Bearer')
     assert.equal(typeof result.tokenTruyCap, 'string')
@@ -103,7 +103,7 @@ test('mock login accepts email or MSSV and returns JWT, expiry and the current u
 test('mock seeds the student and admin accounts with their correct role', async () => {
   const student = await session('demo@studyplanner.vn', '123456')
   assert.equal(student.nguoiDung.vaiTro, 'Student')
-  assert.equal(student.nguoiDung.maSinhVien, 'SVDEMO001')
+  assert.equal(student.nguoiDung.maSoSinhVien, 'SVDEMO001')
   assert.equal(student.nguoiDung.tenTruong, 'Cao đẳng Kỹ Thuật Cao Thắng')
   assert.equal(student.nguoiDung.tenLop, 'CDTH23WEBC')
   assert.equal(student.nguoiDung.nganhHoc, 'Công nghệ thông tin')
@@ -119,14 +119,16 @@ test('mock PATCH updates only editable profile fields and GET confirms persisted
   await register()
   const { tokenTruyCap, nguoiDung } = await session()
   const changes = { hoTen: ' Nguyễn An mới ', tenTruong: ' Trường mới ', tenLop: ' CDTH23D ', nganhHoc: ' Ngành mới ' }
-  const response = await mockAuthRequest('/users/me', { method: 'PATCH', token: tokenTruyCap, body: {
-    ...changes, ma: 999, email: 'hacker@example.com', maSinhVien: 'HACKED', vaiTro: 'Admin', dangHoatDong: false,
+  const rejected = await mockAuthRequest('/users/me', { method: 'PATCH', token: tokenTruyCap, body: {
+    ...changes, ma: 999, email: 'hacker@example.com', maSoSinhVien: 'HACKED', vaiTro: 'Admin', dangHoatDong: false,
   } })
+  assert.equal(rejected.status, 400)
+  const response = await mockAuthRequest('/users/me', { method: 'PATCH', token: tokenTruyCap, body: changes })
   assert.equal(response.status, 200)
   const updated = await response.json()
   safeProfile(updated)
   for (const [field, value] of Object.entries(changes)) assert.equal(updated[field], value.trim())
-  for (const field of ['ma', 'email', 'maSinhVien', 'vaiTro', 'dangHoatDong', 'ngayTao']) assert.equal(updated[field], nguoiDung[field], field)
+  for (const field of ['ma', 'email', 'maSoSinhVien', 'vaiTro', 'dangHoatDong', 'ngayTao']) assert.equal(updated[field], nguoiDung[field], field)
   const confirmed = await me(tokenTruyCap)
   assert.equal(confirmed.status, 200)
   assert.deepEqual(await confirmed.json(), updated)
@@ -134,15 +136,51 @@ test('mock PATCH updates only editable profile fields and GET confirms persisted
   assert.equal(anotherSession.nguoiDung.hoTen, updated.hoTen)
 })
 
+test('mock profile edits MSSV, supports optional blanks and rejects duplicate codes atomically', async () => {
+  await register()
+  const first = await session()
+  const changed = await mockAuthRequest('/users/me', { method: 'PATCH', token: first.tokenTruyCap, body: { maSoSinhVien: ' SvUpdated01 ', tenTruong: null, tenLop: '', nganhHoc: null } })
+  assert.equal(changed.status, 200)
+  assert.equal((await changed.json()).maSoSinhVien, 'SvUpdated01')
+  assert.equal((await session('SvUpdated01')).nguoiDung.email, registration.email)
+  assert.equal((await login('svupdated01')).status, 401, 'MSSV preserves the backend case-sensitive comparison')
+  const duplicate = await mockAuthRequest('/users/me', { method: 'PATCH', token: first.tokenTruyCap, body: { hoTen: 'Must not be saved', maSoSinhVien: '0306231307' } })
+  assert.equal(duplicate.status, 409)
+  assert.equal((await (await me(first.tokenTruyCap)).json()).hoTen, registration.hoTen)
+})
+
+test('legacy local sample records keep profiles and sessions after renaming the MSSV field', async () => {
+  await register()
+  const current = await session()
+  const key = 'studyplanner.mock-auth.v1'
+  const saved = JSON.parse(entries.get(key))
+  for (const { user } of saved.accounts) { user.maSinhVien = user.maSoSinhVien; delete user.maSoSinhVien }
+  entries.set(key, JSON.stringify(saved))
+  const profile = await (await me(current.tokenTruyCap)).json()
+  assert.equal(profile.maSoSinhVien, registration.maSoSinhVien)
+  assert.equal(profile.hoTen, registration.hoTen)
+  assert(!('maSinhVien' in profile))
+  assert.equal((await login()).status, 200)
+})
+
+test('mock registration follows backend password and field length limits', async () => {
+  assert.equal((await register({ ...registration, matKhau: '1234567' })).status, 400)
+  assert.equal((await register({ ...registration, maSoSinhVien: 'S'.repeat(51) })).status, 400)
+  assert.equal((await register({ ...registration, hoTen: 'A'.repeat(201) })).status, 400)
+  assert.equal((await register({ ...registration, matKhau: '12345678', hoTen: 'A'.repeat(200) })).status, 201)
+})
+
 test('mock password change validates the current password and revokes every old session', async () => {
   await register()
   const first = await session()
-  const second = await session(registration.maSinhVien)
+  const second = await session(registration.maSoSinhVien)
   const admin = await session('admin@studyplanner.vn', '123456')
   const change = (body) => mockAuthRequest('/users/me/change-password', { method: 'POST', token: first.tokenTruyCap, body })
-  assert.equal((await change({ matKhauHienTai: 'wrong-password', matKhauMoi: 'NewStrong123!' })).status, 400)
+  assert.equal((await change({ matKhauHienTai: 'wrong-password', matKhauMoi: 'NewStrong123!' })).status, 401)
   assert.equal((await me(first.tokenTruyCap)).status, 200)
-  assert.equal((await change({ matKhauHienTai: registration.matKhau, matKhauMoi: 'NewStrong123!' })).status, 204)
+  const changed = await change({ matKhauHienTai: registration.matKhau, matKhauMoi: 'NewStrong123!' })
+  assert.equal(changed.status, 200)
+  assert.equal((await changed.json()).thongBao, 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.')
   assert.equal((await me(first.tokenTruyCap)).status, 401)
   assert.equal((await me(second.tokenTruyCap)).status, 401)
   assert.equal((await me(admin.tokenTruyCap)).status, 200, 'Changing a student password must not revoke another account session')
@@ -176,14 +214,14 @@ test('mock account, edited profile and changed password survive a fresh module i
   const changed = await mockAuthRequest('/users/me/change-password', { method: 'POST', token: initial.tokenTruyCap, body: {
     matKhauHienTai: registration.matKhau, matKhauMoi: 'Persisted123!',
   } })
-  assert.equal(changed.status, 204)
+  assert.equal(changed.status, 200)
   const reloadedServer = await createServer({
     define: { 'import.meta.env.VITE_USE_MOCK_API': JSON.stringify('true') },
     server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom',
   })
   try {
     const { mockAuthRequest: reloadedRequest } = await reloadedServer.ssrLoadModule('/src/api/mockAuth.ts')
-    const loginResponse = await reloadedRequest('/auth/login', { method: 'POST', body: { taiKhoan: registration.maSinhVien, matKhau: 'Persisted123!' } })
+    const loginResponse = await reloadedRequest('/auth/login', { method: 'POST', body: { taiKhoan: registration.maSoSinhVien, matKhau: 'Persisted123!' } })
     assert.equal(loginResponse.status, 200)
     const current = await loginResponse.json()
     assert.equal(current.nguoiDung.hoTen, 'Tên đã lưu')

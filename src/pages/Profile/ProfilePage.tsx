@@ -23,13 +23,13 @@ function ProfileForm({ profile }: { profile: Profile }) {
     event.preventDefault()
     if (pending) return
     setError(''); setSuccess(false)
-    const requiredFields = [['name', 'họ và tên'], ['school', 'tên trường'], ['className', 'tên lớp'], ['major', 'ngành học']] as const
+    const requiredFields = [['name', 'họ và tên']] as const
     for (const [key, label] of requiredFields) {
       if (!values[key].trim()) { setError(`Vui lòng nhập ${label}.`); return }
     }
     if (!event.currentTarget.reportValidity()) return
     const updatedProfile = {
-      ...profile, name: values.name.trim(), school: values.school.trim(),
+      ...profile, name: values.name.trim(), studentId: values.studentId.trim(), school: values.school.trim(),
       className: values.className.trim(), major: values.major.trim(),
     }
     setPending(true)
@@ -42,15 +42,15 @@ function ProfileForm({ profile }: { profile: Profile }) {
     <form className="session-form" onSubmit={submit} noValidate aria-busy={pending}>
       <fieldset className="form-fields" disabled={pending || viewOnlyDemo}>
         <div className="form-grid">
-          <label>Họ và tên<input name="fullName" autoComplete="name" value={values.name} onChange={(event) => field('name', event.target.value)} maxLength={100} required /></label>
+          <label>Họ và tên<input name="fullName" autoComplete="name" value={values.name} onChange={(event) => field('name', event.target.value)} maxLength={200} required /></label>
           <label>Email<input name="email" type="email" value={profile.email} readOnly /></label>
         </div>
         <div className="form-grid">
-          <label>Mã sinh viên<input name="studentCode" value={profile.studentId} readOnly /></label>
-          <label>Tên lớp<input name="className" value={values.className} onChange={(event) => field('className', event.target.value)} maxLength={100} required /></label>
+          <label>Mã sinh viên<input name="studentCode" value={values.studentId} onChange={(event) => field('studentId', event.target.value)} maxLength={50} /></label>
+          <label>Tên lớp<input name="className" value={values.className} onChange={(event) => field('className', event.target.value)} maxLength={200} /></label>
         </div>
-        <label>Tên trường<input name="schoolName" value={values.school} onChange={(event) => field('school', event.target.value)} maxLength={150} required /></label>
-        <label>Ngành học<input name="major" value={values.major} onChange={(event) => field('major', event.target.value)} maxLength={120} required /></label>
+        <label>Tên trường<input name="schoolName" value={values.school} onChange={(event) => field('school', event.target.value)} maxLength={200} /></label>
+        <label>Ngành học<input name="major" value={values.major} onChange={(event) => field('major', event.target.value)} maxLength={200} /></label>
         {error && <p className="auth-error" role="alert">{error}</p>}
         {success && <p className="auth-notice" role="status">Đã lưu hồ sơ.</p>}
         <div className="profile-save-row"><button className="button button-primary" type="submit">{pending ? 'Đang lưu…' : 'Lưu hồ sơ'}<Icon name="check" size={16} /></button></div>
@@ -84,7 +84,7 @@ function PasswordForm() {
   }
   return <section className="paper-panel profile-form-panel profile-password-panel">
     <div className="panel-heading"><h2>Đổi mật khẩu</h2></div>
-    <p className="profile-password-note">Sau khi đổi mật khẩu thành công, bạn cần đăng nhập lại.</p>
+    <p className="profile-password-note">Mật khẩu mới cần từ 8 đến 128 ký tự. Sau khi đổi mật khẩu thành công, bạn cần đăng nhập lại.</p>
     <form className="session-form" onSubmit={submit} noValidate aria-busy={pending}>
       <fieldset className="form-fields" disabled={pending || viewOnlyDemo}>
         <label>Mật khẩu hiện tại<input name="currentPassword" type="password" autoComplete="current-password" maxLength={PASSWORD_MAX_LENGTH} required value={currentPassword} onChange={(event) => { setCurrentPassword(event.target.value); setError('') }} /></label>

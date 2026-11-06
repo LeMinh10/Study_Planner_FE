@@ -1,11 +1,13 @@
-import { createContext, useContext, useEffect, useReducer, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import type { Dispatch, ReactNode } from 'react'
 import { createEmptyPlannerData } from '../data/planner'
-import type { PlannerAction, PlannerData, PlannerTask } from '../types/planner'
+import type { PlannerAction, PlannerData, PlannerTask, Semester, Subject } from '../types/planner'
+import * as academic from '../api/academic'
+import { useMockApi } from '../api/config'
 import { dueAlerts, plannerReducer, semesterTasks } from '../utils/planner'
 import { useAuth } from './AuthContext'
 
-interface Confirmation { title: string; message: string; confirm: () => void }
+interface Confirmation { title: string; message: string; confirm: () => Promise<void> }
 interface PlannerContextValue {
   data: PlannerData
   dispatch: Dispatch<PlannerAction>
@@ -24,6 +26,15 @@ interface PlannerContextValue {
   requestDelete: (kind: 'semester' | 'subject' | 'slot' | 'task', id: string) => void
   closeConfirmation: () => void
   canMutate: boolean
+  canManageSemesters: boolean
+  canManageSubjects: boolean
+  academicError: string
+  academicLoading: boolean
+  academicBusy: boolean
+  retryAcademic: () => void
+  saveSemester: (value: Semester) => Promise<void>
+  saveSubject: (value: Subject) => Promise<void>
+  loadSubject: (id: string, signal: AbortSignal) => Promise<void>
   loggedIn: boolean
   logout: () => void
 }
@@ -31,17 +42,29 @@ const PlannerContext = createContext<PlannerContextValue | null>(null)
 
 export function PlannerProvider({ children }: { children: ReactNode }) {
   const auth = useAuth()
+  const { getAccessToken, isDemo } = auth
   const loggedIn = auth.status === 'authenticated'
   const [plannerData, updateData] = useReducer(plannerReducer, undefined, createEmptyPlannerData)
   const data = { ...plannerData, profile: auth.user ? {
     name: auth.user.name, email: auth.user.email, studentId: auth.user.studentId,
     school: auth.user.school, className: auth.user.className, major: auth.user.major,
   } : plannerData.profile }
-  // Enable writes only after replacing local mutations with confirmed API responses.
+  // Tasks and schedules remain read-only until their APIs are integrated.
   const canMutate = false
-  const dispatch: Dispatch<PlannerAction> = (action) => {
+  const [semesterReady, setSemesterReady] = useState(false)
+  const [subjectReady, setSubjectReady] = useState(false)
+  const [academicError, setAcademicError] = useState('')
+  const [academicLoading, setAcademicLoading] = useState(false)
+  const [academicBusy, setAcademicBusy] = useState(false)
+  const [revision, setRevision] = useState(0)
+  const generation = useRef(0)
+  const writeVersion = useRef(0)
+  const busy = useRef(false)
+  const canManageSemesters = loggedIn && semesterReady && !academicLoading && !academicBusy
+  const canManageSubjects = loggedIn && subjectReady && !academicLoading && !academicBusy
+  const dispatch: Dispatch<PlannerAction> = useCallback((action) => {
     if (action.type === 'select-semester') updateData(action)
-  }
+  }, [])
   const [now, setNow] = useState(Date.now)
   const [taskEditor, setTaskEditor] = useState<PlannerTask | null | undefined>(undefined)
   const [taskSubjectId, setTaskSubjectId] = useState<string | undefined>()
@@ -49,6 +72,65 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const tasks = semesterTasks(data)
   const alerts = dueAlerts(tasks, now)
+
+  useEffect(() => {
+    const current = ++generation.current
+    const controller = new AbortController()
+    updateData({ type: 'reset' })
+    setSemesterReady(false); setSubjectReady(false); setConfirmation(null)
+    setAcademicError(''); setAcademicLoading(false)
+    busy.current = false; setAcademicBusy(false)
+    if (!loggedIn || isDemo || useMockApi) return
+    setAcademicLoading(true)
+    async function load() {
+      try {
+        const token = getAccessToken()
+        const semesters = await academic.listSemesters(token, controller.signal)
+        if (current !== generation.current) return
+        updateData({ type: 'load-academic', semesters, subjects: [] })
+        setSemesterReady(true)
+        const subjects = (await Promise.all(semesters.map((semester) => academic.listSubjects(token, semester.id, controller.signal)))).flat()
+        if (current !== generation.current) return
+        updateData({ type: 'load-academic', semesters, subjects })
+        setSubjectReady(true)
+      } catch (error) {
+        if (current === generation.current && !controller.signal.aborted) setAcademicError(error instanceof Error ? error.message : 'Không tải được học kỳ/môn học.')
+      } finally { if (current === generation.current) setAcademicLoading(false) }
+    }
+    void load()
+    return () => { generation.current = current + 1; controller.abort() }
+  }, [loggedIn, isDemo, getAccessToken, revision])
+
+  async function saveSemester(value: Semester) {
+    if (!canManageSemesters || busy.current) throw new Error('Học kỳ chưa sẵn sàng để ghi dữ liệu.')
+    const current = generation.current
+    writeVersion.current++
+    busy.current = true; setAcademicBusy(true)
+    try {
+      const saved = await academic.saveSemester(getAccessToken(), value)
+      if (current === generation.current) updateData({ type: 'save-semester', value: saved })
+    } finally { if (current === generation.current) { busy.current = false; setAcademicBusy(false) } }
+  }
+  async function saveSubject(value: Subject) {
+    if (!canManageSubjects || busy.current) throw new Error('Môn học chưa sẵn sàng để ghi dữ liệu.')
+    const original = data.subjects.find((item) => item.id === value.id)
+    if (value.id && (!original || original.semesterId !== value.semesterId)) throw new Error('Không thể chuyển học kỳ của môn học.')
+    const current = generation.current
+    writeVersion.current++
+    busy.current = true; setAcademicBusy(true)
+    try {
+      const saved = await academic.saveSubject(getAccessToken(), value)
+      if (current === generation.current) updateData({ type: 'save-subject', value: saved })
+    } finally { if (current === generation.current) { busy.current = false; setAcademicBusy(false) } }
+  }
+
+  const loadSubject = useCallback(async (id: string, signal: AbortSignal) => {
+    if (!subjectReady) return
+    const current = generation.current
+    const version = writeVersion.current
+    const value = await academic.getSubject(getAccessToken(), id, signal)
+    if (current === generation.current && version === writeVersion.current && !signal.aborted) updateData({ type: 'save-subject', value })
+  }, [subjectReady, getAccessToken])
 
   function logout() {
     auth.logout()
@@ -65,18 +147,27 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   function requestDelete(kind: 'semester' | 'subject' | 'slot' | 'task', id: string) {
-    if (!canMutate) return
-    const name = kind === 'semester' ? data.semesters.find((s) => s.id === id)?.name : kind === 'subject' ? data.subjects.find((s) => s.id === id)?.name : kind === 'slot' ? data.schedule.find((s) => s.id === id)?.title : data.tasks.find((t) => t.id === id)?.title
-    const subjectIds = kind === 'semester' ? data.subjects.filter((s) => s.semesterId === id).map((s) => s.id) : kind === 'subject' ? [id] : []
-    const linkedTasks = data.tasks.filter((t) => subjectIds.includes(t.subjectId)).length
-    const linkedSlots = data.schedule.filter((s) => subjectIds.includes(s.subjectId)).length
-    setConfirmation({ title: `Xóa ${kind === 'semester' ? 'học kỳ' : kind === 'subject' ? 'môn học' : kind === 'slot' ? 'lịch học' : 'nhiệm vụ'}?`, message: `“${name}” sẽ được xóa.${subjectIds.length ? ` Thao tác này cũng xóa ${kind === 'semester' ? `${subjectIds.length} môn học, ` : ''}${linkedTasks} nhiệm vụ và ${linkedSlots} lịch học liên quan.` : ''} Bạn không thể hoàn tác thao tác này.`, confirm: () => {
-      if (kind === 'semester') dispatch({ type: 'delete-semester', id })
-      else if (kind === 'subject') dispatch({ type: 'delete-subject', id })
-      else if (kind === 'slot') dispatch({ type: 'delete-slot', id })
-      else dispatch({ type: 'delete-task', id })
-      setConfirmation(null)
-    } })
+    if (kind !== 'semester' && kind !== 'subject') return
+    if (!(kind === 'semester' ? canManageSemesters : canManageSubjects) || busy.current) return
+    const current = generation.current
+    const token = getAccessToken()
+    busy.current = true; setAcademicBusy(true); setAcademicError('')
+    void academic.deletionPreview(token, kind, id).then((preview) => {
+      if (current !== generation.current) return
+      const name = kind === 'semester' ? data.semesters.find((item) => item.id === id)?.name : data.subjects.find((item) => item.id === id)?.name
+      setConfirmation({ title: 'Xóa ' + (kind === 'semester' ? 'học kỳ' : 'môn học') + '?', message: '“' + name + '” sẽ được xóa. ' + (kind === 'semester' ? preview.courses + ' môn học và ' : '') + preview.sessions + ' buổi học liên quan bị xóa. ' + preview.tasks + ' nhiệm vụ được giữ lại và bỏ liên kết ' + (kind === 'semester' ? 'học kỳ/môn học' : 'môn học') + '. Bạn không thể hoàn tác thao tác này.', confirm: async () => {
+        if (current !== generation.current || busy.current) return
+        writeVersion.current++
+        busy.current = true; setAcademicBusy(true)
+        try {
+          await academic.deleteAcademic(token, kind, id)
+          if (current !== generation.current) return
+          updateData({ type: kind === 'semester' ? 'delete-semester' : 'delete-subject', id })
+          setConfirmation(null)
+        } finally { if (current === generation.current) { busy.current = false; setAcademicBusy(false) } }
+      } })
+    }).catch((error) => { if (current === generation.current) setAcademicError(error instanceof Error ? error.message : 'Không tải được ảnh hưởng khi xóa.') })
+      .finally(() => { if (current === generation.current) { busy.current = false; setAcademicBusy(false) } })
   }
 
   function createTask(subjectId?: string) {
@@ -97,7 +188,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     setTaskEditor(task)
   }
 
-  return <PlannerContext.Provider value={{ data, dispatch, now, tasks, alerts, taskEditor, openTask, editTask, createTask, taskSubjectId, taskDetails: data.tasks.find((task) => task.id === detailId), closeDetails: () => setDetailId(undefined), closeTask: () => setTaskEditor(undefined), confirmation, requestDelete, closeConfirmation: () => setConfirmation(null), canMutate, loggedIn, logout }}>{children}</PlannerContext.Provider>
+  return <PlannerContext.Provider value={{ data, dispatch, now, tasks, alerts, taskEditor, openTask, editTask, createTask, taskSubjectId, taskDetails: data.tasks.find((task) => task.id === detailId), closeDetails: () => setDetailId(undefined), closeTask: () => setTaskEditor(undefined), confirmation, requestDelete, closeConfirmation: () => { if (!busy.current) setConfirmation(null) }, canManageSemesters, canManageSubjects, academicError, academicLoading, academicBusy, retryAcademic: () => setRevision((value) => value + 1), saveSemester, saveSubject, loadSubject, canMutate, loggedIn, logout }}>{children}</PlannerContext.Provider>
 }
 export function usePlanner() {
   const context = useContext(PlannerContext)
