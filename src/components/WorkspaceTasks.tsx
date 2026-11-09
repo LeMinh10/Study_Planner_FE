@@ -1,3 +1,4 @@
+import { DateInput } from './DateInput'
 import { useState } from 'react'
 import type { DragEvent, FormEvent } from 'react'
 import { usePlanner } from '../contexts/PlannerContext'
@@ -27,7 +28,7 @@ export function QuickTaskForm({ subjects, subjectId, status = 'todo', date, onCl
   }
   return <form className="quick-task-form" onSubmit={submit} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
     <div className="quick-task-title"><span className={'flow-status-dot flow-' + status} /><input name="title" placeholder="Tên nhiệm vụ · Enter để thêm" maxLength={150} required autoFocus aria-label="Tên nhiệm vụ mới" /><button type="button" className="icon-button" aria-label="Hủy thêm nhanh" onClick={onClose}><Icon name="close" size={15} /></button></div>
-    <div className="quick-task-options"><label><span className="sr-only">Môn học cho nhiệm vụ mới</span><select name="subjectId" defaultValue={subjectId ?? subjects[0]?.id ?? ''} required><option value="" disabled>Chọn môn học</option>{subjects.map((subject) => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select></label><label className="quick-task-date"><Icon name="calendar" size={13} /><span>Hạn</span><input type="date" name="date" defaultValue={date ?? dateKey(addDays(vietnamToday(), 1))} required aria-label="Hạn của nhiệm vụ mới" /></label><button className="flow-button" type="submit">Thêm nhiệm vụ<Icon name="arrow-right" size={13} /></button></div>
+    <div className="quick-task-options"><label><span className="sr-only">Môn học cho nhiệm vụ mới</span><select name="subjectId" defaultValue={subjectId ?? subjects[0]?.id ?? ''} required><option value="" disabled>Chọn môn học</option>{subjects.map((subject) => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select></label><label className="quick-task-date"><Icon name="calendar" size={13} /><span>Hạn</span><DateInput name="date" defaultValue={date ?? dateKey(addDays(vietnamToday(), 1))} required aria-label="Hạn của nhiệm vụ mới" /></label><button className="flow-button" type="submit">Thêm nhiệm vụ<Icon name="arrow-right" size={13} /></button></div>
     {error && <p className="form-error" role="alert">{error}</p>}
   </form>
 }
@@ -47,7 +48,7 @@ export function FlowTaskRow({ task, showSubject = true, showReason = false }: { 
       <div className="flow-task-name"><button onClick={() => openTask(task)}>{task.title}</button>{task.subtasks.length > 0 && <button className={'flow-subtask-toggle' + (expanded ? ' expanded' : '')} aria-label={'Nhiệm vụ nhỏ của ' + task.title} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><Icon name="list" size={12} />{task.subtasks.filter((subtask) => subtask.done).length}/{task.subtasks.length}</button>}</div>
       {showSubject && <div className="flow-task-subject"><SubjectBadge id={task.subjectId} /></div>}
       <div className="flow-task-status-cell"><TaskStatusControl task={task} compact /></div>
-      <label className={'flow-inline-date' + (overdue ? ' date-overdue' : '')} title={taskDueLabel(task, now)}><Icon name="calendar" size={13} /><input type="date" value={task.dueDate} aria-label={'Đổi hạn nộp của ' + task.title} onChange={(event) => { if (event.target.value) dispatch({ type: 'save-task', value: { ...task, dueDate: event.target.value } }) }} /></label>
+      <label className={'flow-inline-date' + (overdue ? ' date-overdue' : '')} title={taskDueLabel(task, now)}><Icon name="calendar" size={13} /><DateInput value={task.dueDate} aria-label={'Đổi hạn nộp của ' + task.title} onChange={(value) => { if (value) dispatch({ type: 'save-task', value: { ...task, dueDate: value } }) }} /></label>
       <label className={'flow-importance importance-' + task.importance} title={importanceLabels[task.importance]}><Icon name="flag" size={13} /><select value={task.importance} aria-label={'Mức quan trọng của ' + task.title} onChange={(event) => dispatch({ type: 'save-task', value: { ...task, importance: event.target.value as PlannerTask['importance'] } })}>{Object.entries(importanceLabels).map(([value, label]) => <option key={value} value={value}>{value === 'normal' ? 'Vừa' : label}</option>)}</select></label>
       <TaskActionMenu task={task} />
     </article>

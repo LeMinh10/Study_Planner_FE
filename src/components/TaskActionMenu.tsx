@@ -1,3 +1,4 @@
+import { DateInput } from './DateInput'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { usePlanner } from '../contexts/PlannerContext'
@@ -54,7 +55,7 @@ export function TaskActionMenu({ task }: { task: PlannerTask }) {
         const date = dateKey(addDays(today, option.days))
         return <button type="button" key={option.days} aria-pressed={task.dueDate === date} onClick={() => save({ dueDate: date })}><Icon name={option.icon} size={17} /><span>{option.label}</span></button>
       })}</div>
-      <div className="task-menu-date-fields"><label><span className="sr-only">Ngày đến hạn</span><input type="date" value={task.dueDate} required onChange={(event) => { if (event.target.validity.valid && event.target.value) save({ dueDate: event.target.value }) }} /></label><label><span className="sr-only">Giờ đến hạn</span><input type="time" value={task.dueTime} required onChange={(event) => { if (event.target.validity.valid && event.target.value) save({ dueTime: event.target.value }) }} /></label></div>
+      <div className="task-menu-date-fields"><label><span className="sr-only">Ngày đến hạn</span><DateInput value={task.dueDate} required onChange={(value) => { if (value) save({ dueDate: value }) }} /></label><label><span className="sr-only">Giờ đến hạn</span><input type="time" value={task.dueTime} required onChange={(event) => { if (event.target.validity.valid && event.target.value) save({ dueTime: event.target.value }) }} /></label></div>
     </div>
     <div className="task-menu-section" data-menu-keep-open>
       <span className="task-menu-caption">Mức ưu tiên</span>

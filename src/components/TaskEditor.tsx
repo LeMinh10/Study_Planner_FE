@@ -1,3 +1,4 @@
+import { DateInput } from './DateInput'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { usePlanner } from '../contexts/PlannerContext'
@@ -49,7 +50,7 @@ export function TaskEditor({ task, initialSubjectId, onClose }: { task: PlannerT
     <form className="session-form" onSubmit={submit}>
       <label>Tên nhiệm vụ<input name="title" defaultValue={task?.title} maxLength={150} placeholder="Ví dụ: Hoàn thành bài tập chương 3" required autoFocus /></label>
       <div className="form-grid"><label>Môn học<select name="subjectId" defaultValue={task?.subjectId ?? initialSubjectId ?? subjects[0]?.id} required><option value="" disabled>Chọn môn học</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label><label>Loại nhiệm vụ<select name="kind" defaultValue={task?.kind ?? 'assignment'}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
-      <div className="form-grid"><label>Ngày đến hạn<input name="dueDate" type="date" defaultValue={task?.dueDate ?? dateKey(addDays(vietnamToday(), 1))} required /></label><label>Giờ đến hạn<input name="dueTime" type="time" defaultValue={task?.dueTime ?? '23:59'} required /></label></div>
+      <div className="form-grid"><label>Ngày đến hạn<DateInput name="dueDate" defaultValue={task?.dueDate ?? dateKey(addDays(vietnamToday(), 1))} required /></label><label>Giờ đến hạn<input name="dueTime" type="time" defaultValue={task?.dueTime ?? '23:59'} required /></label></div>
       <div className="form-grid"><label>Trạng thái<select name="status" value={status} onChange={(event) => { const next = event.target.value as TaskStatus; setStatus(next); if (next === 'done') setSubtasks(subtasks.map((subtask) => ({ ...subtask, done: true }))) }}>{(['todo', 'doing', 'done'] as const).map((value) => <option value={value} key={value}>{statusLabels[value]}</option>)}</select></label><label>Mức quan trọng<select name="importance" defaultValue={task?.importance ?? 'normal'}>{Object.entries(importanceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>
       <label>Mô tả<textarea name="description" defaultValue={task?.description} rows={3} maxLength={2000} placeholder="Nội dung cần làm, yêu cầu nộp bài, tài liệu…" /></label>
       <fieldset className="subtask-editor"><legend>Chia thành nhiệm vụ nhỏ <span>{subtasks.filter((subtask) => subtask.done).length}/{subtasks.length}</span></legend>

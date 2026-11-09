@@ -1,3 +1,4 @@
+import { DateInput } from '../components/DateInput'
 import { useState } from 'react'
 import { EmptyState, PageHeading } from '../components/PlannerUI'
 import { usePlanner } from '../contexts/PlannerContext'
@@ -23,7 +24,7 @@ export function StatisticsPage() {
 
   return <>
     <PageHeading title="Tiến độ" />
-    <div className="analytics-filters"><label>Môn học<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}><option value="all">Tất cả môn học</option>{subjects.map((subject) => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select></label><label>Hạn nộp từ<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label><label>Đến<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label><button className="text-button" onClick={() => { setFrom(''); setTo(''); setSubjectId('all') }}>Xóa bộ lọc</button></div>
+    <div className="analytics-filters"><label>Môn học<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}><option value="all">Tất cả môn học</option>{subjects.map((subject) => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select></label><label>Hạn nộp từ<DateInput value={from} onChange={(value) => setFrom(value)} /></label><label>Đến<DateInput value={to} onChange={(value) => setTo(value)} /></label><button className="text-button" onClick={() => { setFrom(''); setTo(''); setSubjectId('all') }}>Xóa bộ lọc</button></div>
     {invalidRange && <p className="form-error analytics-error" role="alert">Ngày bắt đầu cần trước hoặc bằng ngày kết thúc.</p>}
     <div className="metric-grid"><article><span>Tổng nhiệm vụ</span><strong>{filtered.length}</strong><p>Trong phạm vi đang xem</p></article><article><span>Tỷ lệ hoàn thành</span><strong>{completion(filtered)}<small>%</small></strong><p>{done}/{filtered.length} nhiệm vụ đã xong</p></article><article className="metric-warning"><span>Đang quá hạn</span><strong>{overdue}</strong><p>Chưa hoàn thành và đã trễ hạn</p></article><article><span>Hoàn thành muộn</span><strong>{late}</strong><p>Đã xong sau thời điểm đến hạn</p></article></div>
     <div className="analytics-grid"><section className="paper-panel analytics-panel"><div className="panel-heading"><div><h2>Theo trạng thái</h2></div><span className="muted">{filtered.length} nhiệm vụ</span></div><div className="status-chart">{Object.entries(statusLabels).map(([value, label]) => {

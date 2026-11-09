@@ -1,9 +1,10 @@
+import { DateInput } from '../components/DateInput'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { usePlanner } from '../contexts/PlannerContext'
 import { FormActions, Modal } from '../components/PlannerUI'
 import type { Semester } from '../types/planner'
-import { dateKey, vietnamToday } from '../utils/planner'
+
 
 export function SemesterEditor({ semester, onClose }: { semester: Semester | null; onClose: () => void }) {
   const { canManageSemesters, saveSemester } = usePlanner()
@@ -21,5 +22,5 @@ export function SemesterEditor({ semester, onClose }: { semester: Semester | nul
       onClose()
     } catch (error) { setError(error instanceof Error ? error.message : 'Không lưu được học kỳ.') }
   }
-  return <Modal title={semester ? 'Chỉnh sửa học kỳ' : 'Thêm học kỳ'} onClose={onClose}><form className="session-form" onSubmit={submit}><label>Tên học kỳ<input name="name" defaultValue={semester?.name} maxLength={200} placeholder="Học kỳ I · 2026–2027" required autoFocus /></label><div className="form-grid"><label>Ngày bắt đầu<input type="date" name="startDate" defaultValue={semester?.startDate ?? dateKey(vietnamToday())} required /></label><label>Ngày kết thúc<input type="date" name="endDate" defaultValue={semester?.endDate} required /></label></div>{error && <p className="form-error" role="alert">{error}</p>}<FormActions onClose={onClose} disabled={!canManageSemesters} /></form></Modal>
+  return <Modal title={semester ? 'Chỉnh sửa học kỳ' : 'Thêm học kỳ'} onClose={onClose}><form className="session-form" onSubmit={submit}><label>Tên học kỳ<input name="name" defaultValue={semester?.name} maxLength={200} placeholder="Học kỳ I · 2026–2027" required autoFocus /></label><div className="form-grid"><label>Ngày bắt đầu<DateInput name="startDate" defaultValue={semester?.startDate} required /></label><label>Ngày kết thúc<DateInput name="endDate" defaultValue={semester?.endDate} required /></label></div>{error && <p className="form-error" role="alert">{error}</p>}<FormActions onClose={onClose} label="Xác nhận" showIcon={false} disabled={!canManageSemesters} /></form></Modal>
 }
