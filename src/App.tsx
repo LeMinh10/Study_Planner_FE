@@ -9,9 +9,7 @@ import { SemestersPage, SubjectsPage } from './pages/AcademicPages'
 import { SubjectDetailPage } from './pages/SubjectDetailPage'
 import { CreateSubjectPage } from './pages/CreateSubjectPage'
 import { TaskDetails } from './components/StudentTasks'
-import { TasksPage } from './pages/Tasks/TasksPage'
-import { SchedulePage } from './pages/Schedule/SchedulePage'
-import { CalendarPage } from './pages/Calendar/CalendarPage'
+import { HocTapPage } from './hoc-tap/HocTapPage'
 import { StatisticsPage } from './pages/StatisticsPage'
 import { ProfilePage } from './pages/Profile/ProfilePage'
 import { AuthPage } from './pages/Auth/AuthPage'
@@ -46,9 +44,9 @@ export function AppRoutes() {
         <Route path="subjects" element={<SubjectsPage key={data.selectedSemesterId} />} />
         <Route path="subjects/new" element={<CreateSubjectPage />} />
         <Route path="subjects/:subjectId" element={<SubjectDetailPage key={data.selectedSemesterId} />} />
-        <Route path="schedule" element={<SchedulePage key={data.selectedSemesterId} />} />
-        <Route path="tasks" element={<TasksPage />} />
-        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="schedule" element={<HocTapPage mode="schedule" />} />
+        <Route path="tasks" element={<HocTapPage mode="tasks" />} />
+        <Route path="calendar" element={<HocTapPage mode="calendar" />} />
         <Route path="notifications" element={<Navigate to="/tasks" replace />} />
         <Route path="statistics" element={<StatisticsPage key={data.selectedSemesterId} />} />
         <Route path="priorities" element={<Navigate to="/tasks?view=priority" replace />} />

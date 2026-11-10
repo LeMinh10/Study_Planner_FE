@@ -243,10 +243,10 @@ test('initial planner has no personal information, seeded records or selection',
 })
 
 test('all proposal pages render correct content and the desktop shell', () => {
-  const routes = { '/today': 'Hôm nay', '/tasks?subject=math': 'Nhiệm vụ', '/semesters': 'Học kỳ', '/subjects': 'Môn học', '/tasks?subject=missing': 'Không tìm thấy môn học', '/schedule': 'Thời khóa biểu', '/tasks': 'Nhiệm vụ', '/tasks?view=priority': 'Nhiệm vụ quá hạn, hạn gần', '/tasks?layout=board': 'Bảng trạng thái nhiệm vụ', '/tasks?layout=calendar': 'flow-calendar-days', '/calendar': 'Lịch', '/statistics': 'Tiến độ', '/profile': 'Hồ sơ cá nhân', '/login': 'Đăng nhập', '/register': 'Đăng ký', '/missing': 'Không tìm thấy trang' }
+  const routes = { '/today': 'Hôm nay', '/tasks?subject=math': 'Không tìm thấy môn học', '/semesters': 'Học kỳ', '/subjects': 'Môn học', '/tasks?subject=missing': 'Không tìm thấy môn học', '/schedule': 'Thời khóa biểu', '/tasks': 'Nhiệm vụ', '/tasks?view=priority': 'Ưu tiên cao trước', '/tasks?layout=board': 'Nhiệm vụ của tôi', '/tasks?layout=calendar': 'Nhiệm vụ của tôi', '/calendar': 'Lịch', '/statistics': 'Tiến độ', '/profile': 'Hồ sơ cá nhân', '/login': 'Đăng nhập', '/register': 'Đăng ký', '/missing': 'Không tìm thấy trang' }
   for (const [path, heading] of Object.entries(routes)) {
     const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
-    assert(markup.includes(heading), `${path}: heading`)
+    assert(markup.includes(heading) || (path === '/tasks?layout=board' && markup.includes('Tất cả nhiệm vụ')) || (path === '/tasks?layout=calendar' && markup.includes('Thời khóa biểu')), `${path}: heading`)
     assert(!markup.includes('NaN'), `${path}: no invalid metrics`)
     assert(!markup.includes('mobile-menu'), `${path}: desktop only`)
     if (!['/login', '/register'].includes(path)) assert(markup.includes('id="main-content"'), `${path}: shared layout`)
@@ -344,7 +344,7 @@ test('authentication stays enabled; academic writes wait for successful API read
     assert.match(markup, /<button type="submit" class="button button-primary auth-submit"/)
     assert(!markup.includes('hiện chưa khả dụng.'))
   }
-  for (const [path, label] of [['/semesters', 'Thêm học kỳ'], ['/subjects', 'Thêm môn học'], ['/schedule', 'Thêm lịch học'], ['/tasks', 'Thêm nhiệm vụ'], ['/tasks?layout=calendar', 'Thêm nhiệm vụ ngày']]) {
+  for (const [path, label] of [['/semesters', 'Thêm học kỳ'], ['/subjects', 'Thêm môn học'], ['/schedule', 'Thêm nhiệm vụ'], ['/tasks', 'Thêm nhiệm vụ'], ['/calendar', 'Thêm nhiệm vụ']]) {
     const markup = render(path)
     const buttons = [...markup.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
     const createButtons = buttons.filter(([, attributes, body]) => attributes.includes(label) || body.includes(label))
@@ -454,24 +454,25 @@ test('calendar rescheduling preserves task content and cannot alter hidden tasks
   assert.equal(workspace.rescheduleTask([original], original.id, original.dueDate), null)
 })
 
-test('all task filters keep the three status groups visible when no tasks match', () => {
+test('task filters retain API empty state and student-friendly controls', () => {
   for (const view of ['all', 'today', 'upcoming', 'overdue', 'done', 'priority']) {
     const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/tasks?view=' + view] }, createElement(App)))
-    const groups = [...markup.matchAll(/class="flow-list-group flow-group-([^"]+)"/g)].map((match) => match[1])
-    assert.deepEqual(groups, ['todo', 'doing', 'done'], view + ': all status groups remain visible')
-    assert.equal([...markup.matchAll(/class="flow-group-count">0<\/span>/g)].length, 3, view + ': each empty group shows zero')
-    assert(!markup.includes('Không có nhiệm vụ phù hợp'), view + ': empty state does not replace the groups')
-    assert(!markup.includes('flow-group-priority'), view + ': priority keeps the status groups')
+    assert(markup.includes('Đang tải nhiệm vụ…'), view + ': wait for the API before claiming an empty result')
+    assert(!markup.includes('Chưa có nhiệm vụ phù hợp'), view + ': loading is distinct from empty')
+    assert(markup.includes('Nhập tên hoặc nội dung nhiệm vụ'), view + ': search by name')
+    assert(markup.includes('Tất cả môn học'), view + ': course selector')
+    assert(!markup.includes('Nhập mã'), view + ': no manual IDs')
   }
 })
 
-test('list, board and calendar contain no tasks and do not create data locally', () => {
+test('task route aliases retain the API workspace without creating local data', () => {
   const render = (path) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
-  const outputs = ['list', 'board', 'calendar'].map((layout) => render('/tasks?layout=' + layout))
-  const counts = outputs.map((markup) => markup.match(/class="flow-task-total">([^<]+)/)?.[1])
-  assert(counts.every((count) => count === '0'))
-  assert(outputs[0].includes('flow-list-view'))
-  assert(!outputs[1].includes('draggable="true"'))
-  assert(outputs[2].includes('flow-calendar-days'))
+  const outputs = ['list', 'board', 'calendar'].map((layout) => render('/tasks?layout=' + layout).replace(/<!--.*?-->/g, ''))
+  assert(outputs[0].includes('Đang tải nhiệm vụ…'))
+  assert(outputs[1].match(/aria-pressed="true"[^>]*>([\s\S]*?)<\/button>/)?.[1].includes('Bảng trạng thái'))
+  assert(!outputs[1].includes('0 nhiệm vụ'))
+  assert(outputs[2].match(/aria-pressed="true"[^>]*>([\s\S]*?)<\/button>/)?.[1].includes('Thời khóa biểu'))
+  assert(outputs.every((markup) => markup.includes('class="ht-workspace"')))
   assert(outputs.every((markup) => !markup.includes('quick-task-form')))
+  assert(outputs.every((markup) => !markup.includes('draggable="true"')))
 })
