@@ -50,7 +50,7 @@ Chạy `npm.cmd run test:backend` khi backend đang chạy để kiểm tra Swag
 | `/tasks?subject=<subjectId>` | Danh sách nhiệm vụ của một môn; giá trị là ID môn học |
 | `/tasks?layout=board` | Bảng Cần làm / Đang làm / Đã xong |
 | `/tasks?layout=calendar` | Lịch nhiệm vụ, có thể hiện giờ học và kéo để đổi hạn |
-| `/today` | Buổi học tiếp theo, nhiệm vụ đến hạn, lịch trong ngày và nhiệm vụ có thể bắt đầu sớm |
+| `/today` | Tổng quan trong ngày, gợi ý ưu tiên tự động, nhiệm vụ theo hạn và lịch lớp/sự kiện/tự học |
 | `/login`, `/register` | Giao diện đăng nhập, đăng ký và kiểm tra dữ liệu nhập |
 | `/admin` | Đăng nhập quản trị viên |
 | `/admin/overview` | Tổng quan admin; hiện chỉ có mục trên sidebar, nội dung trang để trống |
@@ -126,14 +126,24 @@ Lê Công Minh và Trần Hồng Kỳ cùng trường Cao đẳng Kỹ Thuật C
 - Token giả lập chỉ có ý nghĩa với dữ liệu trình duyệt này, không phải JWT được BE thật ký. Khi nối BE, xác thực, băm mật khẩu và thu hồi JWT phải do BE thực hiện.
 - Có kiểm thử hợp đồng bằng HTTP giả lập, kiểm thử trình duyệt và kiểm thử API backend thật qua proxy Vite. Lượt kiểm thử thật tạo một tài khoản riêng, kiểm tra toàn bộ luồng tài khoản/admin rồi xóa chính tài khoản đó; không thay đổi tài khoản người dùng đang có.
 
+## Trang Hôm nay
+
+Trang Hôm nay đọc API nhiệm vụ lá và lịch tổng hợp của bản BE đã merge. Hệ thống tự gợi ý thứ tự dựa trên độ gấp của hạn, mức quan trọng và trạng thái. Giao diện chỉ hiển thị thông tin cần thao tác; giải thích thuật toán nằm trong tài liệu riêng. Trang có bộ nhớ riêng trong phiên và cập nhật nền khi quay lại. Các thao tác chỉnh sửa tiếp tục mở đúng chi tiết tại trang Nhiệm vụ hiện có; phần Hôm nay không ghi API nhiệm vụ/lịch hay thay đổi source của module học tập.
+
+Xem [giải thích thuật toán, luồng dữ liệu và câu hỏi phản biện](docs/hom-nay-va-uu-tien.md). Kiểm tra riêng bằng `npm.cmd run test:auth:browser -- --today`.
+
+## Thông báo
+
+Chuông đọc hộp thư BE của tài khoản, nhắc nhiệm vụ sắp đến hạn/quá hạn, có số chưa đọc, Tất cả/Chưa đọc, phân trang và Đọc tất cả. Trạng thái đọc lưu tại BE nên F5 vẫn giữ. Bấm thông báo mở đúng nhiệm vụ/môn/học kỳ. Xem [quy tắc, API, cách chạy và kiểm thử](docs/thong-bao.md). Khởi động lại BE sau khi cập nhật để nạp API và worker mới.
+
 ## Phạm vi hiện tại
 
 - Tài khoản, hồ sơ và quản trị người dùng chạy được với dữ liệu giả lập, hoặc gọi BE khi tắt giả lập. Học kỳ và môn học tải qua `/semesters`, `/semesters/{id}/courses` và `/courses/{id}`, dùng JWT và phân trang BE. Nhiệm vụ/lịch học vẫn chờ tích hợp API.
-- Không đọc hoặc ghi dữ liệu học tập vào `localStorage`/`sessionStorage`; các bản ghi cũ không được nạp lại.
-- Đăng ký, đăng nhập, cập nhật hồ sơ và đổi mật khẩu dùng phản hồi API. Tạo/sửa/xóa học kỳ/môn chỉ bật sau khi tải API hợp lệ; lưu theo ID BE trả về. Xóa phải tải `deletion-preview`, hiển thị số lịch bị xóa và số nhiệm vụ giữ lại/bỏ liên kết; DELETE chấp nhận 204 không body. Thao tác nhiệm vụ/lịch học và đánh dấu đã đọc tiếp tục chờ API. Phím tắt thêm nhiệm vụ và kéo thả cũng chưa cập nhật dữ liệu.
+- Không đọc hoặc ghi bản ghi học tập vào `localStorage`/`sessionStorage`; các bản ghi cũ không được nạp lại. Riêng ID học kỳ đang chọn được giữ trong `sessionStorage` theo tài khoản để F5 không đổi học kỳ; chỉ khôi phục nếu ID vẫn thuộc danh sách API trả về.
+- Đăng ký, đăng nhập, cập nhật hồ sơ và đổi mật khẩu dùng phản hồi API. Tạo/sửa/xóa học kỳ/môn chỉ bật sau khi tải API hợp lệ; lưu theo ID BE trả về. Xóa phải tải `deletion-preview`, hiển thị số lịch bị xóa và số nhiệm vụ giữ lại/bỏ liên kết; DELETE chấp nhận 204 không body. Đánh dấu đã đọc thông báo dùng API hộp thư riêng, không thay đổi nhiệm vụ/lịch.
 - Điều hướng, tìm kiếm, bộ lọc, đổi kiểu xem và chuyển ngày trên lịch vẫn hoạt động.
 - Trang tiến độ hiển thị trạng thái chưa có dữ liệu khi chưa có nhiệm vụ.
-- Chuông thông báo nằm bên trái ô tìm kiếm, mở popup nhỏ hiển thị nhiệm vụ quá hạn hoặc đến hạn trong 72 giờ. Bấm ngoài popup, nhấn Escape hoặc chuyển trang để đóng; bấm một thông báo để xem nhiệm vụ. Không gửi email, push hay thông báo nền khi ứng dụng đã đóng.
+- Chuông thông báo nằm bên trái ô tìm kiếm, mở hộp thư nhắc hạn/quá hạn theo giờ nhắc của nhiệm vụ hoặc tài khoản. Bấm ngoài popup, nhấn Escape hoặc chuyển trang để đóng. BE có worker kiểm tra mỗi phút; FE đọc lại khi đang mở ứng dụng. Chưa gửi email/browser push.
 - Nhiệm vụ chưa hoàn thành được chuyển sang hiển thị quá hạn khi qua thời điểm đến hạn, theo múi giờ Việt Nam. Nhiệm vụ đã xong giữ trạng thái hoàn thành, kể cả nộp muộn.
 - Hoàn thành tất cả nhiệm vụ con sẽ hoàn thành nhiệm vụ cha. Mở lại một nhiệm vụ con sẽ đưa nhiệm vụ cha về đang làm.
 - Các quy tắc nghiệp vụ và hộp thoại được giữ lại để tích hợp backend; hiện tại không cập nhật dữ liệu cục bộ. Dữ liệu phục vụ kiểm thử chỉ nằm trong `tests/fixtures/`, không được nạp vào ứng dụng.

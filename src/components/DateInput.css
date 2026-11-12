@@ -1,0 +1,10 @@
+.date-input { display: inline-flex; position: relative; min-width: 0; width: 100%; align-items: center; }
+.date-input > input[type='text'] { width: 100%; padding-right: 36px; }
+.date-input-picker { position: absolute; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 24px; }
+.date-input-picker:focus-within { outline: 2px solid var(--green); outline-offset: 2px; }
+.date-input .date-input-picker input[type='date'] { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; padding: 0; margin: 0; opacity: 0; cursor: pointer; }
+.date-input-picker input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; }
+.flow-inline-date .date-input { width: 110px; }
+.quick-task-date .date-input { width: 116px; }
+.flow-inline-date .date-input > input, .quick-task-date .date-input > input { width: 100%; padding-right: 24px; }
+.flow-inline-date .date-input-picker, .quick-task-date .date-input-picker { right: 0; }

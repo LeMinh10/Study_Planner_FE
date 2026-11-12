@@ -8,6 +8,10 @@ import { MemoryRouter } from 'react-router-dom'
 const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
 after(async () => { await server.close(); delete globalThis.localStorage; delete globalThis.sessionStorage })
 const model = await server.ssrLoadModule('/src/utils/planner.ts')
+const dateInput = await server.ssrLoadModule('/src/utils/dateInput.ts')
+const { DateInput } = await server.ssrLoadModule('/src/components/DateInput.tsx')
+
+
 const storage = await server.ssrLoadModule('/src/data/planner.ts')
 const fixtures = await server.ssrLoadModule('/tests/fixtures/planner.ts')
 const student = await server.ssrLoadModule('/src/utils/studentView.ts')
@@ -27,6 +31,23 @@ function App({ auth = fixtureAuth } = {}) {
 }
 const now = Date.parse('2026-10-15T12:00:00+07:00')
 const task = (overrides = {}) => ({ id: 'test', subjectId: 'math', title: 'Nhiệm vụ thử', description: '', kind: 'assignment', dueDate: '2026-10-15', dueTime: '12:00', status: 'todo', importance: 'normal', subtasks: [], ...overrides })
+
+test('date fields display day first and preserve ISO form values', () => {
+  assert.equal(dateInput.displayDate('2026-11-06'), '06/11/2026')
+  assert.equal(dateInput.displayDate(''), '')
+  assert.equal(dateInput.parseDate('06/11/2026'), '2026-11-06')
+  assert.equal(dateInput.parseDate('6/1/2026'), '2026-01-06')
+  assert.equal(dateInput.parseDate('29/02/2024'), '2024-02-29')
+  for (const value of ['29/02/2026', '31/04/2026', '06/13/2026', '00/11/2026', '06/11/0000', '2026-11-06', '06/11/']) {
+    assert.equal(dateInput.parseDate(value), null, value)
+  }
+  assert.equal(dateInput.parseDate(''), '')
+  const markup = renderToString(createElement(DateInput, { name: 'startDate', defaultValue: '2026-11-06', required: true }))
+  assert.match(markup, /value="06\/11\/2026"/)
+  assert.match(markup, /type="hidden" name="startDate" value="2026-11-06"/)
+  assert.match(markup, /type="date"/)
+  assert.match(renderToString(createElement(DateInput)), /placeholder="dd\/mm\/yyyy"/)
+})
 
 test('overdue uses Vietnam deadline and does not reclassify finished tasks', () => {
   assert.equal(model.taskStatus(task(), now), 'todo')

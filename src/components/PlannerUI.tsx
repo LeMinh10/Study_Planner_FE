@@ -24,8 +24,8 @@ export function Modal({ title, children, onClose, wide = false, side = false }: 
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose()
   }}><div className="dialog-heading"><h2 id="active-dialog-title">{title}</h2><button type="button" className="icon-button" aria-label="Đóng hộp thoại" onClick={onClose}><Icon name="close" /></button></div>{children}</dialog>
 }
-export function FormActions({ onClose, label = 'Lưu thay đổi', disabled = false }: { onClose: () => void; label?: string; disabled?: boolean }) {
-  return <div className="dialog-actions"><button disabled={disabled} type="button" className="button button-secondary" onClick={onClose}>Hủy</button><button disabled={disabled} type="submit" className="button button-primary">{label}<Icon name="check" size={16} /></button></div>
+export function FormActions({ onClose, label = 'Lưu thay đổi', disabled = false, showIcon = true }: { onClose: () => void; label?: string; disabled?: boolean; showIcon?: boolean }) {
+  return <div className="dialog-actions"><button disabled={disabled} type="button" className="button button-secondary" onClick={onClose}>Hủy</button><button disabled={disabled} type="submit" className="button button-primary">{label}{showIcon && <Icon name="check" size={16} />}</button></div>
 }
 export function EmptyState({ title = 'Chưa có dữ liệu', description, children }: { title?: string; description?: string; children?: ReactNode }) {
   return <div className="empty-state"><h3>{title}</h3>{description && <p>{description}</p>}{children}</div>

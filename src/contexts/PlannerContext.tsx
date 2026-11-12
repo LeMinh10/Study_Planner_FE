@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import type { Dispatch, ReactNode } from 'react'
 import { createEmptyPlannerData } from '../data/planner'
+import { readSelectedSemester, saveSelectedSemester } from '../data/semesterSelection'
 import type { PlannerAction, PlannerData, PlannerTask, Semester, Subject } from '../types/planner'
 import * as academic from '../api/academic'
 import { useMockApi } from '../api/config'
@@ -44,6 +45,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const auth = useAuth()
   const { getAccessToken, isDemo } = auth
   const loggedIn = auth.status === 'authenticated'
+  const accountEmail = auth.user?.email ?? ''
   const [plannerData, updateData] = useReducer(plannerReducer, undefined, createEmptyPlannerData)
   const data = { ...plannerData, profile: auth.user ? {
     name: auth.user.name, email: auth.user.email, studentId: auth.user.studentId,
@@ -88,6 +90,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         const semesters = await academic.listSemesters(token, controller.signal)
         if (current !== generation.current) return
         updateData({ type: 'load-academic', semesters, subjects: [] })
+        const remembered = readSelectedSemester(accountEmail, semesters.map((semester) => semester.id))
+        if (remembered) updateData({ type: 'select-semester', id: remembered })
         setSemesterReady(true)
         const subjects = (await Promise.all(semesters.map((semester) => academic.listSubjects(token, semester.id, controller.signal)))).flat()
         if (current !== generation.current) return
@@ -99,7 +103,12 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }
     void load()
     return () => { generation.current = current + 1; controller.abort() }
-  }, [loggedIn, isDemo, getAccessToken, revision])
+  }, [loggedIn, isDemo, getAccessToken, accountEmail, revision])
+
+  useEffect(() => {
+    if (!loggedIn || !semesterReady || !plannerData.semesters.some((semester) => semester.id === plannerData.selectedSemesterId)) return
+    saveSelectedSemester(accountEmail, plannerData.selectedSemesterId)
+  }, [loggedIn, semesterReady, accountEmail, plannerData.selectedSemesterId, plannerData.semesters])
 
   async function saveSemester(value: Semester) {
     if (!canManageSemesters || busy.current) throw new Error('Học kỳ chưa sẵn sàng để ghi dữ liệu.')
