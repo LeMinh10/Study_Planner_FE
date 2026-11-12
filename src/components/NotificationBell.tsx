@@ -1,16 +1,21 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { usePlanner } from '../contexts/PlannerContext'
-import { formatDate } from '../utils/planner'
+import { useNavigate } from 'react-router-dom'
+import { notificationHref } from '../api/notifications'
+import { useNotifications } from '../hooks/useNotifications'
 import { Icon } from './Icon'
+import './notifications.css'
 
 export function NotificationBell() {
-  const { data, alerts, openTask } = usePlanner()
+  const c = useNotifications()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
-  const unread = alerts.filter((alert) => !data.readAlerts.includes(alert.key)).length
+  const unread = c.inbox?.tongChuaDoc ?? 0
+  const rows = c.inbox?.danhSach ?? []
+  const date = (value: string) => new Intl.DateTimeFormat('vi-VN', { timeZone: c.inbox?.muiGio ?? 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
 
   function close() {
     setOpen(false)
@@ -47,13 +52,19 @@ export function NotificationBell() {
     </button>
     {open && <div ref={panelRef} id={panelId} className="student-notification-popup" role="dialog" aria-labelledby={panelId + '-title'} tabIndex={-1}>
       <div className="student-notification-heading"><h2 id={panelId + '-title'}>Thông báo</h2><button type="button" className="icon-button" aria-label="Đóng thông báo" onClick={close}><Icon name="close" size={17} /></button></div>
-      {alerts.length ? <ul className="student-notification-list">{alerts.map((alert) => <li key={alert.key}>
-        <button type="button" className="student-notification-item" onClick={() => { close(); openTask(alert.task) }}>
-          <span className={'student-notification-kind' + (alert.overdue ? ' overdue' : '')}>{alert.overdue ? 'Quá hạn' : 'Sắp đến hạn'}</span>
-          <strong>{alert.task.title}</strong>
-          <small>Hạn {formatDate(alert.task.dueDate, true)} lúc {alert.task.dueTime}</small>
+      <div className="notification-toolbar"><div role="group" aria-label="Lọc thông báo"><button type="button" disabled={c.saving} aria-pressed={!c.unreadOnly} onClick={() => c.filter(false)}>Tất cả</button><button type="button" disabled={c.saving} aria-pressed={c.unreadOnly} onClick={() => c.filter(true)}>Chưa đọc</button></div><button type="button" className="notification-read-all" disabled={!unread || c.loading || c.saving} onClick={() => { void c.mark() }}>Đọc tất cả</button></div>
+      {c.error && <div className="notification-error" role="alert"><p>{c.error}</p><button type="button" disabled={c.loading || c.saving} onClick={c.reload}>Thử lại</button></div>}
+      {c.loading && <p className="notification-loading" role="status">{c.inbox ? 'Đang cập nhật…' : 'Đang tải thông báo…'}</p>}
+      {rows.length ? <ul className="student-notification-list">{rows.map((item) => <li key={item.ma}>
+        <button type="button" disabled={c.saving} className={'student-notification-item' + (!item.ngayDoc ? ' notification-unread' : '')} onClick={() => { void c.mark(item).then(ok => { if (ok) { close(); navigate(notificationHref(item)) } }) }}>
+          <span className={'student-notification-kind' + (item.quaHan ? ' overdue' : '')}>{item.tieuDe}{!item.ngayDoc && <span className="notification-unread-dot" aria-label="Chưa đọc" />}</span>
+          <strong>{item.tenNhiemVu}</strong>
+          {(item.tenMonHoc || item.tenHocKy) && <small>{[item.tenMonHoc, item.tenHocKy].filter(Boolean).join(' · ')}</small>}
+          {item.hanHieuLuc && <small>Hạn {date(item.hanHieuLuc)}</small>}
+          <small>{item.daHoanThanh ? 'Đã hoàn thành · ' : ''}{date(item.ngayPhat)}</small>
         </button>
-      </li>)}</ul> : <div className="student-notification-empty"><Icon name="bell" size={26} /><p>Chưa có thông báo</p><small>Nhiệm vụ sắp đến hạn hoặc quá hạn sẽ hiển thị tại đây.</small></div>}
+      </li>)}</ul> : !c.loading && !c.error && <div className="student-notification-empty"><Icon name="bell" size={26} /><p>{c.unreadOnly ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo'}</p></div>}
+      {c.inbox && c.inbox.tongSo > c.inbox.kichThuocTrang && <nav className="notification-pagination" aria-label="Trang thông báo"><button type="button" disabled={c.page <= 1 || c.loading || c.saving} onClick={() => c.turnPage(c.page - 1)}>Trước</button><span>{c.page}/{Math.ceil(c.inbox.tongSo / c.inbox.kichThuocTrang)}</span><button type="button" disabled={c.page * c.inbox.kichThuocTrang >= c.inbox.tongSo || c.loading || c.saving} onClick={() => c.turnPage(c.page + 1)}>Sau</button></nav>}
     </div>}
   </div>
 }

@@ -8,11 +8,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { createServer } from 'vite'
 import { createAcademicFixture, runSubjectChecks } from './browser-subjects.mjs'
+import { createTodayFixture, runTodayChecks } from './browser-today.mjs'
+import { createNotificationFixture, runNotificationChecks } from './browser-notifications.mjs'
 
 const chromePath = process.env.CHROME_PATH || ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 if (!chromePath) throw new Error('Set CHROME_PATH to a Chromium browser executable.')
 const subjectsOnly = process.env.TEST_SUBJECTS_UI === '1' || process.argv.includes('--subjects')
-for (const useLocalMock of subjectsOnly ? [false] : [false, true]) {
+const todayOnly = process.argv.includes('--today')
+const notificationsOnly = process.argv.includes('--notifications')
+for (const useLocalMock of subjectsOnly || todayOnly || notificationsOnly ? [false] : [false, true]) {
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-auth-test-')
 const userDir = fs.mkdtempSync(tempPrefix)
 const vite = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': JSON.stringify(useLocalMock ? 'true' : 'false'), 'import.meta.env.VITE_ENABLE_DEMO_AUTH': JSON.stringify(useLocalMock ? 'false' : 'true') }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
@@ -61,10 +65,13 @@ try {
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
   const cdp = (method, params) => send(method, params, sessionId)
   const calls = []
-  const academicFixture = subjectsOnly ? createAcademicFixture() : null
+  const academicFixture = subjectsOnly || todayOnly || notificationsOnly ? createAcademicFixture() : null
+  const todayFixture = todayOnly || notificationsOnly ? createTodayFixture() : null
+  const notificationFixture = createNotificationFixture()
+  if (!notificationsOnly) notificationFixture.state.rows = []
   const errors = []
   let registered = false, password = 'Strong123!', meFailure = 0, patchFailure = 0, expiresIn = 3600
-  let profile = { ma: 2, hoTen: 'Nguyễn An', email: 'an@example.com', maSoSinhVien: '', tenTruong: '', tenLop: '', nganhHoc: '', vaiTro: 'Student', dangHoatDong: true }
+  let profile = { ma: 2, hoTen: 'Nguyễn An', email: 'an@example.com', maSoSinhVien: '', tenTruong: '', tenLop: '', nganhHoc: '', vaiTro: 'Student', dangHoatDong: true, ...(todayOnly ? { muiGio: 'Asia/Ho_Chi_Minh' } : {}) }
   const managedUsers = [
     { ma: 11, hoTen: 'Lê Công Minh', email: '0306231307@caothang.edu.vn', maSoSinhVien: '0306231307', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: true, ngayTao: '2026-10-30T08:00:00+07:00', ngayCapNhat: '2026-10-30T08:00:00+07:00' },
     { ma: 12, hoTen: 'Trần Hồng Kỳ', email: '0306231303@caothang.edu.vn', maSoSinhVien: '0306231303', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: false, ngayTao: '2026-10-31T09:00:00+07:00', ngayCapNhat: '2026-10-31T09:00:00+07:00' },
@@ -80,7 +87,7 @@ try {
       const body = request.postData ? JSON.parse(request.postData) : undefined
       calls.push({ route, query: requestUrl.search, method: request.method, body })
       let status = 200, response
-      const academicReply = academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null
+      const academicReply = notificationFixture.handle(requestUrl, request.method, body) || (todayFixture ? await todayFixture.handle(requestUrl, request.method) : null) || (academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null)
       if (academicReply) { status = academicReply.status; response = academicReply.response }
       else if (route === '/api/v1/auth/register') {
         if (registered) { status = 409; response = { thongBao: 'Email đã tồn tại.' } }
@@ -204,7 +211,11 @@ try {
     await input('password', password); await input('confirmPassword', password)
   }
 
-  if (subjectsOnly) {
+  if (notificationsOnly) {
+    await runNotificationChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: notificationFixture, calls, errors })
+  } else if (todayOnly) {
+    await runTodayChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: todayFixture, calls, errors })
+  } else if (subjectsOnly) {
     await runSubjectChecks({ go, input, click, select, waitFor, evaluate, cdp, login, fixture: academicFixture, calls, errors })
   } else if (useLocalMock) {
     const networkAuthCalls = []

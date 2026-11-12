@@ -1,0 +1,21 @@
+.student-app .student-notifications .student-notification-popup { width: 380px; }
+.student-app .notification-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.notification-toolbar > div { display: flex; gap: 4px; }
+.notification-toolbar button, .notification-pagination button, .notification-error button { padding: 5px 7px; border: 0; border-radius: 3px; background: transparent; color: #526d8d; font-size: 11px; }
+.notification-toolbar button[aria-pressed=true] { color: #265b9f; background: #eaf2ff; }
+.notification-toolbar .notification-read-all { color: #265b9f; }
+.notification-toolbar button:disabled, .notification-pagination button:disabled { opacity: .5; cursor: default; }
+.student-app .student-notification-item.notification-unread { background: #f0f6ff; }
+.student-app .student-notification-item { overflow-wrap: anywhere; }
+.student-app .student-notification-item > * { min-width: 0; max-width: 100%; }
+.student-app .student-notification-kind { display: flex; gap: 8px; align-items: center; }
+.notification-unread-dot { display: inline-block; flex: 0 0 6px; width: 6px; height: 6px; background: #326db6; border-radius: 50%; }
+.notification-loading, .notification-error { padding: 10px 14px; font-size: 12px; color: #617b99; }
+.notification-error { color: #a34c35; }
+.notification-error p { overflow-wrap: anywhere; }
+.notification-error button { padding-left: 0; color: #265b9f; text-decoration: underline; }
+.notification-pagination { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 11px; color: #617b99; }
+@media (max-width: 600px) {
+  .student-app .student-notifications .student-notification-popup { position: fixed; top: 68px; left: 12px; right: 12px; width: auto; max-width: calc(100vw - 24px); }
+  .student-app .student-notifications .student-notification-list { max-height: calc(100dvh - 240px); }
+}
