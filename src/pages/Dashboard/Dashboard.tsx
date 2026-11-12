@@ -28,7 +28,7 @@ export function Dashboard() {
   useEffect(() => { setSelected(null); setAllRecommendations(false); setAllDaily(false) }, [semester])
   const scoped = (c.tasks ?? []).filter((task) => taskInScope(task, semester))
   const events = (c.calendar?.suKien ?? []).filter((event) => eventInScope(event, semester))
-  const ranked = recommend(scoped, c.now)
+  const ranked = recommend(scoped, c.now, c.priorityRule?.cauHinh)
   const dueToday = dailyTasks(scoped, c.now, c.zone)
   const pendingToday = dueToday.filter((task) => !isDone(task))
   const completedToday = dueToday.filter(isDone)
@@ -36,9 +36,10 @@ export function Dashboard() {
   const sessions = agenda(events, c.now, c.zone)
   const next = nextClass(events, c.now, c.zone)
   const today = ngay(c.now, c.zone)
-  const busy = c.taskLoading || c.calendarLoading
+  const busy = c.taskLoading || c.calendarLoading || c.priorityLoading
   const metadataPending = c.academicLoading
   const taskReady = c.tasks !== undefined && !metadataPending
+  const priorityReady = taskReady && c.priorityRule !== undefined
   const calendarReady = c.calendar !== undefined && !metadataPending
   const progress = dueToday.length ? Math.round(completedToday.length / dueToday.length * 100) : 0
   const selectedTask = selected ? scoped.find((task) => task.ma === selected.ma) ?? selected : null
@@ -64,13 +65,14 @@ export function Dashboard() {
       <div className="today-grid">
         <div className="today-main">
           <section className="today-panel today-priorities" aria-labelledby="today-priority-title">
-            <header className="today-panel-heading"><h2 id="today-priority-title">Gợi ý nên làm trước</h2>{c.taskLoading && c.tasks !== undefined && <span className="today-updating" role="status">Đang cập nhật…</span>}</header>
+            <header className="today-panel-heading"><h2 id="today-priority-title">Gợi ý nên làm trước</h2>{(c.taskLoading || c.priorityLoading) && priorityReady && <span className="today-updating" role="status">Đang cập nhật…</span>}</header>
             {c.taskError && <ReadError message={(c.tasks ? 'Đang hiển thị lần tải trước. ' : '') + c.taskError} retry={c.reload} loading={c.taskLoading} />}
-            {!taskReady && !c.taskError ? <Loading label="Đang tải gợi ý ưu tiên…" /> : taskReady && ranked.length ? <ol className="today-priority-list">{(allRecommendations ? ranked : ranked.slice(0, 5)).map(({ task }, index) => <li key={task.ma} className={index === 0 ? 'today-first-choice' : ''}>
+            {c.priorityError && <ReadError message={(c.priorityRule ? 'Đang dùng quy tắc lần tải trước. ' : '') + c.priorityError} retry={c.reload} loading={c.priorityLoading} />}
+            {!priorityReady && !c.taskError && !c.priorityError ? <Loading label="Đang tải gợi ý ưu tiên…" /> : priorityReady && ranked.length ? <ol className="today-priority-list">{(allRecommendations ? ranked : ranked.slice(0, 5)).map(({ task }, index) => <li key={task.ma} className={index === 0 ? 'today-first-choice' : ''}>
               <span className="today-rank" aria-label={`Ưu tiên ${index + 1}`}>{String(index + 1).padStart(2, '0')}</span>
               <div className="today-recommendation"><button className="today-task-title" onClick={() => setSelected(task)}>{task.tieuDe}</button><TaskMeta task={task} /></div><button type="button" className="today-open" aria-label={'Xem nhiệm vụ: ' + task.tieuDe} onClick={() => setSelected(task)}><Icon name="arrow-right" size={16} /></button>
-            </li>)}</ol> : taskReady && !c.taskError ? <Empty title="Chưa có việc cần gợi ý" /> : null}
-            {taskReady && ranked.length > 5 && <button className="today-show-more" aria-expanded={allRecommendations} onClick={() => setAllRecommendations((value) => !value)}>{allRecommendations ? 'Thu gọn còn 5 gợi ý' : `Xem tất cả ${ranked.length} gợi ý`}<Icon name={allRecommendations ? 'chevron-left' : 'chevron-right'} size={14} /></button>}
+            </li>)}</ol> : priorityReady && !c.taskError ? <Empty title="Chưa có việc cần gợi ý" /> : null}
+            {priorityReady && ranked.length > 5 && <button className="today-show-more" aria-expanded={allRecommendations} onClick={() => setAllRecommendations((value) => !value)}>{allRecommendations ? 'Thu gọn còn 5 gợi ý' : `Xem tất cả ${ranked.length} gợi ý`}<Icon name={allRecommendations ? 'chevron-left' : 'chevron-right'} size={14} /></button>}
           </section>
 
           <section className="today-panel today-daily" aria-labelledby="today-daily-title"><header className="today-panel-heading"><h2 id="today-daily-title">Việc cần theo dõi</h2><Link to="/tasks?view=today" className="today-text-link">Mở danh sách<Icon name="arrow-right" size={14} /></Link></header>

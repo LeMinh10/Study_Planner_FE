@@ -191,10 +191,10 @@ test('anonymous startup cannot render protected pages when storage is unavailabl
   } finally { delete globalThis.localStorage; delete globalThis.sessionStorage }
 })
 
-test('admin entry renders its own login without the student navigation or account helpers', () => {
+test('legacy admin entry cannot render a separate login or protected admin content for a student', () => {
   const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/admin'] }, createElement(App)))
-  assert(markup.includes('Đăng nhập admin'))
-  assert(markup.includes('Tài khoản quản trị'))
+  assert(!markup.includes('Đăng nhập admin'))
+  assert(!markup.includes('Tài khoản quản trị'))
   assert(!markup.includes('Menu chính'))
   assert(!markup.includes('id="main-content"'))
   assert(!markup.includes('Điền tài khoản mẫu'))
@@ -245,7 +245,8 @@ test('initial planner has no personal information, seeded records or selection',
 test('all proposal pages render correct content and the desktop shell', () => {
   const routes = { '/today': 'Hôm nay', '/tasks?subject=math': 'Không tìm thấy môn học', '/semesters': 'Học kỳ', '/subjects': 'Môn học', '/tasks?subject=missing': 'Không tìm thấy môn học', '/schedule': 'Thời khóa biểu', '/tasks': 'Nhiệm vụ', '/tasks?view=priority': 'Ưu tiên cao trước', '/tasks?layout=board': 'Nhiệm vụ của tôi', '/tasks?layout=calendar': 'Nhiệm vụ của tôi', '/calendar': 'Lịch', '/statistics': 'Tiến độ', '/profile': 'Hồ sơ cá nhân', '/login': 'Đăng nhập', '/register': 'Đăng ký', '/missing': 'Không tìm thấy trang' }
   for (const [path, heading] of Object.entries(routes)) {
-    const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
+    const auth = ['/login', '/register'].includes(path) ? { ...fixtureAuth, user: null, status: 'anonymous' } : fixtureAuth
+    const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App, { auth })))
     assert(markup.includes(heading) || (path === '/tasks?layout=board' && markup.includes('Tất cả nhiệm vụ')) || (path === '/tasks?layout=calendar' && markup.includes('Thời khóa biểu')), `${path}: heading`)
     assert(!markup.includes('NaN'), `${path}: no invalid metrics`)
     assert(!markup.includes('mobile-menu'), `${path}: desktop only`)
@@ -336,7 +337,10 @@ test('academic and statistics pages display empty states instead of seeded recor
 })
 
 test('authentication stays enabled; academic writes wait for successful API reads', () => {
-  const render = (path) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
+  const render = (path) => {
+    const auth = ['/login', '/register'].includes(path) ? { ...fixtureAuth, user: null, status: 'anonymous' } : fixtureAuth
+    return renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App, { auth })))
+  }
   for (const path of ['/login', '/register']) {
     const markup = render(path)
     assert(markup.includes('<fieldset class="form-fields">'), path)

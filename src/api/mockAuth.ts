@@ -1,6 +1,8 @@
 // Local account simulation for frontend development. These tokens are accepted
 // only by this adapter; they do not authenticate against a real backend.
 import { demoStudents } from '../admin/studentAccounts'
+import { mockPriorityRequest } from './mockPriorityRules'
+import type { MockPriorityState } from './mockPriorityRules'
 
 interface MockUser {
   ma: number
@@ -18,8 +20,8 @@ interface MockUser {
   ngayCapNhat: string
 }
 interface MockAccount { user: MockUser; salt: string; passwordHash: string }
-interface MockSession { token: string; accountId: number; expiresAt: number }
-interface MockDatabase { version: 1; nextId: number; accounts: MockAccount[]; sessions: MockSession[]; adminSeedVersion?: number }
+interface MockSession { token: string; accountId: number; expiresAt: number; revoked?: boolean }
+interface MockDatabase extends MockPriorityState { version: 1; nextId: number; accounts: MockAccount[]; sessions: MockSession[]; adminSeedVersion?: number }
 interface MockRequest { method?: string; body?: unknown; token?: string; signal?: AbortSignal }
 
 const STORAGE_KEY = 'studyplanner.mock-auth.v1'
@@ -169,11 +171,32 @@ async function handle(path: string, request: MockRequest): Promise<Response> {
     return json(200, { tokenTruyCap: session.token, loaiToken: 'Bearer', hetHanLuc: new Date(session.expiresAt).toISOString(), nguoiDung: publicUser(account) })
   }
   const adminRequest = path === '/admin/users' || path.startsWith('/admin/users/')
-  if (!['/users/me', '/users/me/change-password'].includes(path) && !adminRequest) return failure(404, 'Không tìm thấy chức năng yêu cầu.')
+  const overviewRequest = path === '/admin/overview'
+  const priorityRequest = path === '/priority-rules/active' || path === '/admin/priority-rules' || path.startsWith('/admin/priority-rules/')
+  if (!['/users/me', '/users/me/change-password'].includes(path) && !adminRequest && !priorityRequest && !overviewRequest) return failure(404, 'Không tìm thấy chức năng yêu cầu.')
   const session = data.sessions.find((item) => item.token === request.token && item.expiresAt > Date.now())
   const account = session ? data.accounts.find((item) => item.user.ma === session.accountId) : undefined
   if (!session || !account) return failure(401, 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.', 'INVALID_TOKEN')
-  if (!account.user.dangHoatDong) return failure(403, 'Tài khoản đã bị vô hiệu hóa.', 'ACCOUNT_DISABLED')
+  if (!account.user.dangHoatDong) return failure(401, 'Tài khoản đã bị vô hiệu hóa.', 'ACCOUNT_DISABLED')
+  if (session.revoked) return failure(401, 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.', 'INVALID_TOKEN')
+  if (overviewRequest) {
+    if (account.user.vaiTro !== 'Admin') return failure(403, 'Bạn không có quyền xem tổng quan.', 'FORBIDDEN')
+    if (method !== 'GET') return failure(405, 'Phương thức yêu cầu chưa được hỗ trợ.')
+    const now = Date.now(), from = now - 7 * 86400000
+    const students = data.accounts.map(item => item.user).filter(user => user.vaiTro === 'Student')
+    return json(200, { tongSinhVien: students.length, dangMo: students.filter(user => user.dangHoatDong).length,
+      daKhoa: students.filter(user => !user.dangHoatDong).length,
+      moiTrong7Ngay: students.filter(user => Date.parse(user.ngayTao) >= from && Date.parse(user.ngayTao) <= now).length,
+      tuNgay: new Date(from).toISOString(), denNgay: new Date(now).toISOString(),
+      sinhVienMoi: [...students].sort((a, b) => Date.parse(b.ngayTao) - Date.parse(a.ngayTao) || b.ma - a.ma).slice(0, 5)
+        .map(user => ({ ma: user.ma, hoTen: user.hoTen, email: user.email, dangHoatDong: user.dangHoatDong, ngayTao: user.ngayTao })) })
+  }
+  if (priorityRequest) {
+    if (path.startsWith('/admin/') && account.user.vaiTro !== 'Admin') return failure(403, 'Bạn không có quyền quản lý quy tắc ưu tiên.', 'FORBIDDEN')
+    const result = mockPriorityRequest(data, url, method, body)
+    if (method !== 'GET' && result.ok) saveDatabase(data)
+    return result
+  }
   if (adminRequest) {
     if (account.user.vaiTro !== 'Admin') return failure(403, 'Bạn không có quyền quản lý người dùng.', 'FORBIDDEN')
     if (path === '/admin/users' && method === 'GET') {
@@ -185,9 +208,17 @@ async function handle(path: string, request: MockRequest): Promise<Response> {
       const trang = numberParameter('Trang', 1, 2147483647)
       const kichThuocTrang = numberParameter('KichThuocTrang', 20, 100)
       const activeFilter = url.searchParams.get('DangHoatDong')
+      const roleFilter = url.searchParams.get('VaiTro')
+      const fromDate = url.searchParams.get('TaoTu'), toDate = url.searchParams.get('TaoDen')
+      if (roleFilter !== null && !['Student', 'Admin'].includes(roleFilter) ||
+        [fromDate, toDate].some(value => value !== null && (!/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value)))) ||
+        fromDate && toDate && Date.parse(fromDate) > Date.parse(toDate)) return failure(400, 'Bộ lọc tài khoản chưa hợp lệ.', 'VALIDATION_ERROR')
       if (trang === null || kichThuocTrang === null || (activeFilter !== null && activeFilter !== '' && !['true', 'false'].includes(activeFilter))) return failure(400, 'Thông tin phân trang hoặc bộ lọc trạng thái chưa hợp lệ.', 'VALIDATION_ERROR')
       const search = (url.searchParams.get('TuKhoa') || '').trim().toLocaleLowerCase('vi')
       const filtered = data.accounts.filter(({ user }) =>
+        (!roleFilter || user.vaiTro === roleFilter) &&
+        (!fromDate || Date.parse(user.ngayTao) >= Date.parse(fromDate)) &&
+        (!toDate || Date.parse(user.ngayTao) <= Date.parse(toDate)) &&
         (!activeFilter || user.dangHoatDong === (activeFilter === 'true')) &&
         (!search || `${user.hoTen} ${user.email} ${user.maSoSinhVien}`.toLocaleLowerCase('vi').includes(search)),
       ).sort((left, right) => left.user.ma - right.user.ma)
@@ -203,7 +234,7 @@ async function handle(path: string, request: MockRequest): Promise<Response> {
       if (!dangHoatDong && target.user.vaiTro === 'Admin' && target.user.dangHoatDong && data.accounts.filter(({ user }) => user.vaiTro === 'Admin' && user.dangHoatDong).length <= 1) return failure(409, 'Không được khóa hoặc xóa quản trị viên hoạt động cuối cùng.', 'LAST_ACTIVE_ADMIN')
       target.user.dangHoatDong = dangHoatDong
       target.user.ngayCapNhat = new Date().toISOString()
-      if (!dangHoatDong) data.sessions = data.sessions.filter((item) => item.accountId !== target.user.ma)
+      if (!dangHoatDong) data.sessions.forEach((item) => { if (item.accountId === target.user.ma) item.revoked = true })
       saveDatabase(data)
       return json(200, { thongBao: dangHoatDong ? 'Kích hoạt tài khoản thành công.' : 'Vô hiệu hóa tài khoản thành công.', dangHoatDong })
     }

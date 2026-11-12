@@ -11,14 +11,13 @@ function demoUser(role: UserRole): AuthUser {
   return { name: admin ? 'Quản trị viên' : 'Sinh viên mẫu', email: admin ? ADMIN_DEMO_ACCOUNT.email : DEMO_ACCOUNT.email, studentId: '', school: '', className: '', major: '', role, isActive: true }
 }
 
-export function tryDemoLogin(email: string, password: string, role: UserRole): AuthUser | null {
+export function tryDemoLogin(email: string, password: string): AuthUser | null {
   if (!demoEnabled) return null
   const normalizedEmail = email.trim().toLowerCase()
   const accountRole = normalizedEmail === DEMO_ACCOUNT.email ? 'sinhvien' : normalizedEmail === ADMIN_DEMO_ACCOUNT.email ? 'admin' : null
   if (!accountRole) return null
   const account = accountRole === 'admin' ? ADMIN_DEMO_ACCOUNT : DEMO_ACCOUNT
   if (password !== account.password) throw new ApiError('Email hoặc mật khẩu không đúng.')
-  if (role !== accountRole) throw new ApiError(accountRole === 'admin' ? 'Vui lòng dùng trang đăng nhập admin cho tài khoản quản trị.' : 'Tài khoản mẫu chỉ dùng cho trang sinh viên.', 403)
   return demoUser(accountRole)
 }
 

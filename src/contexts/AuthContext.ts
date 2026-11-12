@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { AuthUser, ChangePasswordInput, RegisterInput, UserRole } from '../types/auth'
+import type { AuthUser, ChangePasswordInput, RegisterInput } from '../types/auth'
 import type { Profile } from '../types/planner'
 
 export interface AuthContextValue {
@@ -8,7 +8,7 @@ export interface AuthContextValue {
   status: 'anonymous' | 'loading' | 'authenticated' | 'error'
   notice: string
   error: string
-  login: (taiKhoan: string, password: string, role: UserRole) => Promise<void>
+  login: (taiKhoan: string, password: string) => Promise<AuthUser>
   register: (input: RegisterInput) => Promise<void>
   saveProfile: (profile: Profile) => Promise<void>
   changePassword: (input: ChangePasswordInput) => Promise<void>

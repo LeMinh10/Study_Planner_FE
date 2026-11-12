@@ -51,7 +51,7 @@ test('login verifies the JWT against the current-user API before accepting a stu
   const token = jwt()
   const hetHanLuc = new Date(Date.now() + 1800000).toISOString()
   const calls = mockFetch([[200, { tokenTruyCap: token, loaiToken: 'Bearer', hetHanLuc, nguoiDung: profile }], [200, { data: profile }]])
-  const result = await api.loginAccount(' AN@EXAMPLE.COM ', 'Strong123!', 'sinhvien')
+  const result = await api.loginAccount(' AN@EXAMPLE.COM ', 'Strong123!')
   assert.deepEqual(calls[0].payload, { taiKhoan: 'an@example.com', matKhau: 'Strong123!' })
   assert.equal(calls[0].url, '/api/v1/auth/login')
   assert.equal(calls[1].url, '/api/v1/users/me')
@@ -70,32 +70,35 @@ test('login verifies the JWT against the current-user API before accepting a stu
 test('MSSV login uses taiKhoan and preserves leading zeroes and identifier case', async () => {
   for (const account of ['0306231307', 'SvABC01']) {
     const calls = mockFetch([[200, { tokenTruyCap: jwt() }], [200, profile]])
-    await api.loginAccount(' ' + account + ' ', 'Strong123!', 'sinhvien')
+    await api.loginAccount(' ' + account + ' ', 'Strong123!')
     assert.deepEqual(calls[0].payload, { taiKhoan: account, matKhau: 'Strong123!' })
   }
 })
 
-test('admin login accepts only an admin role confirmed by the server', async () => {
+test('shared login uses the server-confirmed role and sends no client-selected role', async () => {
   const token = jwt({ role: 'admin' })
-  mockFetch([[200, { tokenTruyCap: token }], [200, { ...profile, vaiTro: 'Admin' }]])
-  assert.equal((await api.loginAccount('admin@example.com', 'Strong123!', 'admin')).user.role, 'admin')
+  const calls = mockFetch([[200, { tokenTruyCap: token, nguoiDung: profile }], [200, { ...profile, vaiTro: 'Admin' }]])
+  const admin = await api.loginAccount('an@example.com', 'Strong123!')
+  assert.equal(admin.user.role, 'admin')
+  assert.equal(session.roleHome(admin.user.role), '/admin/overview')
+  assert.deepEqual(calls[0].payload, { taiKhoan: 'an@example.com', matKhau: 'Strong123!' })
   mockFetch([[200, { tokenTruyCap: token }], [200, profile]])
-  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!', 'admin'), /không có quyền quản trị/)
-  mockFetch([[200, { tokenTruyCap: token }], [200, { ...profile, vaiTro: 'Admin' }]])
-  await assert.rejects(api.loginAccount('admin@example.com', 'Strong123!', 'sinhvien'), /trang đăng nhập admin/)
+  const student = await api.loginAccount('admin@example.com', 'Strong123!')
+  assert.equal(student.user.role, 'sinhvien', 'Profile role wins over an admin-looking email and JWT claim')
+  assert.equal(session.roleHome(student.user.role), '/today')
 })
 
 test('wrong passwords, disabled accounts, unknown roles and expired tokens never create sessions', async () => {
   mockFetch([[401, { thongBao: 'Tài khoản hoặc mật khẩu không đúng.' }]])
-  await assert.rejects(api.loginAccount('an@example.com', 'wrong', 'sinhvien'), /mật khẩu không đúng/)
+  await assert.rejects(api.loginAccount('an@example.com', 'wrong'), /mật khẩu không đúng/)
   mockFetch([[403, { thongBao: 'Tài khoản đã bị vô hiệu hóa.' }]])
-  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!', 'sinhvien'), /vô hiệu hóa/)
+  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!'), /vô hiệu hóa/)
   mockFetch([[200, { tokenTruyCap: jwt() }], [200, { ...profile, dangHoatDong: false }]])
-  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!', 'sinhvien'), /vô hiệu hóa/)
+  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!'), /vô hiệu hóa/)
   mockFetch([[200, { tokenTruyCap: jwt() }], [200, { ...profile, vaiTro: 'owner' }]])
-  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!', 'sinhvien'), /chưa hợp lệ/)
+  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!'), /chưa hợp lệ/)
   const calls = mockFetch([[200, { tokenTruyCap: jwt({ exp: 1 }) }]])
-  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!', 'sinhvien'), /hết hạn/)
+  await assert.rejects(api.loginAccount('an@example.com', 'Strong123!'), /hết hạn/)
   assert.equal(calls.length, 1)
 })
 
@@ -196,7 +199,7 @@ test('real API mode cannot accept or restore a fake demo session by default', as
     storage().set('studyplanner.demo.v1', 'admin')
     assert.equal(settings.useMockApi, false)
     assert.equal(disabledDemo.demoEnabled, false)
-    assert.equal(disabledDemo.tryDemoLogin('admin@studyplanner.vn', '123456', 'admin'), null)
+    assert.equal(disabledDemo.tryDemoLogin('admin@studyplanner.vn', '123456'), null)
     assert.equal(disabledDemo.readDemoSession(), null)
   } finally { await live.close() }
 })
@@ -207,14 +210,13 @@ test('profile payload permits clearing optional fields and sends only backend-ed
   })
 })
 
-test('demo login accepts only the sample password and student role, without a JWT', () => {
-  const user = demo.tryDemoLogin(' DEMO@studyplanner.vn ', '123456', 'sinhvien')
+test('shared demo login identifies the student account without a role selector or JWT', () => {
+  const user = demo.tryDemoLogin(' DEMO@studyplanner.vn ', '123456')
   assert.equal(user.role, 'sinhvien')
   assert.equal(user.name, 'Sinh viên mẫu')
   assert.equal(user.token, undefined)
-  assert.throws(() => demo.tryDemoLogin('demo@studyplanner.vn', 'wrong', 'sinhvien'), /không đúng/)
-  assert.throws(() => demo.tryDemoLogin('demo@studyplanner.vn', '123456', 'admin'), /chỉ dùng cho trang sinh viên/)
-  assert.equal(demo.tryDemoLogin('real@example.com', '123456', 'sinhvien'), null)
+  assert.throws(() => demo.tryDemoLogin('demo@studyplanner.vn', 'wrong'), /không đúng/)
+  assert.equal(demo.tryDemoLogin('real@example.com', '123456'), null)
 })
 
 test('demo session restores only the fixed student identity and logout removes the marker', () => {
@@ -229,14 +231,13 @@ test('demo session restores only the fixed student identity and logout removes t
   assert.equal(entries.size, 0)
 })
 
-test('admin demo credentials have a fixed admin identity and cannot log into the student entry', () => {
-  const user = demo.tryDemoLogin(' ADMIN@studyplanner.vn ', '123456', 'admin')
+test('shared demo login identifies the fixed admin account without a role selector', () => {
+  const user = demo.tryDemoLogin(' ADMIN@studyplanner.vn ', '123456')
   assert.equal(user.role, 'admin')
   assert.equal(user.email, 'admin@studyplanner.vn')
   assert.equal(user.name, 'Quản trị viên')
   assert.equal(user.token, undefined)
-  assert.throws(() => demo.tryDemoLogin('admin@studyplanner.vn', 'wrong', 'admin'), /không đúng/)
-  assert.throws(() => demo.tryDemoLogin('admin@studyplanner.vn', '123456', 'sinhvien'), /trang đăng nhập admin/)
+  assert.throws(() => demo.tryDemoLogin('admin@studyplanner.vn', 'wrong'), /không đúng/)
 })
 
 test('admin demo session restores its role and logout removes it without storing credentials', () => {

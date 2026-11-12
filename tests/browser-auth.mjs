@@ -10,16 +10,25 @@ import { createServer } from 'vite'
 import { createAcademicFixture, runSubjectChecks } from './browser-subjects.mjs'
 import { createTodayFixture, runTodayChecks } from './browser-today.mjs'
 import { createNotificationFixture, runNotificationChecks } from './browser-notifications.mjs'
+import { createPriorityFixture, runPriorityChecks } from './browser-priority-rules.mjs'
+import { createOverviewFixture, overviewUsers, runOverviewChecks } from './browser-overview.mjs'
+import { createSessionLockFixture, runSessionLockChecks } from './browser-session-lock.mjs'
+import { createStatisticsFixture, runStatisticsChecks } from './browser-statistics.mjs'
 
 const chromePath = process.env.CHROME_PATH || ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 if (!chromePath) throw new Error('Set CHROME_PATH to a Chromium browser executable.')
 const subjectsOnly = process.env.TEST_SUBJECTS_UI === '1' || process.argv.includes('--subjects')
 const todayOnly = process.argv.includes('--today')
 const notificationsOnly = process.argv.includes('--notifications')
-for (const useLocalMock of subjectsOnly || todayOnly || notificationsOnly ? [false] : [false, true]) {
+const priorityOnly = process.argv.includes('--priority-rules')
+const overviewOnly = process.argv.includes('--overview')
+const sessionLockOnly = process.argv.includes('--session-lock')
+const statisticsOnly = process.argv.includes('--statistics')
+for (const useLocalMock of subjectsOnly || todayOnly || notificationsOnly || priorityOnly || overviewOnly || sessionLockOnly || statisticsOnly ? [false] : [false, true]) {
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-auth-test-')
 const userDir = fs.mkdtempSync(tempPrefix)
-const vite = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': JSON.stringify(useLocalMock ? 'true' : 'false'), 'import.meta.env.VITE_ENABLE_DEMO_AUTH': JSON.stringify(useLocalMock ? 'false' : 'true') }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
+const sessionLockFixture = createSessionLockFixture()
+const vite = await createServer({ plugins: sessionLockOnly ? [{ name: 'session-lock-test-stream', configureServer(server) { server.middlewares.use(sessionLockFixture.middleware) } }] : [], define: { 'import.meta.env.VITE_USE_MOCK_API': JSON.stringify(useLocalMock ? 'true' : 'false'), 'import.meta.env.VITE_ENABLE_DEMO_AUTH': JSON.stringify(useLocalMock ? 'false' : 'true') }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
 let chrome, socket
 try {
   await vite.listen()
@@ -65,18 +74,23 @@ try {
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
   const cdp = (method, params) => send(method, params, sessionId)
   const calls = []
-  const academicFixture = subjectsOnly || todayOnly || notificationsOnly ? createAcademicFixture() : null
-  const todayFixture = todayOnly || notificationsOnly ? createTodayFixture() : null
+  const academicFixture = subjectsOnly || todayOnly || notificationsOnly || priorityOnly || statisticsOnly ? createAcademicFixture() : null
+  const statisticsFixture = createStatisticsFixture()
+  const todayFixture = todayOnly || notificationsOnly || priorityOnly ? createTodayFixture() : null
+  const { mockPriorityRequest } = await vite.ssrLoadModule('/src/api/mockPriorityRules.ts')
+  const priorityFixture = createPriorityFixture(mockPriorityRequest)
   const notificationFixture = createNotificationFixture()
   if (!notificationsOnly) notificationFixture.state.rows = []
   const errors = []
   let registered = false, password = 'Strong123!', meFailure = 0, patchFailure = 0, expiresIn = 3600
-  let profile = { ma: 2, hoTen: 'Nguyễn An', email: 'an@example.com', maSoSinhVien: '', tenTruong: '', tenLop: '', nganhHoc: '', vaiTro: 'Student', dangHoatDong: true, ...(todayOnly ? { muiGio: 'Asia/Ho_Chi_Minh' } : {}) }
+  let profile = { ma: 2, hoTen: 'Nguyễn An', email: 'an@example.com', maSoSinhVien: '', tenTruong: '', tenLop: '', nganhHoc: '', vaiTro: 'Student', dangHoatDong: true, ...(todayOnly || statisticsOnly ? { muiGio: 'Asia/Ho_Chi_Minh' } : {}) }
   const managedUsers = [
     { ma: 11, hoTen: 'Lê Công Minh', email: '0306231307@caothang.edu.vn', maSoSinhVien: '0306231307', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: true, ngayTao: '2026-10-30T08:00:00+07:00', ngayCapNhat: '2026-10-30T08:00:00+07:00' },
     { ma: 12, hoTen: 'Trần Hồng Kỳ', email: '0306231303@caothang.edu.vn', maSoSinhVien: '0306231303', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: false, ngayTao: '2026-10-31T09:00:00+07:00', ngayCapNhat: '2026-10-31T09:00:00+07:00' },
     { ma: 13, hoTen: 'Quản trị viên', email: 'admin@example.com', maSoSinhVien: null, tenTruong: null, tenLop: null, nganhHoc: null, vaiTro: 'Admin', dangHoatDong: true, ngayTao: '2026-10-31T09:00:00+07:00', ngayCapNhat: '2026-10-31T09:00:00+07:00' },
   ]
+  if (overviewOnly) managedUsers.splice(0, managedUsers.length, ...overviewUsers())
+  const overviewFixture = createOverviewFixture(() => managedUsers)
   const token = (role) => 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expiresIn, role })).toString('base64url') + '.mock'
   let activeRole = 'sinhvien'
   handlers.set('Runtime.exceptionThrown', ({ exceptionDetails }) => errors.push(exceptionDetails.text + ': ' + (exceptionDetails.exception?.description || '')))
@@ -84,10 +98,15 @@ try {
     try {
       const requestUrl = new URL(request.url)
       const route = requestUrl.pathname
+      if (sessionLockOnly && route === '/api/v1/users/me/session-events') { await cdp('Fetch.continueRequest', { requestId }); return }
+      if (sessionLockOnly && sessionLockFixture.state.locked && route === '/api/v1/users/me') {
+        await cdp('Fetch.fulfillRequest', { requestId, responseCode: 401, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from(JSON.stringify({ code: 'ACCOUNT_DISABLED', title: 'Tài khoản của bạn đã bị khóa.' })).toString('base64') })
+        return
+      }
       const body = request.postData ? JSON.parse(request.postData) : undefined
       calls.push({ route, query: requestUrl.search, method: request.method, body })
       let status = 200, response
-      const academicReply = notificationFixture.handle(requestUrl, request.method, body) || (todayFixture ? await todayFixture.handle(requestUrl, request.method) : null) || (academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null)
+      const academicReply = (statisticsOnly ? await statisticsFixture.handle(requestUrl, request.method) : null) || await overviewFixture.handle(requestUrl, request.method, activeRole) || await priorityFixture.handle(requestUrl, request.method, body) || notificationFixture.handle(requestUrl, request.method, body) || (todayFixture ? await todayFixture.handle(requestUrl, request.method) : null) || (academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null)
       if (academicReply) { status = academicReply.status; response = academicReply.response }
       else if (route === '/api/v1/auth/register') {
         if (registered) { status = 409; response = { thongBao: 'Email đã tồn tại.' } }
@@ -122,7 +141,8 @@ try {
           const query = requestUrl.searchParams
           const keyword = (query.get('TuKhoa') || '').trim().toLowerCase()
           const active = query.get('DangHoatDong')
-          const users = managedUsers.filter((user) => (!keyword || `${user.hoTen} ${user.email} ${user.maSoSinhVien || ''}`.toLowerCase().includes(keyword)) && (active === null || user.dangHoatDong === (active === 'true')))
+          const roleFilter = query.get('VaiTro'), from = query.get('TaoTu'), to = query.get('TaoDen')
+          const users = managedUsers.filter((user) => (!keyword || `${user.hoTen} ${user.email} ${user.maSoSinhVien || ''}`.toLowerCase().includes(keyword)) && (active === null || user.dangHoatDong === (active === 'true')) && (!roleFilter || user.vaiTro === roleFilter) && (!from || Date.parse(user.ngayTao) >= Date.parse(from)) && (!to || Date.parse(user.ngayTao) <= Date.parse(to)))
           const trang = Number(query.get('Trang') || 1), kichThuocTrang = Number(query.get('KichThuocTrang') || 20)
           response = { danhSach: users.slice((trang - 1) * kichThuocTrang, trang * kichThuocTrang), trang, kichThuocTrang, tongSo: users.length }
         } else {
@@ -194,6 +214,7 @@ try {
     assert(await evaluate(`document.querySelector('.sidebar a[aria-label="Đăng xuất"]').getClientRects().length > 0`))
     await click('.sidebar .flow-sidebar-tools a[href="/subjects"]')
     await waitFor(at('/subjects'))
+    await waitFor(`document.querySelector('.sidebar a[href="/subjects"]')?.getAttribute('aria-current') === 'page'`)
     assert.equal(await evaluate('document.querySelector(".sidebar-toggle").getAttribute("aria-expanded")'), 'false')
     assert.equal(await evaluate(`document.querySelector('.sidebar a[href="/subjects"]').getAttribute('aria-current')`), 'page')
     await click('.sidebar-toggle')
@@ -202,6 +223,7 @@ try {
     assert.notEqual(await evaluate('getComputedStyle(document.querySelector(".student-profile-info")).display'), 'none')
     await click('.sidebar a[href="/today"]')
     await waitFor(at('/today'))
+    await waitFor(`document.querySelector('.sidebar nav a[href="/today"]')?.getAttribute('aria-current') === 'page'`)
   }
   const alertHas = (text) => 'document.querySelector("[role=alert]")?.textContent.includes(' + JSON.stringify(text) + ')'
   const at = (route) => 'location.pathname === ' + JSON.stringify(route)
@@ -211,7 +233,15 @@ try {
     await input('password', password); await input('confirmPassword', password)
   }
 
-  if (notificationsOnly) {
+  if (statisticsOnly) {
+    await runStatisticsChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: statisticsFixture, calls, errors })
+  } else if (sessionLockOnly) {
+    await runSessionLockChecks({ go, login, waitFor, evaluate, fixture: sessionLockFixture, errors })
+  } else if (overviewOnly) {
+    await runOverviewChecks({ go, click, waitFor, evaluate, cdp, login, fixture: overviewFixture, priority: priorityFixture, calls, errors })
+  } else if (priorityOnly) {
+    await runPriorityChecks({ go, input, click, waitFor, evaluate, cdp, login, fixture: priorityFixture, calls, errors })
+  } else if (notificationsOnly) {
     await runNotificationChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: notificationFixture, calls, errors })
   } else if (todayOnly) {
     await runTodayChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: todayFixture, calls, errors })
@@ -234,10 +264,11 @@ try {
     assert.equal(await evaluate('document.querySelector("input[name=studentCode]").readOnly'), false)
     assert(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'))
     await click('.profile-summary button'); await waitFor(at('/login'))
-    await go('/admin'); await waitFor('document.body.innerText.includes("Đăng nhập admin")')
-    await login('admin@studyplanner.vn', '123456'); await waitFor(at('/admin/students'))
+    await go('/admin'); await waitFor(at('/login'))
+    await login('admin@studyplanner.vn', '123456'); await waitFor(at('/admin/overview'))
+    await click('a[href="/admin/students"]')
     await waitFor('!!document.querySelector(".admin-students-table")')
-    await click('.admin-logout'); await waitFor(at('/admin'))
+    await click('.admin-logout'); await waitFor(at('/login'))
 
     await go('/register'); await waitFor('!!document.querySelector("input[name=fullName]")')
     await fillRegistration(); await click('button[type="submit"]'); await waitFor(at('/login'))
@@ -290,8 +321,9 @@ try {
     await click('.profile-summary button'); await waitFor(at('/login'))
 
     // Admin uses the same local account database as registration and profile editing.
-    await go('/admin'); await waitFor('document.body.innerText.includes("Đăng nhập admin")')
-    await login('admin@caothang.edu.vn', '0306231303'); await waitFor(at('/admin/students'))
+    await go('/admin'); await waitFor(at('/login'))
+    await login('admin@caothang.edu.vn', '0306231303'); await waitFor(at('/admin/overview'))
+    await click('a[href="/admin/students"]')
     await waitFor(userRows + ' === 6')
     assert((await evaluate('document.querySelector(".admin-students-table").innerText')).includes(updatedProfile.fullName))
     assert((await evaluate('document.querySelector(".admin-students-table").innerText')).includes('Quản trị viên'))
@@ -310,12 +342,12 @@ try {
     assert((await evaluate('document.querySelector(".admin-topbar").innerText')).includes('Chi tiết sinh viên'))
     await go(kyLink); await waitFor('!!document.querySelector(".admin-student-details")')
     await click('.admin-student-details button'); await waitFor('document.body.innerText.includes("Kích hoạt tài khoản thành công.")')
-    const kyToken = await evaluate(`(async () => { const { loginAccount } = await import('/src/api/auth.ts'); return (await loginAccount('0306231303', '123456', 'sinhvien')).token })()`)
+    const kyToken = await evaluate(`(async () => { const { loginAccount } = await import('/src/api/auth.ts'); return (await loginAccount('0306231303', '123456')).token })()`)
     await click('.admin-student-details button'); await waitFor('document.body.innerText.includes("Vô hiệu hóa tài khoản thành công.")')
-    const blockedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); const statuses = []; for (const action of [() => getCurrentUser(${JSON.stringify(kyToken)}), () => loginAccount('0306231303@caothang.edu.vn', '123456', 'sinhvien')]) { try { await action(); statuses.push(200) } catch (error) { statuses.push(error.status) } } return statuses })()`)
+    const blockedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); const statuses = []; for (const action of [() => getCurrentUser(${JSON.stringify(kyToken)}), () => loginAccount('0306231303@caothang.edu.vn', '123456')]) { try { await action(); statuses.push(200) } catch (error) { statuses.push(error.status) } } return statuses })()`)
     assert.deepEqual(blockedKy, [401, 401], 'Deactivation must revoke existing tokens and block new logins')
     await click('.admin-student-details button'); await waitFor('document.body.innerText.includes("Kích hoạt tài khoản thành công.")')
-    const reactivatedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); let previousStatus; try { await getCurrentUser(${JSON.stringify(kyToken)}); previousStatus = 200 } catch (error) { previousStatus = error.status } return { previousStatus, email: (await loginAccount('0306231303', '123456', 'sinhvien')).user.email } })()`)
+    const reactivatedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); let previousStatus; try { await getCurrentUser(${JSON.stringify(kyToken)}); previousStatus = 200 } catch (error) { previousStatus = error.status } return { previousStatus, email: (await loginAccount('0306231303', '123456')).user.email } })()`)
     assert.deepEqual(reactivatedKy, { previousStatus: 401, email: '0306231303@caothang.edu.vn' }, 'Activation allows a fresh login without restoring revoked tokens')
     await click('.admin-back-link'); await waitFor(at('/admin/students'))
     await waitFor('new URLSearchParams(location.search).get("TuKhoa") === "0306231303" && new URLSearchParams(location.search).get("DangHoatDong") === "false"')
@@ -324,7 +356,7 @@ try {
     await searchUsers(registrationFields.email); await waitFor(userRows + ' === 1 && document.querySelector(".admin-students-table").innerText.includes(' + JSON.stringify(updatedProfile.fullName) + ')')
     await click('.admin-students-table tbody a'); await waitFor('!!document.querySelector(".admin-student-details")')
     assert((await evaluate('document.querySelector(".admin-student-details").innerText')).includes(updatedProfile.className))
-    await click('.admin-logout'); await waitFor(at('/admin'))
+    await click('.admin-logout'); await waitFor(at('/login'))
     await go('/login'); await waitFor('!!document.querySelector("input[name=taiKhoan]")')
     await login('0306231303', '123456'); await waitFor(at('/today'))
     await openProfile(); await waitFor('document.querySelector("input[name=studentCode]").value === "0306231303"')
@@ -354,30 +386,30 @@ try {
   await openProfile(); await click('.profile-summary button'); await waitFor(at('/login'))
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.demo.v1")'), null)
 
-  await go('/admin'); await waitFor('document.body.innerText.includes("Đăng nhập admin")')
+  await go('/admin'); await waitFor(at('/login'))
   await login('admin@studyplanner.vn', 'wrong-password'); await waitFor(alertHas('không đúng'))
-  await login('admin@studyplanner.vn', '123456'); await waitFor(at('/admin/students'))
+  await login('admin@studyplanner.vn', '123456'); await waitFor(at('/admin/overview'))
   await waitFor('document.body.innerText.includes("Quản trị viên")')
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
   await waitFor('!!document.querySelector("[role=alert]")')
   assert(!await evaluate('!!document.querySelector(".admin-stats")'))
   await click('a[href="/admin/overview"]'); await waitFor(at('/admin/overview'))
   await waitFor('document.querySelector(".admin-topbar strong")?.textContent === "Tổng quan"')
-  assert.equal(await evaluate('document.querySelector("#admin-content").innerHTML'), '')
+  assert(await evaluate('!!document.querySelector(".admin-overview")'))
   assert.equal(await evaluate('document.querySelector(".admin-sidebar a[aria-current=page]").getAttribute("href")'), '/admin/overview')
   await go('/admin/overview'); await waitFor('!!document.querySelector("#admin-content")')
-  assert.equal(await evaluate('document.querySelector("#admin-content").innerHTML'), '')
+  assert(await evaluate('!!document.querySelector(".admin-overview")'))
   await click('a[href="/admin/priority-rules"]'); await waitFor(at('/admin/priority-rules'))
   await waitFor('document.querySelector(".admin-topbar strong")?.textContent === "Quy tắc ưu tiên"')
-  assert.equal(await evaluate('document.querySelector("#admin-content").innerHTML'), '')
+  assert(await evaluate('!!document.querySelector(".admin-priority-page")'))
   assert.equal(await evaluate('document.querySelector(".admin-sidebar a[aria-current=page]").getAttribute("href")'), '/admin/priority-rules')
   assert.deepEqual(await evaluate('[...document.querySelectorAll(".admin-sidebar nav a")].map((link) => link.getAttribute("href"))'), ['/admin/overview', '/admin/students', '/admin/priority-rules'])
   await go('/admin/priority-rules'); await waitFor('!!document.querySelector("#admin-content")')
-  assert.equal(await evaluate('document.querySelector("#admin-content").innerHTML'), '')
+  assert(await evaluate('!!document.querySelector(".admin-priority-page")'))
   await click('a[href="/admin/students"]'); await waitFor('!!document.querySelector("[role=alert]")')
   assert.equal(calls.length, 0, 'Admin demo login and restoration must not contact the backend')
-  await go('/tasks'); await waitFor(at('/admin/students'))
-  await click('.admin-logout'); await waitFor(at('/admin'))
+  await go('/tasks'); await waitFor(at('/admin/overview'))
+  await click('.admin-logout'); await waitFor(at('/login'))
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.demo.v1")'), null)
 
   await go('/profile'); await waitFor(at('/login'))
@@ -438,9 +470,14 @@ try {
   await go('/profile'); await waitFor(at('/login'))
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
   meFailure = 0
-  await go('/admin'); await waitFor('document.body.innerText.includes("Đăng nhập admin")')
-  await login(); await waitFor(alertHas('không có quyền quản trị'))
-  await login('admin@example.com'); await waitFor(at('/admin/students'))
+  await go('/admin'); await waitFor(at('/login'))
+  await login(); await waitFor(at('/today'))
+  await go('/admin/students'); await waitFor(at('/today'))
+  await openProfile(); await click('.profile-summary button'); await waitFor(at('/login'))
+  await login('admin@example.com'); await waitFor(at('/admin/overview'))
+  await go('/login'); await waitFor(at('/admin/overview'))
+  await go('/admin'); await waitFor(at('/admin/overview'))
+  await click('a[href="/admin/students"]'); await waitFor(at('/admin/students'))
   await waitFor(userRows + ' === 3')
   assert((await evaluate('document.querySelector(".admin-students-table").innerText')).includes('Lê Công Minh'))
   assert((await evaluate('document.querySelector(".admin-students-table").innerText')).includes('Quản trị viên'))
@@ -459,8 +496,8 @@ try {
   assert(calls.some((call) => call.route === '/api/v1/admin/users/12/deactivate' && call.method === 'PATCH' && call.body === undefined))
   await go('/admin/students/demo-student-1'); await waitFor('document.querySelector("#student-details-title")?.textContent === "Không tìm thấy sinh viên"')
   assert(!await evaluate('!!document.querySelector(".admin-student-details")'))
-  await go('/tasks'); await waitFor(at('/admin/students'))
-  await click('.admin-logout'); await waitFor(at('/admin'))
+  await go('/tasks'); await waitFor(at('/admin/overview'))
+  await click('.admin-logout'); await waitFor(at('/login'))
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
   expiresIn = 2
   await go('/login'); await waitFor('!!document.querySelector("input[name=taiKhoan]")')
@@ -471,6 +508,7 @@ try {
   console.log('PASS: Swagger v1 Vietnamese DTO contract, student/admin demo navigation, registration, login, profile, password change and JWT expiry (' + calls.length + ' intercepted requests).')
   }
 } finally {
+  sessionLockFixture.close()
   socket?.close()
   chrome?.kill()
   await vite.close()
