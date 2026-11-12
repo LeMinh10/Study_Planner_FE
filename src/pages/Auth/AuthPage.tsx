@@ -69,7 +69,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
               </div>
             </> : <label>Email hoặc MSSV<input name="taiKhoan" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Nhập email hoặc MSSV" maxLength={320} required value={taiKhoan} onChange={(event) => { setTaiKhoan(event.target.value); setError('') }} /></label>}
             <div className={register ? 'form-grid' : undefined}>
-              <label>Mật khẩu<input name="password" type="password" autoComplete={register ? 'new-password' : 'current-password'} minLength={register ? PASSWORD_MIN_LENGTH : undefined} maxLength={PASSWORD_MAX_LENGTH} placeholder={register ? 'Từ 8 đến 128 ký tự' : 'Nhập mật khẩu'} required value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} /></label>
+              <label>Mật khẩu<input name="password" type="password" autoComplete={register ? 'new-password' : 'current-password'} minLength={register ? PASSWORD_MIN_LENGTH : undefined} maxLength={PASSWORD_MAX_LENGTH} placeholder={register ? '' : 'Nhập mật khẩu'} required value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} /></label>
               {register && <label>Nhập lại mật khẩu<input name="confirmPassword" type="password" autoComplete="new-password" maxLength={PASSWORD_MAX_LENGTH} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>}
             </div>
             {error && <p className="auth-error" role="alert">{error}</p>}

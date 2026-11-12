@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react'
 
-export type IconName = 'overview' | 'calendar' | 'book' | 'chart' | 'search' | 'chevron-left' | 'chevron-right' | 'arrow-right' | 'plus' | 'check' | 'clock' | 'menu' | 'close' | 'sun' | 'headphones' | 'play' | 'pause' | 'reset' | 'code' | 'language' | 'math' | 'panel-left' | 'leaf' | 'edit' | 'trash' | 'bell' | 'user' | 'logout' | 'flag' | 'list' | 'layers'
+export type IconName = 'overview' | 'calendar' | 'book' | 'chart' | 'search' | 'chevron-left' | 'chevron-right' | 'arrow-right' | 'plus' | 'check' | 'clock' | 'menu' | 'close' | 'sun' | 'headphones' | 'play' | 'pause' | 'reset' | 'code' | 'language' | 'math' | 'panel-left' | 'leaf' | 'edit' | 'trash' | 'bell' | 'user' | 'logout' | 'flag' | 'list' | 'layers' | 'dots' | 'task-group' | 'link' | 'check-square' | 'undo'
 
 const paths: Record<IconName, ReactNode> = {
+  'check-square': <><rect x="3.5" y="3.5" width="17" height="17" rx="4" /><path d="m7.5 12 3 3 6-7" /></>,
+  dots: <g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></g>,
+  'task-group': <><rect x="3.5" y="3.5" width="17" height="17" rx="4" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+  link: <><path d="m10 14 4-4M9 16l-1 1a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0m0 8a3.5 3.5 0 0 0 5 0l4-4a3.5 3.5 0 0 0-5-5l-1 1" /></>,
   edit: <><path d="m15 4 5 5M4 20l5-1 12-12a2 2 0 0 0-5-5L4 14Z" /></>,
   trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></>,
   bell: <><path d="M5 9a7 7 0 0 1 14 0c0 7 2 7 2 8H3c0-1 2-1 2-8M9 21h6" /></>,
@@ -28,6 +32,7 @@ const paths: Record<IconName, ReactNode> = {
   headphones: <><path d="M4 14v-3a8 8 0 0 1 16 0v3" /><rect x="3" y="12" width="4" height="8" rx="2" /><rect x="17" y="12" width="4" height="8" rx="2" /></>,
   play: <path d="m8 5 11 7-11 7Z" />,
   pause: <path d="M8 5v14M16 5v14" />,
+  undo: <path d="m8 5-5 5 5 5M3 10h12a4 4 0 0 1 0 8h-3" />,
   reset: <path d="M4 10a8 8 0 1 1 .7 6M4 4v6h6" />,
   code: <path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" />,
   language: <path d="M3 5h12M9 3v2M5 5c.5 5 4 8 8 10M13 5c-.5 5-4 8-8 10M13 21l4-10 4 10M14.5 17h5" />,

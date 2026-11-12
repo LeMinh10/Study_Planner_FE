@@ -23,11 +23,11 @@ function sidebarLinkClass({ isActive }: { isActive: boolean }) {
 }
 
 export function AppLayout() {
-  const { data, dispatch, tasks, canMutate, canManageSubjects, academicError, academicLoading, academicBusy, retryAcademic, openTask, createTask, loggedIn, logout } = usePlanner()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { data, dispatch, tasks, canManageSubjects, academicError, academicLoading, academicBusy, retryAcademic, openTask, loggedIn, logout } = usePlanner()
+  const [sidebarPreference, setSidebarPreference] = useState<boolean | null>(null)
   const [subjectsCollapsed, setSubjectsCollapsed] = useState(false)
   const [query, setQuery] = useState('')
-  const [coreReady, setCoreReady] = useState({ path: '', ready: false })
+  const [coreReady, setCoreReady] = useState({ path: '', ready: false, showCreate: false })
   const syncIcon = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -35,6 +35,7 @@ export function AppLayout() {
   const navigate = useNavigate()
   const params = new URLSearchParams(location.search)
   const workspaceMode = location.pathname === '/' || location.pathname === '/tasks'
+  const sidebarCollapsed = sidebarPreference ?? (workspaceMode || location.pathname === '/calendar')
   const coreWorkspace = ['/tasks', '/calendar', '/schedule'].includes(location.pathname)
   const subjects = data.subjects.filter((subject) => subject.semesterId === data.selectedSemesterId)
   const scopedSubject = workspaceMode ? data.subjects.find((subject) => subject.id === params.get('subject')) : undefined
@@ -48,7 +49,7 @@ export function AppLayout() {
   const initials = data.profile.name.split(' ').filter(Boolean).slice(-2).map((word) => word.charAt(0)).join('').toLocaleUpperCase('vi')
 
   useEffect(() => {
-    const receive = (event: Event) => setCoreReady((event as CustomEvent<{ path: string; ready: boolean }>).detail)
+    const receive = (event: Event) => setCoreReady((event as CustomEvent<{ path: string; ready: boolean; showCreate: boolean }>).detail)
     window.addEventListener('studyplanner:core-ready', receive)
     return () => window.removeEventListener('studyplanner:core-ready', receive)
   }, [])
@@ -118,7 +119,7 @@ export function AppLayout() {
     </aside>
     <div className="workspace">
       <header className="topbar">
-        <div className="flow-top-location"><button type="button" className="sidebar-toggle" aria-controls="student-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} title={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}><Icon name={sidebarCollapsed ? 'menu' : 'panel-left'} size={20} /></button><strong>{title}</strong></div>
+        <div className="flow-top-location"><button type="button" className="sidebar-toggle" aria-controls="student-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} title={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} onClick={() => setSidebarPreference(!sidebarCollapsed)}><Icon name={sidebarCollapsed ? 'menu' : 'panel-left'} size={20} /></button><strong>{title}</strong></div>
         <div className="topbar-actions">
           <NotificationBell key={location.key} />
           <div className="search-container" ref={searchRef}>
@@ -126,7 +127,9 @@ export function AppLayout() {
             {normalized && <div className="search-results">{taskMatches.length > 0 && <span className="search-caption">NHIỆM VỤ</span>}{taskMatches.map((task) => <button className="search-task-result" key={task.id} onClick={() => { setQuery(''); openTask(task) }}><Icon name="list" size={15} />{task.title}</button>)}{subjectMatches.length > 0 && <span className="search-caption search-task-caption">MÔN HỌC</span>}{subjectMatches.map((subject) => <Link key={subject.id} to={subjectLink(subject.id)} onClick={() => setQuery('')}><Icon name="book" size={15} />{subject.name}</Link>)}{matches.length > 0 && <span className="search-caption search-task-caption">ĐI ĐẾN</span>}{matches.map((page) => <Link key={page.path} to={page.path} onClick={() => setQuery('')}><Icon name={page.icon} size={15} />{page.title}</Link>)}{!taskMatches.length && !subjectMatches.length && !matches.length && <p>Không tìm thấy kết quả phù hợp.</p>}</div>}
           </div>
           <label className="flow-active-semester"><span className="sr-only">Học kỳ đang xem</span><select value={data.selectedSemesterId} disabled={!data.semesters.length} onChange={(event) => selectSemester(event.target.value)}>{!data.semesters.length && <option value="">Chưa có học kỳ</option>}{data.semesters.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-          <button disabled={coreWorkspace ? !loggedIn || !coreReady.ready || coreReady.path !== location.pathname : !canMutate} title="Thêm nhiệm vụ học tập" className="flow-global-create" onClick={() => { if (coreWorkspace) window.dispatchEvent(new CustomEvent('studyplanner:create-task')); else createTask(scopedSubject?.id) }}><Icon name="plus" size={15} /><span>Tạo nhiệm vụ</span></button>
+          {coreWorkspace && coreReady.path === location.pathname && coreReady.showCreate &&
+            <button type="button" disabled={!loggedIn || !coreReady.ready} title="Thêm nhiệm vụ học tập" className="flow-global-create"
+              onClick={() => window.dispatchEvent(new Event('studyplanner:create-task'))}><Icon name="plus" size={15} /><span>Tạo nhiệm vụ</span></button>}
         </div>
       </header>
       <main id="main-content" tabIndex={-1}>{!['/subjects', '/subjects/new'].includes(location.pathname) && academicLoading && <p role="status">Đang tải học kỳ và môn học…</p>}{!['/subjects', '/subjects/new'].includes(location.pathname) && academicError && <div className="inline-notice" role="alert">Không tải được dữ liệu học kỳ/môn học: {academicError} <button className="text-button" disabled={academicBusy} onClick={retryAcademic}>Thử lại</button></div>}<Outlet /></main>

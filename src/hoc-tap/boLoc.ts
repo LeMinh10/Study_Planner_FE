@@ -4,6 +4,8 @@ export const cheDoNhiemVu: Record<string, string> = {
   all: 'Tất cả nhiệm vụ', today: 'Đến hạn hôm nay', upcoming: 'Đến hạn trong 7 ngày',
   overdue: 'Đã quá hạn', undated: 'Chưa đặt hạn', inbox: 'Việc cá nhân', completed: 'Đã hoàn thành',
 }
+export const khoangDaHoanThanh = { today: 'Hôm nay', yesterday: 'Hôm qua', last7: '7 ngày gần đây' }
+
 export function layCheDo(params: URLSearchParams) {
   const value = params.get('view')
   if (value === 'done') return 'completed'
@@ -16,8 +18,14 @@ export function layPhamVi(params: URLSearchParams, subjects: Subject[]) {
 }
 export function taoTruyVanNhiemVu(params: URLSearchParams, page: number, search: string, scope: { hocKy: string; monHoc: string }) {
   const view = layCheDo(params)
-  const sort = params.get('sort') ?? (params.get('view') === 'priority' ? 'priority' : 'due')
+  const sort = view === 'completed' ? 'completed' : params.get('sort') ?? (params.get('view') === 'priority' ? 'priority' : 'due')
   const query = new URLSearchParams({ cheDo: view, trang: String(page), kichThuocTrang: '20', sapXep: sort })
+  if (view === 'completed') {
+    const period = params.get('donePeriod') ?? ''
+    const day = params.get('doneDay') ?? ''
+    if (Object.hasOwn(khoangDaHoanThanh, period)) query.set('khoangHoanThanh', period)
+    else if (period === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(day)) query.set('ngayHoanThanh', day)
+  }
   if (view !== 'inbox') {
     if (scope.hocKy) query.set('maHocKy', scope.hocKy)
     if (scope.monHoc) query.set('maMonHoc', scope.monHoc)

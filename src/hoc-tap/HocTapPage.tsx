@@ -10,20 +10,28 @@ import { apiRequest } from '../api/client'
 import type { Semester, Subject } from '../types/planner'
 import { goi, LoiHocTap } from './api'
 import { loaiViec, trangThai, uuTien } from './time'
-import { cheDoNhiemVu, layCheDo, layPhamVi, taoTruyVanNhiemVu } from './boLoc'
+import { cheDoNhiemVu, khoangDaHoanThanh, layCheDo, layPhamVi, taoTruyVanNhiemVu } from './boLoc'
 import type { NhiemVu, Trang } from './types'
 import { ChiTietNhiemVu, NhiemVuView, SuaNhiemVu, ThemNhanh } from './NhiemVuView'
+import type { InlineChildDraft } from './NhiemVuView'
 import { LichView } from './LichView'
+import { ThungRacView } from './ThungRacView'
 import { LapLichView } from './LapLichView'
 import { KhungChiaChiTiet } from './KhungChiaChiTiet'
 import './hoc-tap.css'
+import './study-planning.css'
 
+type TienDoXemTruoc = { ma: number; tienDo: number } | null
+type SuccessToast = { message: string; undo?: () => Promise<unknown> }
+type DiemMoLich = { batch?: number; date?: string }
 interface HocTapState {
   token: string
   version: number | null
   zone: string
   zoneReady: boolean
   revision: number
+  tienDoXemTruoc: TienDoXemTruoc
+  setTienDoXemTruoc: (value: TienDoXemTruoc) => void
   semesters: Semester[]
   subjects: Subject[]
   hocKy: string
@@ -31,19 +39,22 @@ interface HocTapState {
   tasks: NhiemVu[]
   page: number
   total: number
+  pageCount: number
   nhiemVuXemPhien: NhiemVu | null
   setPage: (page: number) => void
   chonMonHoc: (id: string) => void
   chonNhiemVu: (id: number | null) => void
-  hienNhiemVuMoi: (task: NhiemVu) => void
+  hienNhiemVuMoi: (task: NhiemVu, giuDanhSach?: boolean) => void
   xemPhienNhiemVu: (task: NhiemVu | null) => void
+  moTab: (key: string, diemMo?: DiemMoLich) => void
   reload: () => void
   modal: (content: ReactNode) => void
   close: () => void
   run: (operation: () => Promise<unknown>) => Promise<void>
-  thongBaoThanhCong: (message: string) => void
+  thongBaoThanhCong: (message: string, undo?: SuccessToast['undo']) => void
 }
 const Context = createContext<HocTapState | null>(null)
+const shortcutIcons: Record<string, IconName> = { all: 'layers', today: 'sun', upcoming: 'calendar', inbox: 'book', overdue: 'clock', undated: 'list', completed: 'check-square' }
 const navigationIcons: Record<string, IconName> = { tasks: 'list', board: 'overview', calendar: 'calendar', classes: 'book', free: 'clock', planning: 'leaf', sessions: 'play' }
 export function useHocTap() {
   const value = useContext(Context)
@@ -119,37 +130,52 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
   const layout = params.get('layout') ?? 'list'
   const taskTab = layout === 'calendar' ? 'calendar' : layout === 'board' ? 'board' : 'tasks'
   const requestedTab = params.get('tab') ?? ''
-  const initialTab = ['tasks', 'board', 'calendar', 'classes', 'free', 'planning', 'sessions'].includes(requestedTab) ? requestedTab : mode === 'tasks' ? taskTab : 'calendar'
+  const initialTab = ['tasks', 'board', 'calendar', 'classes', 'free', 'planning', 'sessions', 'trash'].includes(requestedTab) ? requestedTab : mode === 'tasks' ? taskTab : 'calendar'
   const { hocKy, monHoc } = layPhamVi(params, data.subjects)
   const [zone, setZone] = useState('Asia/Ho_Chi_Minh')
   const [zoneReady, setZoneReady] = useState(false)
-  const [tasks, setTasks] = useState<NhiemVu[]>([])
   const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
-  const [version, setVersion] = useState<number | null>(null)
   const [revision, setRevision] = useState(0)
+  const [tienDoXemTruoc, setTienDoXemTruoc] = useState<TienDoXemTruoc>(null)
+  const [yeuCauThemBuoc, setYeuCauThemBuoc] = useState<number[] | null>(null)
+  const [moBuocMoi, setMoBuocMoi] = useState<{ revision: number; path: number[]; inlineDraft?: InlineChildDraft } | null>(null)
   const [error, setError] = useState('')
   const [versionConflict, setVersionConflict] = useState(false)
-  const [taskError, setTaskError] = useState('')
+  const [taskSnapshot, setTaskSnapshot] = useState<{ token: string; query: string; revision: number; tasks: NhiemVu[]; total: number; pageCount: number; version: number } | null>(null)
+  const [taskFailure, setTaskFailure] = useState<{ token: string; query: string; revision: number; message: string } | null>(null)
   const [profileError, setProfileError] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [loaded, setLoaded] = useState(false)
+  const [profileRevision, setProfileRevision] = useState(0)
   const [content, setContent] = useState<ReactNode>(null)
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useState<SuccessToast | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [calendarNavOpen, setCalendarNavOpen] = useState(false)
+  const learningNavId = useId()
   const filterPanelId = useId()
   const [createRequested, setCreateRequested] = useState(false)
   const [tab, setTab] = useState(initialTab)
+  const taskView = tab === 'tasks' || tab === 'board'
+  const trash = tab === 'trash'
+  const batchId = Number(params.get('studyBatch'))
+  const studyBatch = tab === 'sessions' && Number.isSafeInteger(batchId) && batchId > 0 ? batchId : undefined
+  const requestedDate = params.get('scheduleDate') ?? ''
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && Number.isFinite(Date.parse(requestedDate))
+    && new Date(requestedDate).toISOString().slice(0, 10) === requestedDate
+  const scheduleDate = tab === 'calendar' && validDate ? requestedDate : undefined
   const [nhiemVuXemPhien, setNhiemVuXemPhien] = useState<NhiemVu | null>(null)
   const ready = auth.status === 'authenticated' && !auth.isDemo && !useMockApi
   const token = ready ? auth.getAccessToken() : ''
   const invalidSubject = params.has('subject') && !academicLoading && !data.subjects.some(s => s.id === params.get('subject'))
   const view = layCheDo(params)
+  const completed = taskView && view === 'completed'
+  const showCreate = taskView && !completed
+  const donePeriod = params.get('donePeriod') ?? ''
+  const doneDay = params.get('doneDay') ?? ''
   const sort = params.get('sort') ?? (params.get('view') === 'priority' ? 'priority' : 'due')
   const taskId = Number(params.get('task'))
   const selectedTask = Number.isSafeInteger(taskId) && taskId > 0 ? taskId : null
+  const draftPath = yeuCauThemBuoc?.at(-1) === selectedTask ? yeuCauThemBuoc : null
   const reload = () => {
     setError('')
     setVersionConflict(false)
@@ -157,14 +183,15 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
   }
   useEffect(() => {
     if (!ready || invalidSubject) return
-    window.addEventListener('studyplanner:refresh', reload)
-    return () => window.removeEventListener('studyplanner:refresh', reload)
+    const sync = () => { reload(); setProfileRevision(value => value + 1) }
+    window.addEventListener('studyplanner:refresh', sync)
+    return () => window.removeEventListener('studyplanner:refresh', sync)
   }, [ready, invalidSubject])
   const modal = (value: ReactNode) => setContent(value)
   const close = () => setContent(null)
   useEffect(() => {
     if (!success) return
-    const timer = setTimeout(() => setSuccess(''), 7000)
+    const timer = setTimeout(() => setSuccess(null), 7000)
     return () => clearTimeout(timer)
   }, [success])
 
@@ -187,12 +214,14 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
     setPage(1)
   }
   function chonNhiemVu(id: number | null) {
+    setYeuCauThemBuoc(null)
     const next = new URLSearchParams(params)
     if (id) next.set('task', String(id))
     else next.delete('task')
     setParams(next)
   }
-  function hienNhiemVuMoi(task: NhiemVu) {
+  function hienNhiemVuMoi(task: NhiemVu, giuDanhSach = false) {
+    if (giuDanhSach && taskView) { chonNhiemVu(task.ma); return }
     const next = new URLSearchParams({ view: 'all', sort: 'created', task: String(task.ma) })
     if (task.maHocKy) next.set('semester', String(task.maHocKy))
     if (task.maMonHoc) next.set('subject', String(task.maMonHoc))
@@ -202,15 +231,38 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
     setPage(1)
     setTab('tasks')
   }
-  function xemPhienNhiemVu(task: NhiemVu | null) {
-    setNhiemVuXemPhien(task)
-    setTab('sessions')
+  function moTab(key: string, diemMo?: DiemMoLich) {
     const next = new URLSearchParams(params)
-    next.set('tab', 'sessions')
+    next.set('tab', key)
+    next.delete('studyBatch')
+    next.delete('scheduleDate')
+    if (diemMo?.batch) next.set('studyBatch', String(diemMo.batch))
+    if (diemMo?.date) next.set('scheduleDate', diemMo.date)
+    if (mode === 'tasks' && ['tasks', 'board', 'calendar'].includes(key)) {
+      next.set('layout', key === 'tasks' ? 'list' : key)
+    }
+    if (key === 'sessions') setNhiemVuXemPhien(null)
+    setTab(key)
     setParams(next)
+  }
+  function moDanhSachNhiemVu(shortcut: string) {
+    const next = new URLSearchParams(params)
+    next.set('tab', 'tasks')
+    next.set('layout', 'list')
+    next.set('view', shortcut)
+    next.delete('task')
+    next.delete('status')
+    setParams(next)
+    setPage(1)
+    setTab('tasks')
+  }
+  function xemPhienNhiemVu(task: NhiemVu | null) {
+    moTab('sessions')
+    setNhiemVuXemPhien(task)
   }
   function xoaBoLoc() {
     const next = new URLSearchParams()
+    if (completed) next.set('view', 'completed')
     for (const key of ['tab', 'layout']) if (params.has(key)) next.set(key, params.get(key)!)
     setParams(next)
     setQuery('')
@@ -223,25 +275,28 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
     return () => clearTimeout(timer)
   }, [query])
   const queryString = taoTruyVanNhiemVu(params, page, search, { hocKy, monHoc })
+  const snapshot = taskSnapshot?.token === token && taskSnapshot.query === queryString ? taskSnapshot : null
+  const taskError = taskFailure?.token === token && taskFailure.query === queryString && taskFailure.revision === revision ? taskFailure.message : ''
+  const version = snapshot?.revision === revision && !taskError ? snapshot.version : null
+  const tasks = snapshot?.tasks ?? []
+  const total = snapshot?.total ?? 0
+  const pageCount = snapshot?.pageCount ?? 1
   useEffect(() => {
     if (!token || invalidSubject) return
     const controller = new AbortController()
-    setLoading(true)
-    setTaskError('')
     goi<Trang<NhiemVu>>(token, '/tasks?' + queryString, { signal: controller.signal }).then(result => {
       if (controller.signal.aborted) return
-      setTasks(result.duLieu.danhSach)
-      setTotal(result.duLieu.tongSo)
-      setVersion(result.phienBan)
-      setLoaded(true)
+      const { danhSach, tongSo, kichThuocTrang } = result.duLieu
+      const lastPage = Math.max(1, Math.ceil(tongSo / kichThuocTrang))
+      setTaskFailure(null)
+      if (page > lastPage) { setPage(lastPage); return }
+      setTaskSnapshot({ token, query: queryString, revision, tasks: danhSach, total: tongSo, pageCount: lastPage, version: result.phienBan })
     }).catch(e => {
       if (controller.signal.aborted) return
-      setTaskError(e.message)
-      setVersion(null)
-      setLoaded(false)
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
+      setTaskFailure({ token, query: queryString, revision, message: e.message })
+    })
     return () => controller.abort()
-  }, [token, queryString, revision, invalidSubject])
+  }, [token, queryString, revision, invalidSubject, page])
   useEffect(() => {
     if (!token) return
     const controller = new AbortController()
@@ -255,23 +310,23 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
       setZoneReady(true)
     }).catch(e => { if (!controller.signal.aborted) setProfileError(e instanceof Error ? e.message : 'Chưa tải được múi giờ tài khoản.') })
     return () => controller.abort()
-  }, [token, revision])
+  }, [token, profileRevision])
   useEffect(() => {
-    const create = () => setCreateRequested(true)
+    const create = () => { if (showCreate) setCreateRequested(true) }
     window.addEventListener('studyplanner:create-task', create)
     return () => window.removeEventListener('studyplanner:create-task', create)
-  }, [])
+  }, [showCreate])
   useEffect(() => {
-    if (createRequested && version !== null && ready && zoneReady && !invalidSubject) {
+    if (showCreate && createRequested && version !== null && ready && zoneReady && !invalidSubject) {
       modal(<SuaNhiemVu baseline={version} />)
       setCreateRequested(false)
     }
-  }, [createRequested, version, ready, zoneReady, invalidSubject])
+  }, [showCreate, createRequested, version, ready, zoneReady, invalidSubject])
   useEffect(() => {
     const path = location.pathname
-    window.dispatchEvent(new CustomEvent('studyplanner:core-ready', { detail: { path, ready: ready && zoneReady && version !== null && !loading && !invalidSubject } }))
-    return () => { window.dispatchEvent(new CustomEvent('studyplanner:core-ready', { detail: { path, ready: false } })) }
-  }, [location.pathname, ready, zoneReady, version, loading, invalidSubject])
+    window.dispatchEvent(new CustomEvent('studyplanner:core-ready', { detail: { path, showCreate, ready: ready && zoneReady && version !== null && !invalidSubject } }))
+    return () => { window.dispatchEvent(new CustomEvent('studyplanner:core-ready', { detail: { path, ready: false, showCreate: false } })) }
+  }, [location.pathname, ready, zoneReady, version, invalidSubject, showCreate])
   async function run(operation: () => Promise<unknown>) {
     setError('')
     setVersionConflict(false)
@@ -282,16 +337,15 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
     }
   }
   const value: HocTapState = {
-    token, version, zone, zoneReady, revision, semesters: data.semesters, subjects: data.subjects,
-    hocKy, monHoc, tasks, page, total, nhiemVuXemPhien, setPage, chonMonHoc, chonNhiemVu,
-    hienNhiemVuMoi, xemPhienNhiemVu, reload, modal, close, run, thongBaoThanhCong: setSuccess,
+    token, version, zone, zoneReady, revision, tienDoXemTruoc, setTienDoXemTruoc, semesters: data.semesters, subjects: data.subjects,
+    hocKy, monHoc, tasks, page, total, pageCount, nhiemVuXemPhien, setPage, chonMonHoc, chonNhiemVu,
+    hienNhiemVuMoi, xemPhienNhiemVu, moTab, reload, modal, close, run, thongBaoThanhCong: (message, undo) => setSuccess({ message, undo }),
   }
   if (invalidSubject) return <section className="ht-workspace">
     <h1>Không tìm thấy môn học</h1>
     <p>Môn học này chưa có trong danh sách của bạn. Chọn tên môn từ thanh bên hoặc quay lại danh sách nhiệm vụ.</p>
     <button onClick={xoaBoLoc}>Xem tất cả nhiệm vụ</button>
   </section>
-  const taskView = tab === 'tasks' || tab === 'board'
   const filterSummary: string[] = []
   if (!taskView || view !== 'inbox') {
     if (hocKy) filterSummary.push('Học kỳ: ' + (data.semesters.find(s => s.id === hocKy)?.name ?? 'Đang chọn'))
@@ -305,68 +359,77 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
     if (priority) filterSummary.push('Ưu tiên: ' + (uuTien[priority] ?? 'Đang chọn'))
     if (type) filterSummary.push('Loại: ' + (loaiViec[type] ?? 'Đang chọn'))
     if (status && view !== 'completed') filterSummary.push('Trạng thái: ' + (trangThai[status] ?? 'Đang chọn'))
-    if (sort !== 'due') filterSummary.push('Sắp xếp: ' + (({ priority: 'Ưu tiên cao trước', progress: 'Tiến độ cao trước', created: 'Mới tạo trước' } as Record<string, string>)[sort] ?? 'Đang chọn'))
+    if (!completed && sort !== 'due') filterSummary.push('Sắp xếp: ' + (({ priority: 'Ưu tiên cao trước', progress: 'Tiến độ cao trước', created: 'Mới tạo trước' } as Record<string, string>)[sort] ?? 'Đang chọn'))
   }
-  return <Context.Provider value={value}><section className="ht-workspace">
-    <div className={'ht-learning-layout' + (!ready ? ' ht-navigation-unavailable' : '')}>
-    {ready && <nav className="ht-tabs" aria-label="Công cụ học tập">
+  if (taskView && query.trim()) filterSummary.push('Tìm: ' + query.trim())
+  const calendar = tab === 'calendar'
+  const study = ['classes', 'free', 'planning', 'sessions'].includes(tab)
+  const classScope = tab === 'classes'
+  const showScope = !trash && !studyBatch && tab !== 'free'
+  const showClearFilters = filterSummary.length > 0 || (taskView && filtersOpen)
+  const filterActions = <div className="ht-filter-actions">
+    {!classScope && <button type="button" className="ht-filter-toggle" aria-expanded={filtersOpen} aria-controls={filterPanelId}
+      onClick={() => setFiltersOpen(open => !open)}><Icon name="layers" size={16} />{calendar || study ? 'Bộ lọc' : filtersOpen ? 'Thu gọn bộ lọc' : 'Mở bộ lọc'}</button>}
+    {!!filterSummary.length && <span className="ht-filter-count">{filterSummary.length} tùy chọn</span>}
+    {showClearFilters && <button type="button" onClick={xoaBoLoc}>Xóa bộ lọc</button>}
+  </div>
+  const showLearningNav = ready && (!calendar || calendarNavOpen)
+  return <Context.Provider value={value}><section className={'ht-workspace' + (taskView ? ' ht-task-workspace' : calendar ? ' ht-calendar-workspace' : study ? ' ht-study-workspace' : '')}>
+    <div className={'ht-learning-layout' + (!showLearningNav ? ' ht-navigation-unavailable' : '')}>
+    {showLearningNav && <nav id={learningNavId} className="ht-tabs" aria-label="Công cụ học tập">
         {Object.entries({ tasks: 'Nhiệm vụ', board: 'Bảng trạng thái', calendar: 'Thời khóa biểu', classes: 'Lịch học theo môn', free: 'Giờ rảnh của tôi', planning: 'Gợi ý lịch học', sessions: 'Phiên tự học' }).map(([key, label]) => <Fragment key={key}>
           {key === 'calendar' && <span className="ht-nav-caption">Lập kế hoạch</span>}
-          <button aria-pressed={tab === key} onClick={() => {
-          setTab(key)
-          if (key === 'sessions') setNhiemVuXemPhien(null)
-          const next = new URLSearchParams(params)
-          next.set('tab', key)
-          if (mode === 'tasks' && ['tasks', 'board', 'calendar'].includes(key)) {
-            next.set('layout', key === 'tasks' ? 'list' : key)
-          }
-          setParams(next)
-        }}><Icon name={navigationIcons[key]} size={16} /><span>{label}</span></button>
+          <button aria-pressed={tab === key} onClick={() => moTab(key)}><Icon name={navigationIcons[key]} size={16} /><span>{label}</span></button>
           {key === 'tasks' && <div className="ht-task-shortcuts" aria-label="Danh sách nhiệm vụ">
-            {Object.entries({ today: 'Hôm nay', upcoming: '7 ngày tới', all: 'Tất cả nhiệm vụ', inbox: 'Chưa phân loại', overdue: 'Quá hạn', undated: 'Không có hạn', completed: 'Đã hoàn thành' }).map(([shortcut, name]) => <button key={shortcut} aria-current={taskView && tab !== 'board' && view === shortcut ? 'page' : undefined} onClick={() => {
-              const next = new URLSearchParams(params)
-              next.set('tab', 'tasks')
-              next.set('layout', 'list')
-              next.set('view', shortcut)
-              next.delete('task')
-              next.delete('status')
-              setParams(next)
-              setPage(1)
-              setTab('tasks')
-            }}>{name}</button>)}
+            {Object.entries({ all: 'Tất cả nhiệm vụ', today: 'Hôm nay', upcoming: '7 ngày tới', inbox: 'Chưa phân loại', overdue: 'Quá hạn', undated: 'Không có hạn', completed: 'Đã hoàn thành' }).map(([shortcut, name]) => <button key={shortcut} aria-current={taskView && tab !== 'board' && view === shortcut ? 'page' : undefined} onClick={() => moDanhSachNhiemVu(shortcut)}><Icon name={shortcutIcons[shortcut]} size={15} /><span>{name}</span></button>)}
+            <button aria-current={trash ? 'page' : undefined} onClick={() => {
+              setParams(new URLSearchParams({ tab: 'trash' }))
+              setTab('trash')
+            }}><Icon name="trash" size={16} /><span>Thùng rác</span></button>
           </div>}
         </Fragment>)}
       </nav>}
-    <KhungChiaChiTiet detail={ready && taskView && selectedTask ? <ChiTietNhiemVu key={selectedTask + '-' + revision} ma={selectedTask} inline /> : null}><div className="ht-page-main">
+    <KhungChiaChiTiet detail={ready && taskView && selectedTask ? <ChiTietNhiemVu key={selectedTask} ma={selectedTask} inline
+      draftRequest={draftPath}
+      onChildrenSaved={() => setMoBuocMoi({
+        revision: revision + 1,
+        path: draftPath ?? [selectedTask],
+      })} /> : null}><div className="ht-page-main">
     <header className="ht-heading">
       <div>
-        <span className="ht-eyebrow">KHÔNG GIAN HỌC TẬP</span>
-        <h1>{taskView ? cheDoNhiemVu[view] : ({ calendar: 'Thời khóa biểu', classes: 'Lịch học theo môn', free: 'Giờ rảnh của tôi', planning: 'Gợi ý lịch tự học', sessions: 'Phiên tự học' } as Record<string, string>)[tab]}</h1>
-        <p>{zoneReady ? new Intl.DateTimeFormat('vi-VN', { timeZone: zone, dateStyle: 'long' }).format(new Date()) : 'Đang tải múi giờ tài khoản…'}</p>
+        <h1>{tab === 'board' ? 'Bảng trạng thái' : taskView ? cheDoNhiemVu[view] : ({ calendar: 'Thời khóa biểu', classes: 'Lịch học theo môn', free: 'Giờ rảnh của tôi', planning: 'Gợi ý lịch tự học', sessions: 'Phiên tự học', trash: 'Thùng rác' } as Record<string, string>)[tab]}</h1>
       </div>
-      <button disabled={!ready || !zoneReady || version === null} className="ht-primary" onClick={() => modal(<SuaNhiemVu baseline={version!} />)}>+ Thêm nhiệm vụ</button>
+    {taskView && ready && filterActions}
+    {calendar && ready && <div className="ht-calendar-header-actions">
+      <button type="button" className="ht-filter-toggle" aria-controls={learningNavId} aria-expanded={calendarNavOpen}
+        onClick={() => setCalendarNavOpen(open => !open)}><Icon name="panel-left" size={16} />Công cụ học tập</button>
+      {filterActions}
+    </div>}
+    {study && ready && showScope && (!classScope || showClearFilters) && filterActions}
     </header>
     {!ready ? <p role="alert" className="ht-error">Hãy đăng nhập bằng tài khoản kết nối BE để quản lý nhiệm vụ và lịch học.</p> : <>
-      <div className="ht-filter-bar">
-        {taskView && <label className="ht-task-search">Tìm nhiệm vụ<input type="search" value={query} maxLength={200} placeholder="Nhập tên hoặc nội dung nhiệm vụ" onChange={e => setQuery(e.target.value)} /></label>}
-        <div className="ht-filter-actions">
-          <button className="ht-filter-toggle" aria-expanded={filtersOpen} aria-controls={filterPanelId} onClick={() => setFiltersOpen(open => !open)}><Icon name="layers" size={16} />{filtersOpen ? 'Thu gọn bộ lọc' : 'Mở bộ lọc'}<Icon name="chevron-right" size={14} className={filtersOpen ? 'ht-filter-chevron ht-filter-chevron-open' : 'ht-filter-chevron'} /></button>
-          {!!filterSummary.length && <span className="ht-filter-count">{filterSummary.length} tùy chọn</span>}
-          <button onClick={xoaBoLoc}>Xóa bộ lọc</button>
-        </div>
-      </div>
-      {!filtersOpen && !!filterSummary.length && <ul className="ht-filter-summary" aria-label="Bộ lọc đang áp dụng">{filterSummary.map(label => <li key={label} title={label}>{label}</li>)}</ul>}
-      <div id={filterPanelId} className="ht-filter-panel" hidden={!filtersOpen}>
+      {showScope && <>
+      {completed && <div className="ht-completed-filters">
+        <label>Ngày hoàn thành<select value={donePeriod} onChange={event => capNhatLoc('donePeriod', event.target.value)}>
+          <option value="">Tất cả các ngày</option>
+          {Object.entries(khoangDaHoanThanh).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          <option value="day">Ngày cụ thể</option>
+        </select></label>
+        {donePeriod === 'day' && <label>Chọn ngày<input type="date" value={doneDay} onChange={event => capNhatLoc('doneDay', event.target.value)} /></label>}
+      </div>}
+      {!classScope && !filtersOpen && !!filterSummary.length && <ul className="ht-filter-summary" aria-label="Bộ lọc đang áp dụng">{filterSummary.map(label => <li key={label} title={label}>{label}</li>)}</ul>}
+      <div id={filterPanelId} className={classScope ? 'ht-study-scope' : 'ht-filter-panel'} hidden={!classScope && !filtersOpen}>
+      {taskView && <label className="ht-task-search">Tìm nhiệm vụ<input type="search" value={query} maxLength={200} placeholder="Nhập tên hoặc nội dung nhiệm vụ" onChange={e => setQuery(e.target.value)} /></label>}
       <div className="ht-toolbar ht-scope-filter">
         <label>Học kỳ
           <select aria-label="Lọc theo học kỳ" value={hocKy} onChange={e => capNhatLoc('semester', e.target.value)} disabled={taskView && view === 'inbox'}>
-            <option value="">Tất cả học kỳ và việc cá nhân</option>
+            <option value="">{classScope ? 'Tất cả học kỳ' : 'Tất cả học kỳ và việc cá nhân'}</option>
             {data.semesters.map(s => <option value={s.id} key={s.id}>{s.name}</option>)}
           </select>
         </label>
         <label>Môn học
           <select aria-label="Lọc theo môn học" value={monHoc} onChange={e => chonMonHoc(e.target.value)} disabled={taskView && view === 'inbox'}>
-            <option value="">Tất cả môn học</option>
+            <option value="">{classScope ? 'Chọn môn học' : 'Tất cả môn học'}</option>
             {data.subjects.filter(s => !hocKy || s.semesterId === hocKy).map(s => <option value={s.id} key={s.id}>{s.name}</option>)}
           </select>
         </label>
@@ -384,31 +447,46 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
         <label>Trạng thái<select aria-label="Lọc trạng thái nhiệm vụ" value={params.get('status') ?? ''} onChange={e => capNhatLoc('status', e.target.value)} disabled={view === 'completed'}>
           <option value="">Mặc định danh sách</option>{['NotStarted', 'InProgress', 'Completed'].map(key => <option key={key} value={key}>{trangThai[key]}</option>)}
         </select></label>
-        <label>Sắp xếp<select value={sort} onChange={e => capNhatLoc('sort', e.target.value)}>
+        {!completed && <label>Sắp xếp<select value={sort} onChange={e => capNhatLoc('sort', e.target.value)}>
           {Object.entries({ due: 'Hạn gần nhất', priority: 'Ưu tiên cao trước', progress: 'Tiến độ cao trước', created: 'Mới tạo trước' }).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select></label>
+        </select></label>}
       </div>}
       </div>
+      </>}
       {academicLoading && <p role="status">Đang tải tên học kỳ và môn học…</p>}
 
       {error && <div className="ht-error"><span role="alert">{error}</span>{versionConflict && <button type="button" onClick={reload}>Tải dữ liệu mới</button>}</div>}
-      {profileError && <p role="alert" className="ht-error">{profileError}</p>}
+      {(calendar || study) && !zoneReady && !profileError && <p role="status">Đang tải múi giờ tài khoản…</p>}
+      {profileError && <p role="alert" className="ht-error">{profileError} <button type="button" onClick={() => setProfileRevision(value => value + 1)}>Thử lại</button></p>}
       {taskView && <div className="ht-task-body">
         <div className="ht-task-main">
-          {view === 'inbox' && <p className="ht-note">Danh sách này gồm việc cá nhân của bạn, được xem chung qua các học kỳ.</p>}
-          <ThemNhanh />
-          {loading && <p role="status">Đang tải nhiệm vụ…</p>}
+          {!completed && <ThemNhanh />}
+          {!snapshot && !taskError && <p role="status">Đang tải nhiệm vụ…</p>}
           {taskError && <p role="alert" className="ht-error">{taskError} <button onClick={reload}>Thử tải lại</button></p>}
-          {!loading && loaded && !taskError && <NhiemVuView key={revision + queryString} board={tab === 'board'} />}
+          {snapshot && <NhiemVuView key={queryString} board={tab === 'board' && !completed} completed={completed}
+            openPath={moBuocMoi?.revision === revision ? moBuocMoi.path : undefined}
+            inlineDraft={moBuocMoi?.revision === revision ? moBuocMoi.inlineDraft : undefined}
+            onShowCompleted={() => moDanhSachNhiemVu('completed')}
+            onInlineSaved={(path, inlineDraft) => setMoBuocMoi({ revision: revision + 1, path, inlineDraft })}
+            onAddChildInDetail={path => {
+              chonNhiemVu(path[path.length - 1])
+              setYeuCauThemBuoc(path)
+            }} />}
         </div>
       </div>}
-      {zoneReady && ['calendar', 'free', 'classes', 'sessions'].includes(tab) && <LichView key={tab + revision} tab={tab} />}
+      {trash && <ThungRacView />}
+      {zoneReady && ['calendar', 'free', 'classes', 'sessions'].includes(tab) && <LichView key={`${tab}:${calendar ? '' : revision}:${studyBatch ?? ''}:${scheduleDate ?? ''}:${classScope ? monHoc : ''}`} tab={tab} studyBatch={studyBatch} scheduleDate={scheduleDate} />}
       {zoneReady && tab === 'planning' && <LapLichView />}
     </>}
     </div>
     </KhungChiaChiTiet>
     </div>
     {content}
-    {success && <div className="ht-success-toast" role="status"><span aria-hidden="true">✓</span><p>{success}</p><button type="button" aria-label="Đóng thông báo" onClick={() => setSuccess('')}>×</button></div>}
+    {success && <div className="ht-success-toast">
+      <p role="status" title={success.message}>{success.message}</p>
+      {success.undo ? <button type="button" className="ht-toast-undo" aria-label="Hoàn tác hoàn thành" title="Hoàn tác hoàn thành"
+        onClick={() => { if (success.undo) { setSuccess(null); void run(success.undo) } }}><Icon name="undo" size={18} /></button>
+        : <button type="button" aria-label="Đóng thông báo" onClick={() => setSuccess(null)}><Icon name="close" size={16} /></button>}
+    </div>}
   </section></Context.Provider>
 }
