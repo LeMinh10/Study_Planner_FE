@@ -51,12 +51,12 @@ Chạy `npm.cmd run test:backend` khi backend đang chạy để kiểm tra Swag
 | `/tasks?layout=board` | Bảng Cần làm / Đang làm / Đã xong |
 | `/tasks?layout=calendar` | Lịch nhiệm vụ, có thể hiện giờ học và kéo để đổi hạn |
 | `/today` | Tổng quan trong ngày, gợi ý ưu tiên tự động, nhiệm vụ theo hạn và lịch lớp/sự kiện/tự học |
-| `/login`, `/register` | Giao diện đăng nhập, đăng ký và kiểm tra dữ liệu nhập |
-| `/admin` | Đăng nhập quản trị viên |
-| `/admin/overview` | Tổng quan admin; hiện chỉ có mục trên sidebar, nội dung trang để trống |
+| `/login`, `/register` | Đăng nhập chung cho sinh viên/admin; đăng ký tài khoản sinh viên |
+| `/admin` | Chuyển vào quản lý nếu là admin; chưa đăng nhập thì về `/login` |
+| `/admin/overview` | Thống kê sinh viên, năm sinh viên mới đăng ký và quy tắc ưu tiên đang áp dụng |
 | `/admin/students` | Danh sách tài khoản có tìm kiếm, lọc trạng thái, phân trang và kích hoạt/vô hiệu hóa; yêu cầu phiên quản trị |
 | `/admin/students/:studentId` | Chi tiết tài khoản theo mã người dùng: thông tin sinh viên, vai trò, trạng thái, ngày tạo/cập nhật; có nút đổi trạng thái và quay lại danh sách |
-| `/admin/priority-rules` | Quy tắc ưu tiên; nằm dưới Tài khoản sinh viên trên sidebar, nội dung hiện để trống |
+| `/admin/priority-rules` | Quản lý phiên bản quy tắc: chỉnh tiêu chí/thứ tự, lưu, áp dụng và xóa bản chưa dùng |
 | `/profile` | Xem hồ sơ; cập nhật họ tên, MSSV, trường, lớp, ngành học và đổi mật khẩu; email chỉ đọc |
 | `/semesters` | Thêm, sửa, xóa và chọn học kỳ |
 | `/subjects` | Thẻ môn học với buổi học tiếp theo, nhiệm vụ còn lại và tiến độ; thêm, sửa, xóa môn học |
@@ -73,17 +73,22 @@ Chạy `npm.cmd run test:backend` khi backend đang chạy để kiểm tra Swag
 
 ## Khu vực admin
 
-Mã giao diện quản trị nằm riêng trong `src/admin/`. Mở `/admin` và đăng nhập bằng tài khoản quản trị để vào `/admin/students`. Vai trò `Student`/`Admin` trong response được ánh xạ sang `sinhvien`/`admin` ở FE. Khi tắt giả lập, BE phải xác thực và kiểm tra quyền tại từng endpoint.
+Mã giao diện quản trị nằm riêng trong `src/admin/`. Sinh viên và admin cùng đăng nhập tại `/login`. FE gọi đăng nhập rồi xác minh JWT bằng `/users/me`; tài khoản có vai trò `Admin` vào `/admin/overview`, tài khoản `Student` vào `/today`. Không chọn vai trò trên form hoặc suy ra quyền từ email. Vai trò `Student`/`Admin` trong response được ánh xạ sang `sinhvien`/`admin` ở FE. BE tiếp tục xác thực và kiểm tra quyền tại từng endpoint.
+
+Đã bỏ trang đăng nhập admin riêng. Các đường dẫn `/admin` cũ vẫn đi qua kiểm tra phiên/quyền. Đăng xuất admin quay về `/login`; mở lại `/login` khi đã có phiên hợp lệ sẽ chuyển về trang tương ứng với vai trò. Sinh viên không truy cập được khu vực quản trị.
 
 Trang quản lý gọi API để tải danh sách, tìm theo tên/email/MSSV, lọc trạng thái và phân trang. Danh sách bao gồm tài khoản `Student` và `Admin`, có cột vai trò. Mặc định hiển thị 20 tài khoản/trang; có thể chọn 5, 10, 20, 50 hoặc 100. Bộ lọc và số trang được giữ trong URL khi mở chi tiết rồi quay lại. Có trạng thái đang tải, lỗi và thử lại; không hiển thị danh sách trống khi yêu cầu tải dữ liệu chưa hoàn tất.
 
 Trong chế độ giả lập, đăng ký, đăng nhập, hồ sơ và quản trị dùng chung dữ liệu tài khoản. Sinh viên vừa đăng ký sẽ xuất hiện trong danh sách quản lý. Nút kích hoạt/vô hiệu hóa có ở danh sách và trang chi tiết, chỉ cập nhật giao diện sau khi API xác nhận thành công. Vô hiệu hóa chặn đăng nhập và thu hồi mọi token đang có của tài khoản; kích hoạt lại cho phép đăng nhập mới, không khôi phục token cũ. Trạng thái được giữ khi tải lại trang. Mỗi tab có một phiên đăng nhập và chỉ truy cập khu vực phù hợp với vai trò.
 
-Sidebar vẫn gồm **Tổng quan**, **Tài khoản sinh viên** và **Quy tắc ưu tiên**. Tổng quan và Quy tắc ưu tiên hiện để trống; trang danh sách không có các thẻ tổng số tài khoản.
+Sidebar gồm **Tổng quan**, **Tài khoản sinh viên** và **Quy tắc ưu tiên**. [Tổng quan](docs/tong-quan-admin.md) hiển thị thống kê Student, năm sinh viên mới và quy tắc đang dùng; bốn thẻ thống kê chỉ hiển thị số liệu. Trang Quy tắc ưu tiên quản lý cấu hình dùng chung cho gợi ý Hôm nay; xem [cách dùng, thuật toán và API](docs/quy-tac-uu-tien-admin.md).
+
+Với backend thật, vô hiệu hóa phát sự kiện SSE đến các phiên đang mở để tự chuyển sinh viên về Đăng nhập và hiển thị thông báo tài khoản bị khóa. Không cần thao tác/F5. Khi mất kết nối, ứng dụng kiểm tra lại và tự kết nối lại; xem [luồng khóa tài khoản và giới hạn](docs/khoa-tai-khoan.md). Khởi động lại BE sau khi cập nhật để nạp endpoint SSE mới.
 
 | API quản trị (sau gốc `/api/v1`) | Dữ liệu gửi/nhận |
 | --- | --- |
-| `GET /admin/users` | Bearer token admin; query tùy chọn `TuKhoa`, `Trang` (từ 1, mặc định 1), `KichThuocTrang` (1–100, mặc định 20), `DangHoatDong` (`true`/`false`, bỏ trống là tất cả); trả 200 với `{ danhSach, trang, kichThuocTrang, tongSo }` |
+| `GET /admin/overview` | Bearer token admin; thống kê Student và năm sinh viên mới nhất, không phụ thuộc phân trang |
+| `GET /admin/users` | Bearer token admin; query tùy chọn `TuKhoa`, `Trang` (từ 1, mặc định 1), `KichThuocTrang` (1–100, mặc định 20), `DangHoatDong`, `VaiTro` (`Student`/`Admin`), `TaoTu`, `TaoDen` (thời điểm có múi giờ); trả 200 với `{ danhSach, trang, kichThuocTrang, tongSo }` |
 | `GET /admin/users/{id}` | Mã người dùng là số nguyên dương; trả 200 và hồ sơ tài khoản tương ứng |
 | `PATCH /admin/users/{id}/activate` | Không cần body; trả 200 với `{ thongBao: "Kích hoạt tài khoản thành công.", dangHoatDong: true }` |
 | `PATCH /admin/users/{id}/deactivate` | Không cần body; trả 200 với `{ thongBao: "Vô hiệu hóa tài khoản thành công.", dangHoatDong: false }` |
@@ -104,7 +109,7 @@ Các tài khoản dưới đây chỉ có trong bộ giả lập khi đặt `VIT
 | Lê Công Minh (đang hoạt động) | `0306231307@caothang.edu.vn` | `0306231307` | `123456` |
 | Trần Hồng Kỳ (đã khóa) | `0306231303@caothang.edu.vn` | `0306231303` | `123456` |
 
-Sinh viên đăng nhập tại `/login`, quản trị tại `/admin`. Tài khoản sinh viên có sẵn tên trường Cao đẳng Kỹ Thuật Cao Thắng, lớp CDTH23WEBC và ngành Công nghệ thông tin; có thể sửa hồ sơ và đổi mật khẩu. Mật khẩu mới tiếp tục có hiệu lực khi tải lại trang. Có thể đăng ký tài khoản mới với đầy đủ bảy trường bắt buộc, rồi đăng nhập bằng email hoặc MSSV vừa đăng ký.
+Sinh viên và quản trị cùng đăng nhập tại `/login`, hệ thống chuyển trang theo vai trò tài khoản. Tài khoản sinh viên có sẵn tên trường Cao đẳng Kỹ Thuật Cao Thắng, lớp CDTH23WEBC và ngành Công nghệ thông tin; có thể sửa hồ sơ và đổi mật khẩu. Mật khẩu mới tiếp tục có hiệu lực khi tải lại trang. Có thể đăng ký tài khoản mới với đầy đủ bảy trường bắt buộc, rồi đăng nhập bằng email hoặc MSSV vừa đăng ký.
 
 Lê Công Minh và Trần Hồng Kỳ cùng trường Cao đẳng Kỹ Thuật Cao Thắng, lớp CDTH23WEBC và ngành Công nghệ thông tin. Tài khoản Kỳ cần được admin kích hoạt trước khi đăng nhập. Khi nâng cấp từ dữ liệu giả lập cũ, ứng dụng chỉ bổ sung các tài khoản mẫu còn thiếu một lần; không ghi đè hồ sơ, mật khẩu hay trạng thái đã lưu. Email/MSSV đã có không được đăng ký trùng.
 
@@ -136,6 +141,10 @@ Xem [giải thích thuật toán, luồng dữ liệu và câu hỏi phản bi�
 
 Chuông đọc hộp thư BE của tài khoản, nhắc nhiệm vụ sắp đến hạn/quá hạn, có số chưa đọc, Tất cả/Chưa đọc, phân trang và Đọc tất cả. Trạng thái đọc lưu tại BE nên F5 vẫn giữ. Bấm thông báo mở đúng nhiệm vụ/môn/học kỳ. Xem [quy tắc, API, cách chạy và kiểm thử](docs/thong-bao.md). Khởi động lại BE sau khi cập nhật để nạp API và worker mới.
 
+## Tiến độ học tập
+
+Trang `/statistics` đọc dữ liệu nhiệm vụ thật theo học kỳ đang chọn: tổng quan hoàn thành/đang làm/quá hạn, tiến độ từng môn và tỷ lệ hoàn thành đúng hạn. Có lọc môn, thống kê toàn bộ học kỳ; không có biểu đồ theo ngày/tuần. Mỗi nhiệm vụ chính được tính một lần, không cộng thêm các bước nhỏ. Tổng gồm cả đã hoàn thành, có tách số chưa xong/đã xong và liên kết đối chiếu từng nhóm trong cùng học kỳ/môn. Xem [cách tính và kiểm thử](docs/tien-do-hoc-tap.md).
+
 ## Phạm vi hiện tại
 
 - Tài khoản, hồ sơ và quản trị người dùng chạy được với dữ liệu giả lập, hoặc gọi BE khi tắt giả lập. Học kỳ và môn học tải qua `/semesters`, `/semesters/{id}/courses` và `/courses/{id}`, dùng JWT và phân trang BE. Nhiệm vụ/lịch học vẫn chờ tích hợp API.
@@ -158,7 +167,7 @@ Chuông đọc hộp thư BE của tài khoản, nhắc nhiệm vụ sắp đế
 - `src/api/mockAuth.ts`: bộ giả lập theo Swagger v1, dữ liệu dùng chung cho auth/hồ sơ/admin, phân trang và thu hồi token sau đổi mật khẩu hoặc vô hiệu hóa.
 - `src/api/admin.ts`, `src/types/admin.ts`: gọi API quản trị và ánh xạ hồ sơ/phân trang từ DTO tiếng Việt.
 - `src/auth/`: đọc hạn JWT, lưu phiên và kiểm tra đầu vào.
-- `src/admin/`: đăng nhập quản trị, bố cục admin và quản lý tài khoản sinh viên.
+- `src/admin/`: bố cục admin, kiểm tra quyền và quản lý tài khoản sinh viên; dùng chung trang đăng nhập tại `src/pages/Auth/`.
 - `src/utils/planner.ts`: trạng thái, hạn nộp, lịch, thống kê và quy tắc ưu tiên.
 - `src/utils/studentView.ts`: phân nhóm nhiệm vụ và chọn các buổi học tiếp theo theo thời gian thực.
 - `src/utils/workspace.ts`: lọc, sắp xếp, thêm nhanh, chuyển trạng thái và đổi hạn trong không gian nhiệm vụ.

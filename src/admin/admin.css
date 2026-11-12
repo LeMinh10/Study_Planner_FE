@@ -1,6 +1,4 @@
 .admin-label { display: inline-block; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: 1.3px; }
-.admin-login-page .admin-label { margin-bottom: 12px; }
-.admin-login-page .auth-form-container > p { font-size: 12px; line-height: 1.8; }
 
 .admin-layout { display: flex; min-height: 100dvh; color: var(--ink); background: var(--paper); }
 .admin-sidebar { position: sticky; top: 0; display: flex; flex-direction: column; width: 260px; height: 100dvh; flex-shrink: 0; padding: 30px 20px 22px; border-right: 1px solid var(--line); background: var(--panel); }

@@ -1,11 +1,13 @@
 import type { NhiemVu, SuKien } from '../../hoc-tap/types'
 import { congNgay, ngay } from '../../hoc-tap/time'
+import { defaultPriorityConfig } from '../../priority/rules'
+import type { PriorityConfig } from '../../priority/rules'
 
 export interface TodayEvent extends SuKien { maHocKy: number | null }
 export interface TodayCalendar { muiGio: string; suKien: TodayEvent[] }
 export const priorityPolicy = [
-  'Xét độ gấp trước: quá hạn → còn tối đa 6 giờ → 24 giờ → 3 ngày → 7 ngày → xa hơn → chưa có hạn.',
-  'Trong cùng nhóm độ gấp: hạn sớm hơn đứng trước; cùng hạn mới xét mức quan trọng Cao → Trung bình → Thấp.',
+  'Việc quá hạn luôn đứng trước; việc chưa có hạn đứng cuối.',
+  'Mặc định: hạn sớm hơn đứng trước; cùng hạn mới xét mức quan trọng Cao → Trung bình → Thấp.',
   'Nếu vẫn bằng nhau, ưu tiên việc đang làm; cuối cùng dùng mã nhiệm vụ để giữ thứ tự ổn định.',
 ]
 const hour = 3600000
@@ -17,18 +19,27 @@ export function urgency(task: NhiemVu, now: number) {
   const remaining = dueAt(task) - now
   return !Number.isFinite(remaining) ? 6 : remaining < 0 ? 0 : remaining <= 6 * hour ? 1 : remaining <= 24 * hour ? 2 : remaining <= 72 * hour ? 3 : remaining <= 168 * hour ? 4 : 5
 }
-export function recommend(tasks: NhiemVu[], now: number) {
+export function recommend(tasks: NhiemVu[], now: number, config: PriorityConfig = defaultPriorityConfig) {
+  const scope = (task: NhiemVu) => !Number.isFinite(dueAt(task)) ? 2 : dueAt(task) < now ? 0 : 1
+  const compare = (a: NhiemVu, b: NhiemVu) => {
+    const boundary = scope(a) - scope(b)
+    if (boundary) return boundary
+    for (const criterion of config.tieuChi) {
+      const difference = criterion === 'Deadline' ? (dueAt(a) === dueAt(b) ? 0 : dueAt(a) < dueAt(b) ? -1 : 1)
+        : criterion === 'Importance' ? importance[a.mucDoUuTien] - importance[b.mucDoUuTien]
+        : Number(b.trangThai === 'InProgress') - Number(a.trangThai === 'InProgress')
+      if (difference) return difference
+    }
+    return a.ma - b.ma
+  }
   return tasks.filter((task) => !isDone(task) && !task.coNhiemVuCon).map((task) => ({ task, group: urgency(task, now) }))
-    .sort((a, b) => a.group - b.group ||
-      (dueAt(a.task) === dueAt(b.task) ? 0 : dueAt(a.task) < dueAt(b.task) ? -1 : 1) ||
-      importance[a.task.mucDoUuTien] - importance[b.task.mucDoUuTien] ||
-      Number(b.task.trangThai === 'InProgress') - Number(a.task.trangThai === 'InProgress') || a.task.ma - b.task.ma)
+    .sort((a, b) => compare(a.task, b.task))
 }
-export function priorityReasons(task: NhiemVu, now: number) {
+export function priorityReasons(task: NhiemVu, now: number, config: PriorityConfig = defaultPriorityConfig) {
   const group = urgency(task, now)
   const reasons = [urgencyLabels[group]]
-  if (task.mucDoUuTien === 'High') reasons.push('Mức quan trọng cao')
-  if (task.trangThai === 'InProgress') reasons.push('Đang thực hiện')
+  if (config.tieuChi.includes('Importance') && task.mucDoUuTien === 'High') reasons.push('Mức quan trọng cao')
+  if (config.tieuChi.includes('InProgress') && task.trangThai === 'InProgress') reasons.push('Đang thực hiện')
   if (task.maNhiemVuNguonHan !== null && task.maNhiemVuNguonHan !== task.ma) reasons.push('Dùng hạn kế thừa từ nhiệm vụ cha')
   return reasons
 }

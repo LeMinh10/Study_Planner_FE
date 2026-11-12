@@ -16,11 +16,14 @@ export function StudentAccountsPage() {
   const page = positiveInteger(params.get('Trang'), 1, 2147483647)
   const pageSize = positiveInteger(params.get('KichThuocTrang'), 20, 100)
   const status = params.get('DangHoatDong') === 'true' ? 'active' : params.get('DangHoatDong') === 'false' ? 'locked' : 'all'
+  const role = params.get('VaiTro') === 'Student' ? 'sinhvien' : params.get('VaiTro') === 'Admin' ? 'admin' : undefined
+  const createdFrom = params.get('TaoTu') || undefined
+  const createdTo = params.get('TaoDen') || undefined
   const [message, setMessage] = useState('')
-  const load = useCallback((token: string, signal: AbortSignal) => listUsers(token, { search: query, page, pageSize, isActive: status === 'all' ? undefined : status === 'active', signal }), [query, page, pageSize, status])
+  const load = useCallback((token: string, signal: AbortSignal) => listUsers(token, { search: query, page, pageSize, isActive: status === 'all' ? undefined : status === 'active', role, createdFrom, createdTo, signal }), [query, page, pageSize, status, role, createdFrom, createdTo])
   const { data, loading, error, reload } = useAdminResource(load)
   const pages = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || pageSize)))
-  const filtering = query.trim() !== '' || status !== 'all'
+  const filtering = query.trim() !== '' || status !== 'all' || !!role || !!createdFrom || !!createdTo
   const listSearch = params.toString() ? '?' + params.toString() : ''
 
   useEffect(() => {
@@ -51,6 +54,10 @@ export function StudentAccountsPage() {
         <label className="admin-search"><Icon name="search" size={18} /><span className="sr-only">Tìm tài khoản sinh viên</span><input type="search" placeholder="Tìm tên, email hoặc mã sinh viên…" maxLength={200} value={query} onChange={(event) => changeFilter('TuKhoa', event.target.value)} /></label>
         <label className="admin-status-filter"><span>Trạng thái</span><select value={status} onChange={(event) => changeFilter('DangHoatDong', event.target.value === 'all' ? '' : String(event.target.value === 'active'))}><option value="all">Tất cả trạng thái</option><option value="active">Đang hoạt động</option><option value="locked">Đã vô hiệu hóa</option></select></label>
       </div>
+      {(role || createdFrom || createdTo) && <div className="admin-filter-chips">
+        {role && <span>{role === 'sinhvien' ? 'Sinh viên' : 'Quản trị viên'}<button type="button" aria-label="Bỏ lọc vai trò" onClick={() => changeFilter('VaiTro', '')}><Icon name="close" size={12} /></button></span>}
+        {(createdFrom || createdTo) && <span>Ngày đăng ký: {createdFrom ? new Date(createdFrom).toLocaleDateString('vi-VN') : '…'} – {createdTo ? new Date(createdTo).toLocaleDateString('vi-VN') : '…'}<button type="button" aria-label="Bỏ lọc ngày đăng ký" onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.delete('TaoTu'); next.delete('TaoDen'); next.set('Trang', '1'); return next }, { replace: true })}><Icon name="close" size={12} /></button></span>}
+      </div>}
       <div className="admin-table-container" aria-busy={loading}>
         <table className="admin-students-table">
           <caption className="sr-only">Danh sách tài khoản người dùng</caption>

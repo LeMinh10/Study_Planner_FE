@@ -1,4 +1,4 @@
-import type { AuthSession, AuthUser, ChangePasswordInput, RegisterInput, UserRole } from '../types/auth'
+import type { AuthSession, AuthUser, ChangePasswordInput, RegisterInput } from '../types/auth'
 import type { Profile } from '../types/planner'
 import { jwtClaims, normalizeRole, tokenExpiry } from '../auth/session'
 import { apiRequest, ApiError, record } from './client'
@@ -32,7 +32,7 @@ export async function registerStudent(input: RegisterInput) {
 export async function getCurrentUser(token: string, signal?: AbortSignal) {
   return parseAuthUser(await apiRequest(authEndpoints.profile, { token, signal }), token)
 }
-export async function loginAccount(taiKhoan: string, password: string, requiredRole: UserRole): Promise<AuthSession> {
+export async function loginAccount(taiKhoan: string, password: string): Promise<AuthSession> {
   const account = taiKhoan.trim()
   const body = unwrap(await apiRequest(authEndpoints.login, { method: 'POST', body: { taiKhoan: account.includes('@') ? account.toLowerCase() : account, matKhau: password } }))
   const token = text(body.tokenTruyCap ?? body.accessToken ?? body.token)
@@ -40,7 +40,6 @@ export async function loginAccount(taiKhoan: string, password: string, requiredR
   if (!token || expiresAt <= Date.now()) throw new ApiError('Máy chủ chưa trả về JWT hợp lệ hoặc token đã hết hạn.')
   const user = await getCurrentUser(token)
   if (expiresAt <= Date.now()) throw new ApiError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 401)
-  if (user.role !== requiredRole) throw new ApiError(requiredRole === 'admin' ? 'Tài khoản này không có quyền quản trị.' : 'Vui lòng dùng trang đăng nhập admin cho tài khoản quản trị.', 403)
   return { token, expiresAt, user }
 }
 

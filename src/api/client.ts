@@ -2,6 +2,13 @@ import { apiBaseUrl, useMockApi } from './config'
 import { mockAuthRequest } from './mockAuth'
 
 export const SESSION_INVALID_EVENT = 'studyplanner:session-invalid'
+export const ACCOUNT_LOCKED_NOTICE = 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên để được hỗ trợ.'
+export function isAccountDisabled(code: string) {
+  return ['ACCOUNT_DISABLED', 'ACCOUNT_INACTIVE', 'USER_DISABLED'].includes(code.toUpperCase())
+}
+export function invalidateSession(token: string, code = '') {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SESSION_INVALID_EVENT, { detail: { token, code } }))
+}
 export class ApiError extends Error {
   status: number
   code: string
@@ -33,6 +40,10 @@ export async function apiRequest(path: string, options: { method?: string; body?
     if (error instanceof Error && error.name === 'AbortError') throw error
     throw new ApiError('Không thể kết nối máy chủ. Vui lòng thử lại.')
   }
+  return readApiResponse(response, options.token)
+}
+
+export async function readApiResponse(response: Response, token?: string): Promise<unknown> {
   const text = await response.text()
   let payload: unknown = null
   if (text) {
@@ -54,9 +65,7 @@ export async function apiRequest(path: string, options: { method?: string; body?
       : response.status === 429 ? 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.'
       : response.status >= 500 ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.' : 'Thông tin chưa hợp lệ. Vui lòng kiểm tra lại.'
     const message = response.status >= 500 ? defaultMessage : [problem.detail, problem.thongBao, problem.message, ...Object.values(errors).flat(), problem.title].find((value) => typeof value === 'string' && value.trim()) || defaultMessage
-    if (options.token && (response.status === 401 || ['ACCOUNT_DISABLED', 'ACCOUNT_INACTIVE', 'USER_DISABLED'].includes(code.toUpperCase()))) {
-      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SESSION_INVALID_EVENT, { detail: { token: options.token } }))
-    }
+    if (token && (response.status === 401 || isAccountDisabled(code))) invalidateSession(token, code)
     throw new ApiError(String(message), response.status, code, errors)
   }
   return payload

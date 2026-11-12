@@ -45,4 +45,4 @@ export function clearAuthCredentials() {
   try { sessionStorage.removeItem(SESSION_KEY) } catch { /* Storage can be unavailable in private browsing. */ }
 }
 
-export function roleHome(role: UserRole) { return role === 'admin' ? '/admin/students' : '/today' }
+export function roleHome(role: UserRole) { return role === 'admin' ? '/admin/overview' : '/today' }

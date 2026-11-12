@@ -33,6 +33,17 @@ export async function listUsers(token: string, options: UserListOptions = {}): P
   const query = new URLSearchParams({ Trang: String(page), KichThuocTrang: String(pageSize) })
   if (options.search?.trim()) query.set('TuKhoa', options.search.trim())
   if (typeof options.isActive === 'boolean') query.set('DangHoatDong', String(options.isActive))
+  if (options.role !== undefined) {
+    if (!['admin', 'sinhvien'].includes(options.role)) throw new ApiError('Vai trò tài khoản chưa hợp lệ.', 400)
+    query.set('VaiTro', options.role === 'admin' ? 'Admin' : 'Student')
+  }
+  for (const [key, value] of [['TaoTu', options.createdFrom], ['TaoDen', options.createdTo]]) {
+    if (value !== undefined) {
+      if (!/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))) throw new ApiError('Khoảng ngày đăng ký chưa hợp lệ.', 400)
+      query.set(key!, value)
+    }
+  }
+  if (options.createdFrom && options.createdTo && Date.parse(options.createdFrom) > Date.parse(options.createdTo)) throw new ApiError('Khoảng ngày đăng ký chưa hợp lệ.', 400)
   const body = unwrap(await apiRequest(usersPath + '?' + query.toString(), { token, signal: options.signal }))
   if (!Array.isArray(body.danhSach) || !validInteger(body.trang, 1, 2147483647) || !validInteger(body.kichThuocTrang, 1, 100) || !validInteger(body.tongSo, 0) ||
     body.danhSach.length > body.kichThuocTrang || body.danhSach.length > body.tongSo) throw new ApiError('Dữ liệu phân trang do máy chủ trả về chưa hợp lệ.')
