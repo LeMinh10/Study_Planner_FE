@@ -1,5 +1,6 @@
 export interface KetQua<T> { phienBan: number; duLieu: T }
 export interface Trang<T> { danhSach: T[]; trang: number; kichThuocTrang: number; tongSo: number }
+export interface MucChecklist { tieuDe: string; daXong: boolean }
 export interface NhiemVu {
   ma: number
   maHocKy: number | null
@@ -7,10 +8,12 @@ export interface NhiemVu {
   maNhiemVuCha: number | null
   tieuDe: string
   moTa: string | null
+  checklist?: MucChecklist[]
   loai: string
   mucDoUuTien: string
   hanHoanThanh: string | null
   hanHieuLuc: string | null
+  ngayHoanThanh: string | null
   maNhiemVuNguonHan: number | null
   batDauSuKien: string | null
   ketThucSuKien: string | null
@@ -37,7 +40,10 @@ export interface LopHoc {
 }
 export interface Phien {
   ma: number; maNhiemVu: number; batDauDuKien: string; ketThucDuKien: string; trangThai: string; ghiChu: string | null
+  tieuDeNhiemVu: string | null; maHocKy: number | null; maMonHoc: number | null
+  batDauBamGio: string | null; soGiayDaHoc: number | null
 }
+export interface ApDungLich { maLanApDung: number; phien: Phien[] }
 export interface DeXuat { maNhiemVu: number; tieuDe: string; batDauDuKien: string; ketThucDuKien: string; lyDo: string }
 export interface GoiY {
   tokenPreview: string; phien: DeXuat[]; muiGio: string; hetHanLuc: string

@@ -1,30 +1,52 @@
 import { useEffect, useRef, useState } from 'react'
 import { xacNhan } from './xacNhan'
-import type { CSSProperties } from 'react'
+import { Icon } from '../components/Icon'
 import { BieuMau, ChonPhamVi, useHocTap } from './HocTapPage'
-import { ChiTietNhiemVu, SuaNhiemVu } from './NhiemVuView'
+import { ChiTietNhiemVu, DoiTienDo, SuaNhiemVu } from './NhiemVuView'
 import { goi, thayDoi } from './api'
-import { congNgay, dauTuan, doiKhoang, gioNhap, hienGio, ngay, thu, thoiDiemGui, trangThai, trongKhoang, utc } from './time'
+import { congNgay, dauTuan, doiKhoang, gioNhap, hienGio, ngay, thu, thoiDiemGui, trangThai } from './time'
 import type { GioRanh, Lich, LopHoc, NhiemVu, Phien, SuKien } from './types'
-import { xepKhoiLich } from './lich'
+import { mocDauNgay, nhanLoaiLich } from './lich'
+import { LichKhungNhin } from './LichKhungNhin'
 
-const nhanLoai: Record<string, string> = { LichHoc: 'Học trên lớp', SuKien: 'Sự kiện', HanNhiemVu: 'Hạn hoàn thành', PhienTuHoc: 'Tự học', GioRanh: 'Giờ rảnh' }
-export function LichView({ tab }: { tab: string }) {
+const calendarModes = { day: 'Ngày', threeDays: '3 ngày', week: 'Tuần', twoWeeks: '2 tuần', month: 'Tháng', agenda: 'Danh sách 7 ngày' }
+const sessionModes = { period: '7 ngày trước đến 31 ngày tới', day: 'Ngày', week: 'Tuần', month: 'Tháng', agenda: 'Danh sách 7 ngày' }
+const dayLabel = new Intl.DateTimeFormat('vi-VN', { timeZone: 'UTC', dateStyle: 'medium' })
+const monthLabel = new Intl.DateTimeFormat('vi-VN', { timeZone: 'UTC', month: 'long', year: 'numeric' })
+const studyDayLabel = new Intl.DateTimeFormat('vi-VN', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'numeric' })
+const statusTone: Record<string, string> = { Planned: 'ready', InProgress: 'live', Completed: 'done', Missed: 'missed' }
+
+function ngayLich(value: string, formatter = dayLabel) {
+  return formatter.format(new Date(value + 'T12:00Z'))
+}
+
+function theoThu<T extends { thuTrongTuan: number; gioBatDau: string }>(rows: T[]) {
+  return [...rows].sort((a, b) => a.thuTrongTuan - b.thuTrongTuan || a.gioBatDau.localeCompare(b.gioBatDau))
+}
+
+export function LichView({ tab, studyBatch, scheduleDate }: { tab: string; studyBatch?: number; scheduleDate?: string }) {
   const c = useHocTap()
-  const [date, setDate] = useState(ngay(Date.now(), c.zone))
+  const [date, setDate] = useState(() => scheduleDate ?? ngay(Date.now(), c.zone))
+  const calendar = tab === 'calendar'
   const [mode, setMode] = useState(tab === 'sessions' ? 'period' : 'week')
-  const [events, setEvents] = useState<SuKien[]>([])
+  const [calendarSnapshot, setCalendarSnapshot] = useState<{ key: string; revision: number; events: SuKien[]; version: number } | null>(null)
   const [free, setFree] = useState<GioRanh[]>([])
   const [classes, setClasses] = useState<LopHoc[]>([])
-  const [sessions, setSessions] = useState<(Phien & { tieuDe: string })[]>([])
+  const [sessions, setSessions] = useState<Phien[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [baseline, setBaseline] = useState<number | null>(null)
-  const [layers, setLayers] = useState(new Set(Object.keys(nhanLoai)))
-  const first = mode === 'period' ? congNgay(date, -7) : mode === 'month' ? dauTuan(date.slice(0, 8) + '01') : mode === 'week' ? dauTuan(date) : date
-  const days = mode === 'period' ? 38 : mode === 'month' ? 42 : mode === 'week' || mode === 'agenda' ? 7 : 1
-  const start = utc(first + 'T00:00', c.zone)!
-  const end = utc(congNgay(first, days) + 'T00:00', c.zone)!
+  const [layers, setLayers] = useState(() => new Set(Object.keys(nhanLoaiLich)))
+  const first = mode === 'period' ? congNgay(date, -7) : mode === 'month' ? dauTuan(date.slice(0, 8) + '01') : mode === 'week' || mode === 'twoWeeks' ? dauTuan(date) : date
+  const days = mode === 'period' ? 38 : mode === 'month' ? 42 : mode === 'twoWeeks' ? 14 : mode === 'threeDays' ? 3 : mode === 'week' || mode === 'agenda' ? 7 : 1
+  const start = new Date(mocDauNgay(first, c.zone)).toISOString()
+  const end = new Date(mocDauNgay(congNgay(first, days), c.zone)).toISOString()
+  const calendarKey = JSON.stringify([c.token, c.hocKy, c.monHoc, start, end])
+  const snapshot = calendarSnapshot?.key === calendarKey ? calendarSnapshot : null
+  const calendarVersion = snapshot?.revision === c.revision ? snapshot.version : null
+  const emptyClassVersion = tab === 'classes' && !c.monHoc ? c.version : null
+  const revision = c.revision
+  const taskSessionId = c.nhiemVuXemPhien?.ma
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true); setError('')
@@ -36,35 +58,33 @@ export function LichView({ tab }: { tab: string }) {
         const r = await goi<GioRanh[]>(c.token, '/availability-windows', { signal: controller.signal })
         if (!controller.signal.aborted) { setFree(r.duLieu); setBaseline(r.phienBan) }
       } else if (tab === 'classes') {
-        if (!c.monHoc) { setClasses([]); setBaseline(c.version); return }
+        if (!c.monHoc) { setClasses([]); setBaseline(emptyClassVersion); return }
         const r = await goi<LopHoc[]>(c.token, `/courses/${c.monHoc}/class-sessions`, { signal: controller.signal })
         if (!controller.signal.aborted) { setClasses(r.duLieu); setBaseline(r.phienBan) }
       } else if (tab === 'sessions') {
-        const sessionQuery = new URLSearchParams({ tu: start, den: end })
-        if (c.nhiemVuXemPhien) sessionQuery.set('maNhiemVu', String(c.nhiemVuXemPhien.ma))
+        const sessionQuery = new URLSearchParams(studyBatch ? { maLanApDung: String(studyBatch) } : { tu: start, den: end })
+        if (!studyBatch && taskSessionId) sessionQuery.set('maNhiemVu', String(taskSessionId))
         const r = await goi<Phien[]>(c.token, '/study-sessions?' + sessionQuery, { signal: controller.signal })
-        const ids = [...new Set(r.duLieu.map(p => p.maNhiemVu))]
-        const taskDetails = new Map<number, NhiemVu>()
-        for (const id of ids) {
-          const task = await goi<NhiemVu>(c.token, `/tasks/${id}`, { signal: controller.signal })
-          taskDetails.set(id, task.duLieu)
-        }
         if (!controller.signal.aborted) {
-          const scoped = r.duLieu.filter(p => {
-            const task = taskDetails.get(p.maNhiemVu)!
-            return !!c.nhiemVuXemPhien || ((!c.hocKy || String(task.maHocKy) === c.hocKy) && (!c.monHoc || String(task.maMonHoc) === c.monHoc))
-          })
-          setSessions(scoped.map(p => ({ ...p, tieuDe: taskDetails.get(p.maNhiemVu)!.tieuDe })))
+          setSessions(studyBatch || taskSessionId ? r.duLieu : r.duLieu.filter(p =>
+            (!c.hocKy || String(p.maHocKy) === c.hocKy) && (!c.monHoc || String(p.maMonHoc) === c.monHoc)))
           setBaseline(r.phienBan)
         }
       } else {
         const r = await goi<Lich>(c.token, '/calendar?' + query, { signal: controller.signal })
-        if (!controller.signal.aborted) { setEvents(r.duLieu.suKien); setBaseline(r.phienBan) }
+        if (!controller.signal.aborted) setCalendarSnapshot({ key: calendarKey, revision, events: r.duLieu.suKien, version: r.phienBan })
       }
     }
     load().catch(e => { if (!controller.signal.aborted) setError(e.message) }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [tab, c.token, c.hocKy, c.monHoc, c.zone, c.version, c.nhiemVuXemPhien, start, end])
+  }, [tab, studyBatch, c.token, c.hocKy, c.monHoc, emptyClassVersion, taskSessionId, start, end, calendarKey, revision])
+  async function openSession(id: number) {
+    setError('')
+    try {
+      const r = await goi<Phien>(c.token, `/study-sessions/${id}`)
+      c.modal(<PhienChiTiet key={id} row={r.duLieu} baseline={r.phienBan} />)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Chưa mở được phiên tự học.') }
+  }
   async function openEvent(event: SuKien) {
     try {
       if (event.loai === 'HanNhiemVu' || event.loai === 'SuKien') { c.modal(<ChiTietNhiemVu ma={event.maNguon} />); return }
@@ -75,64 +95,156 @@ export function LichView({ tab }: { tab: string }) {
         const r = await goi<LopHoc>(c.token, `/class-sessions/${event.maNguon}`)
         c.modal(<SuaLich row={r.duLieu} kind="classes" baseline={r.phienBan} />)
       } else {
-        const r = await goi<Phien>(c.token, `/study-sessions/${event.maNguon}`)
-        c.modal(<PhienChiTiet row={r.duLieu} baseline={r.phienBan} />)
+        await openSession(event.maNguon)
       }
     } catch (e) { setError(e instanceof Error ? e.message : 'Chưa mở được chi tiết lịch.') }
   }
-  function card(event: SuKien, style?: CSSProperties) {
-    return <button key={event.ma} className={'ht-event ht-event-' + event.loai} onClick={() => void openEvent(event)} style={{ borderLeftColor: event.mauSac ?? undefined, ...style }}>
-      <small>{nhanLoai[event.loai]} · {gioNhap(event.batDau, c.zone).slice(11)}{event.ketThuc ? '–' + gioNhap(event.ketThuc, c.zone).slice(11) : ''}</small><strong>{event.tieuDe}</strong>
-      {event.trangThai && <small>{trangThai[event.trangThai]}</small>}
-    </button>
-  }
   const today = ngay(Date.now(), c.zone)
-  return <section>
-    <div className="ht-toolbar">
-      <button disabled={baseline === null} className="ht-primary" onClick={() => c.modal(tab === 'calendar' ? <ThemVaoLich baseline={baseline!} /> : tab === 'sessions' ? <DatPhien baseline={baseline!} task={c.nhiemVuXemPhien ?? undefined} /> : <SuaLich kind={tab === 'free' ? 'free' : 'classes'} baseline={baseline!} />)}>{tab === 'calendar' ? '+ Thêm vào lịch' : tab === 'free' ? '+ Thêm giờ rảnh' : tab === 'sessions' ? '+ Đặt phiên tự học' : '+ Thêm buổi học'}</button>
-      {(tab === 'calendar' || tab === 'sessions') && <>
-        <button aria-label="Khoảng trước" onClick={() => setDate(doiKhoang(date, -1, mode, days))}>←</button><input aria-label="Ngày đang xem" type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value) }} /><button aria-label="Khoảng sau" onClick={() => setDate(doiKhoang(date, 1, mode, days))}>→</button><button onClick={() => setDate(today)}>Hôm nay</button>
-        <label>Chế độ xem<select value={mode} onChange={e => setMode(e.target.value)}>{tab === 'sessions' && <option value="period">7 ngày trước đến 31 ngày tới</option>}{Object.entries({ day: 'Ngày', week: 'Tuần', month: 'Tháng', agenda: 'Danh sách 7 ngày' }).map(([k, v]) => <option value={k} key={k}>{v}</option>)}</select></label>
-      </>}
+  function openDay(day: string) {
+    setDate(day)
+    setMode('day')
+  }
+  function go(direction: number) {
+    setDate(doiKhoang(date, direction, mode, days))
+  }
+  const calendarLabel = mode === 'month' ? monthLabel.format(new Date(date + 'T12:00Z'))
+    : [first, ...(days > 1 ? [congNgay(first, days - 1)] : [])].map(day => dayLabel.format(new Date(day + 'T12:00Z'))).join(' – ')
+  const sessionDays = new Map<string, Phien[]>()
+  for (const row of sessions) {
+    const day = ngay(row.batDauDuKien, c.zone)
+    const list = sessionDays.get(day)
+    if (list) list.push(row)
+    else sessionDays.set(day, [row])
+  }
+  const dateNavigation = <div className="ht-calendar-navigation" aria-label="Điều hướng lịch" role="group">
+    <div className="ht-calendar-pager">
+      <button type="button" aria-label="Khoảng trước" title="Khoảng trước" onClick={() => go(-1)}><Icon name="chevron-left" size={15} /></button>
+      <button type="button" onClick={() => setDate(today)}>Hôm nay</button>
+      <button type="button" aria-label="Khoảng sau" title="Khoảng sau" onClick={() => go(1)}><Icon name="chevron-right" size={15} /></button>
     </div>
-    {error && <p role="alert" className="ht-error">{error}</p>}{loading && <p role="status">Đang tải lịch…</p>}
-    {tab === 'calendar' && <>
-      <div className="ht-toolbar">{Object.entries(nhanLoai).map(([key, label]) => <label key={key} className="ht-check"><input type="checkbox" checked={layers.has(key)} onChange={e => setLayers(old => { const next = new Set(old); if (e.target.checked) next.add(key); else next.delete(key); return next })} />{label}</label>)}</div>
-      {(mode === 'day' || mode === 'week') ? <div className="ht-time-grid-wrap"><div className="ht-time-grid" style={{ gridTemplateColumns: `55px repeat(${days}, minmax(140px, 1fr))` }}>
-        <div className="ht-time-heading" />
-        {Array.from({ length: days }, (_, i) => {
-          const day = congNgay(first, i)
-          return <header className="ht-time-heading" key={day}><strong>{day}</strong>{events.filter(e => layers.has(e.loai) && e.loai === 'HanNhiemVu' && ngay(e.batDau, c.zone) === day).map(e => card(e))}</header>
-        })}
-        <div className="ht-hour-column">{Array.from({ length: 24 }, (_, hour) => <span key={hour} style={{ top: hour * 60 }}>{String(hour).padStart(2, '0')}:00</span>)}</div>
-        {Array.from({ length: days }, (_, i) => {
-          const day = congNgay(first, i)
-          return <div className="ht-time-column" key={day}>{xepKhoiLich(day, events.filter(e => layers.has(e.loai)), c.zone).map(block => card(block.suKien, {
-            position: 'absolute', top: block.top, height: block.height, margin: 0,
-            left: `calc(${block.cot / block.soCot * 100}% + 2px)`, width: `calc(${100 / block.soCot}% - 4px)`,
-            zIndex: block.suKien.loai === 'GioRanh' ? 0 : 1, overflow: 'hidden',
-          }))}</div>
-        })}
-      </div></div> : <div className={'ht-calendar ht-calendar-' + mode}>{Array.from({ length: days }, (_, i) => {
-        const day = congNgay(first, i)
-        const dayStart = Date.parse(utc(day + 'T00:00', c.zone)!)
-        const dayEnd = Date.parse(utc(congNgay(day, 1) + 'T00:00', c.zone)!)
-        const matches = events.filter(e => layers.has(e.loai) && trongKhoang(e.batDau, e.ketThuc, dayStart, dayEnd))
-        return <section key={day} className={'ht-day' + (day === today ? ' ht-today' : '')}><button className="ht-day-name" onClick={() => { setDate(day); setMode('day') }}>{new Date(day + 'T12:00:00Z').toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' })}</button>
-          {matches.slice(0, mode === 'month' ? 4 : matches.length).map(event => card(event))}{mode === 'month' && matches.length > 4 && <button onClick={() => { setDate(day); setMode('day') }}>Xem thêm {matches.length - 4} mục</button>}{!matches.length && <small className="ht-muted">Chưa có lịch</small>}
-        </section>
-      })}</div>}
+    <input aria-label="Ngày đang xem" type="date" value={date} onChange={e => { if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) setDate(e.target.value) }} />
+  </div>
+  const addButton = !calendar && !studyBatch && <button type="button" disabled={baseline === null} className="ht-primary" onClick={() => {
+    if (baseline === null) return
+    c.modal(tab === 'sessions'
+      ? <DatPhien baseline={baseline} task={c.nhiemVuXemPhien ?? undefined} />
+      : <SuaLich kind={tab === 'free' ? 'free' : 'classes'} baseline={baseline} />)
+  }}>{tab === 'free' ? '+ Thêm giờ rảnh' : tab === 'sessions' ? '+ Đặt phiên tự học' : '+ Thêm buổi học'}</button>
+  return <section className={calendar ? 'ht-calendar-view' : 'ht-study-view'}>
+    {calendar && <>
+      <div className="ht-calendar-toolbar">
+        <h2 aria-live="polite">{calendarLabel}</h2>
+        <div className="ht-calendar-actions">
+          {dateNavigation}
+          <select aria-label="Chế độ xem" value={mode} onChange={e => setMode(e.target.value)}>
+            {Object.entries(calendarModes).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
+          </select>
+          <button type="button" className="ht-primary" disabled={calendarVersion === null} onClick={() => c.modal(<ThemVaoLich baseline={calendarVersion!} />)}>+ Thêm vào lịch</button>
+        </div>
+      </div>
+      <div className="ht-calendar-layers" aria-label="Loại lịch hiển thị" role="group">
+        {Object.entries(nhanLoaiLich).map(([key, label]) => <button type="button" key={key} className={`ht-event-${key}`} aria-pressed={layers.has(key)} onClick={() => setLayers(old => {
+          const next = new Set(old)
+          if (next.has(key)) next.delete(key)
+          else next.add(key)
+          return next
+        })}><span />{label}</button>)}
+      </div>
+      {error && <div className="ht-error" role="alert">{error} <button type="button" onClick={c.reload}>Thử lại</button></div>}
+      {(!snapshot && !error) && <p role="status">Đang tải lịch…</p>}
+      <div className="ht-calendar-surface" aria-busy={loading}>
+        <LichKhungNhin mode={mode} first={first} days={days} date={date} today={today} zone={c.zone}
+          events={snapshot?.events.filter(event => layers.has(event.loai)) ?? []} ready={!!snapshot} onDay={openDay} onOpen={event => void openEvent(event)} />
+      </div>
     </>}
-    {tab === 'classes' && <>{!c.monHoc && <p className="ht-note">Chọn tên môn học ở bộ lọc phía trên để quản lý các buổi học của môn.</p>}{classes.map(row => <article className="ht-item" key={row.ma}><div><strong>{c.subjects.find(s => Number(s.id) === row.maMonHoc)?.name ?? row.tenMonHoc}</strong><p>{thu[row.thuTrongTuan - 1]} · {row.gioBatDau.slice(0, 5)}–{row.gioKetThuc.slice(0, 5)} · {row.phongHoc || 'Chưa có phòng'}</p></div><button onClick={() => c.modal(<SuaLich row={row} kind="classes" baseline={baseline!} />)}>Chỉnh sửa</button><button className="ht-danger" onClick={() => void c.run(async () => {
-      if (await xacNhan({ tieuDe: 'Xóa lịch học?', noiDung: <>Xóa buổi học của <strong>{row.tenMonHoc}</strong> vào {thu[row.thuTrongTuan - 1]}, {row.gioBatDau.slice(0, 5)}–{row.gioKetThuc.slice(0, 5)}?</>, luuY: 'Các lần xuất hiện theo mẫu buổi học này sẽ được gỡ khỏi lịch.', nguyHiem: true, nhanXacNhan: 'Xóa lịch học', nhanDangXuLy: 'Đang xóa…', khiXacNhan: () => goi(c.token, `/class-sessions/${row.ma}`, { method: 'DELETE', version: baseline! }) })) c.thongBaoThanhCong('Đã xóa lịch học.')
-    })}>Xóa</button></article>)}</>}
-    {tab === 'free' && <>{!free.length && !loading && <p className="ht-empty">Thêm những khoảng bạn sẵn sàng tự học để hệ thống gợi ý lịch.</p>}{free.map(row => <article className="ht-item" key={row.ma}><div><strong>{thu[row.thuTrongTuan - 1]} · {row.gioBatDau.slice(0, 5)}–{row.gioKetThuc.slice(0, 5)}</strong><p>{row.ngayBatDau} → {row.ngayKetThuc} · {row.dangSuDung ? 'Đang sử dụng' : 'Đã tắt'}</p></div><button onClick={() => c.modal(<SuaLich row={row} kind="free" baseline={baseline!} />)}>Chỉnh sửa</button><button className="ht-danger" onClick={() => void c.run(async () => {
-        if (!await xacNhan({ tieuDe: 'Xóa giờ rảnh?', noiDung: `Xóa khung giờ rảnh ${thu[row.thuTrongTuan - 1]}, ${row.gioBatDau.slice(0, 5)}–${row.gioKetThuc.slice(0, 5)}?`, luuY: 'Hệ thống sẽ kiểm tra các phiên tự học bị ảnh hưởng trước khi xóa.', nguyHiem: true, nhanXacNhan: 'Xóa giờ rảnh' })) return
-        const result = await thayDoi(c.token, `/availability-windows/${row.ma}`, 'DELETE', undefined, baseline!, { path: '/calendar/change-preview', body: { loai: 'GioRanh', ma: row.ma, xoa: true } })
-        if (result) c.thongBaoThanhCong('Đã xóa khung giờ rảnh.')
-        return result
-      })}>Xóa</button></article>)}</>}
-    {tab === 'sessions' && <>{c.nhiemVuXemPhien && <p className="ht-note">Các phiên của “{c.nhiemVuXemPhien.tieuDe}” <button onClick={() => c.xemPhienNhiemVu(null)}>Xem tất cả phiên</button></p>}{!sessions.length && !loading && <p className="ht-empty">Chưa có phiên tự học trong khoảng đang xem.</p>}{sessions.map(row => <article className="ht-item" data-session-id={row.ma} key={row.ma}><div><strong>{row.tieuDe}</strong><p>{hienGio(row.batDauDuKien, c.zone)} → {hienGio(row.ketThucDuKien, c.zone)}</p><small>{trangThai[row.trangThai]}</small></div><button onClick={() => c.modal(<PhienChiTiet row={row} baseline={baseline!} />)}>Xem và cập nhật</button></article>)}</>}
+    {!calendar && !studyBatch && <div className="ht-study-toolbar">
+      {tab === 'sessions' ? <strong>{calendarLabel}</strong>
+        : <strong>{tab === 'free' ? free.length + ' khung giờ'
+          : c.subjects.find(s => s.id === c.monHoc)?.name || 'Buổi học theo môn'}</strong>}
+      <div className="ht-calendar-actions">
+        {tab === 'sessions' && <>
+          {dateNavigation}
+          <select aria-label="Chế độ xem" value={mode} onChange={e => setMode(e.target.value)}>
+            {Object.entries(sessionModes).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
+          </select>
+        </>}
+        {addButton}
+      </div>
+    </div>}
+    {!calendar && error && <div className="ht-error" role="alert">{error} <button type="button" onClick={c.reload}>Thử lại</button></div>}
+    {!calendar && loading && <p className="ht-study-caption" role="status">Đang tải lịch…</p>}
+    {tab === 'classes' && !loading && !error && !classes.length &&
+      <div className="ht-study-empty"><Icon name="book" size={22} />
+        <strong>{c.monHoc ? 'Chưa có buổi học' : 'Chọn môn để xem lịch lên lớp'}</strong>
+        {c.monHoc && <p>Dùng nút Thêm buổi học để lưu lịch theo thứ và giờ.</p>}
+      </div>}
+    {tab === 'classes' && !!classes.length && <div className="ht-study-list">{theoThu(classes).map(row =>
+      <article className="ht-item ht-study-row" key={row.ma}>
+        <div className="ht-study-row-main">
+          <strong>{thu[row.thuTrongTuan - 1]} · {row.gioBatDau.slice(0, 5)}–{row.gioKetThuc.slice(0, 5)}</strong>
+          <p>{row.phongHoc ? 'Phòng ' + row.phongHoc + ' · ' : ''}{row.ngayApDungTu && row.ngayApDungDen
+            ? ngayLich(row.ngayApDungTu) + ' – ' + ngayLich(row.ngayApDungDen) : 'Suốt học kỳ'}</p>
+        </div>
+        <div className="ht-study-row-actions">
+          <button type="button" onClick={() => c.modal(<SuaLich row={row} kind="classes" baseline={baseline!} />)}>Chỉnh sửa</button>
+          <button type="button" className="ht-danger" onClick={() => void c.run(async () => {
+            if (await xacNhan({ tieuDe: 'Xóa lịch học?', noiDung: <>Xóa buổi học của <strong>{row.tenMonHoc}</strong> vào {thu[row.thuTrongTuan - 1]}, {row.gioBatDau.slice(0, 5)}–{row.gioKetThuc.slice(0, 5)}?</>, luuY: 'Các buổi theo mẫu này sẽ được gỡ khỏi thời khóa biểu.', nguyHiem: true, nhanXacNhan: 'Xóa lịch học', nhanDangXuLy: 'Đang xóa…', khiXacNhan: () => goi(c.token, `/class-sessions/${row.ma}`, { method: 'DELETE', version: baseline! }) })) c.thongBaoThanhCong('Đã xóa lịch học')
+          })}>Xóa</button>
+        </div>
+      </article>)}</div>}
+    {tab === 'free' && !loading && !error && !free.length &&
+      <div className="ht-study-empty"><Icon name="clock" size={22} /><strong>Chưa có giờ rảnh</strong>
+        <p>Chọn những khung giờ bạn muốn dành cho việc tự học.</p>
+      </div>}
+    {tab === 'free' && !!free.length && <div className="ht-study-list">{theoThu(free).map(row =>
+      <article className="ht-item ht-study-row" key={row.ma}>
+        <div className="ht-study-row-main">
+          <strong>{thu[row.thuTrongTuan - 1]} · {row.gioBatDau.slice(0, 5)}–{row.gioKetThuc.slice(0, 5)}</strong>
+          <p>{ngayLich(row.ngayBatDau)} – {ngayLich(row.ngayKetThuc)}</p>
+        </div>
+        <span className="ht-study-badge" data-tone={row.dangSuDung ? 'done' : undefined}>{row.dangSuDung ? 'Đang dùng' : 'Đã tắt'}</span>
+        <div className="ht-study-row-actions">
+          <button type="button" onClick={() => c.modal(<SuaLich row={row} kind="free" baseline={baseline!} />)}>Chỉnh sửa</button>
+          <button type="button" className="ht-danger" onClick={() => void c.run(async () => {
+            if (!await xacNhan({ tieuDe: 'Xóa giờ rảnh?', noiDung: `Xóa khung giờ rảnh ${thu[row.thuTrongTuan - 1]}, ${row.gioBatDau.slice(0, 5)}–${row.gioKetThuc.slice(0, 5)}?`, nguyHiem: true, nhanXacNhan: 'Xóa giờ rảnh' })) return
+            const result = await thayDoi(c.token, `/availability-windows/${row.ma}`, 'DELETE', undefined, baseline!, { path: '/calendar/change-preview', body: { loai: 'GioRanh', ma: row.ma, xoa: true } })
+            if (result) c.thongBaoThanhCong('Đã xóa khung giờ rảnh')
+            return result
+          })}>Xóa</button>
+        </div>
+      </article>)}</div>}
+    {tab === 'sessions' && <>
+      {studyBatch && <div className="ht-study-toolbar">
+        <strong>Phiên từ gợi ý</strong>
+        <div className="ht-study-row-actions">
+          <button type="button" onClick={() => c.moTab('sessions')}>Về danh sách phiên</button>
+          {sessions[0] && <button type="button" onClick={() => c.moTab('calendar', { date: ngay(sessions[0].batDauDuKien, c.zone) })}>Xem trên thời khóa biểu</button>}
+        </div>
+      </div>}
+      {!studyBatch && c.nhiemVuXemPhien && <div className="ht-study-toolbar">
+        <strong>{c.nhiemVuXemPhien.tieuDe}</strong>
+        <button type="button" onClick={() => c.xemPhienNhiemVu(null)}>Xem tất cả phiên</button>
+      </div>}
+      {!sessions.length && !loading && !error && <div className="ht-study-empty"><Icon name="clock" size={22} />
+        <strong>{studyBatch ? 'Lần áp dụng này không còn phiên nào' : 'Chưa có phiên tự học trong khoảng này'}</strong>
+        {!studyBatch && <button type="button" onClick={() => c.moTab('planning')}>Xem gợi ý tự học</button>}
+      </div>}
+      {[...sessionDays.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, rows]) =>
+        <section className="ht-study-day" key={day}>
+          <h2>{day === today ? 'Hôm nay' : ngayLich(day, studyDayLabel)}</h2>
+          <div className="ht-study-list">
+            {rows.map(row => <article className="ht-item ht-study-row" data-session-id={row.ma} key={row.ma}>
+              <div className="ht-study-row-main">
+                <strong>{row.tieuDeNhiemVu ?? 'Nhiệm vụ #' + row.maNhiemVu}</strong>
+                <p>{gioNhap(row.batDauDuKien, c.zone).slice(11)}–{ngay(row.ketThucDuKien, c.zone) === day
+                  ? gioNhap(row.ketThucDuKien, c.zone).slice(11) : hienGio(row.ketThucDuKien, c.zone)}</p>
+              </div>
+              <span className="ht-study-badge" data-tone={statusTone[row.trangThai]}>{row.trangThai === 'InProgress' ? 'Đang học' : trangThai[row.trangThai]}</span>
+              <div className="ht-study-row-actions"><button type="button" onClick={() => void openSession(row.ma)}>Mở phiên</button></div>
+            </article>)}
+          </div>
+        </section>)}
+    </>}
   </section>
 }
 
@@ -201,36 +313,106 @@ function DatPhien({ row, task, baseline }: { row?: Phien; task?: NhiemVu; baseli
     <label>Bắt đầu<input name="batDau" required type="datetime-local" defaultValue={gioNhap(row?.batDauDuKien ?? null, c.zone)} /></label><label>Kết thúc<input name="ketThuc" required type="datetime-local" defaultValue={gioNhap(row?.ketThucDuKien ?? null, c.zone)} /></label><label>Ghi chú<textarea name="ghiChu" maxLength={2000} defaultValue={row?.ghiChu ?? ''} /></label><p className="ht-note">Phiên thường dài 25–50 phút, cách phiên khác tối thiểu 10 phút và nằm trong giờ rảnh.</p>
   </BieuMau>
 }
-function PhienChiTiet({ row, baseline }: { row: Phien; baseline: number }) {
+function dinhDangBamGio(seconds: number) {
+  const hours = Math.floor(seconds / 3600)
+  const parts = [Math.floor(seconds / 60) % 60, seconds % 60]
+  if (hours > 0) parts.unshift(hours)
+  return parts.map(value => String(value).padStart(2, '0')).join(':')
+}
+
+function PhienChiTiet({ row: initialRow, baseline: initialVersion }: { row: Phien; baseline: number }) {
   const c = useHocTap()
   const dialog = useRef<HTMLDialogElement>(null)
+  const [{ row, version }, setSession] = useState({ row: initialRow, version: initialVersion })
+  const [task, setTask] = useState<NhiemVu | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
+  const taskId = row.maNhiemVu
+  useEffect(() => { dialog.current?.showModal() }, [])
   useEffect(() => {
-    dialog.current?.showModal()
+    if (row.trangThai !== 'Planned' && !row.batDauBamGio) return
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [row.trangThai, row.batDauBamGio])
+  useEffect(() => {
+    const controller = new AbortController()
+    goi<NhiemVu>(c.token, `/tasks/${taskId}`, { signal: controller.signal }).then(result => {
+      if (!controller.signal.aborted) setTask(result.duLieu)
+    }).catch(e => { if (!controller.signal.aborted) setError(e.message) })
+    return () => controller.abort()
+  }, [c.token, taskId])
+
   const before = now < Date.parse(row.batDauDuKien)
   const ended = now >= Date.parse(row.ketThucDuKien)
-  const actions = row.trangThai === 'InProgress' ? [['finish', 'Kết thúc phiên']] : row.trangThai !== 'Planned' ? [] : before ? [['cancel', 'Hủy phiên']] : ended ? [['finish', 'Xác nhận đã học xong'], ['miss', 'Xác nhận bỏ lỡ']] : [['start', 'Bắt đầu học']]
-  async function change(action: string) {
+  const running = row.trangThai === 'InProgress'
+  const completed = row.trangThai === 'Completed'
+  const missed = row.trangThai === 'Missed'
+  const planned = row.trangThai === 'Planned'
+  const actions = running ? [['finish', 'Kết thúc phiên']] : !planned ? [] : before ? [['cancel', 'Hủy phiên']] : ended ? [['finish', 'Xác nhận đã học xong'], ['miss', 'Xác nhận bỏ lỡ']] : [['start', 'Bắt đầu học']]
+  const lines = task?.moTa?.split(/\r?\n/) ?? []
+  const isLink = (line: string) => /^https?:\/\/\S+$/i.test(line.trim()) && URL.canParse(line.trim())
+  const checklistTitles = task?.checklist?.map(item => item.tieuDe) ?? []
+  const links = [...new Set([...lines, ...checklistTitles].filter(isLink).map(line => line.trim()))]
+  const description = lines.filter(line => !isLink(line)).join('\n').trim()
+  const measured = row.soGiayDaHoc != null
+  const elapsed = (row.soGiayDaHoc ?? 0) + (row.batDauBamGio ? Math.max(0, Math.floor((now - Date.parse(row.batDauBamGio)) / 1000)) : 0)
+  const plannedMinutes = Math.round((Date.parse(row.ketThucDuKien) - Date.parse(row.batDauDuKien)) / 60000)
+  const path = `/study-sessions/${row.ma}`
+  const nextStep = running ? 'Bạn có thể mở tài liệu hoặc làm bài ở ứng dụng khác. Bấm Kết thúc phiên khi dừng học.'
+    : completed ? 'Cập nhật tiến độ nhiệm vụ theo phần bạn thực sự làm được.'
+    : missed ? 'Bạn có thể tạo gợi ý mới để xếp lại phần việc chưa làm.'
+    : !planned ? ''
+    : before ? 'Đến giờ đã đặt, quay lại đây để bắt đầu học. Bạn có thể mở tài liệu trước.'
+    : ended ? 'Chọn kết quả theo thực tế. Xác nhận học xong ở đây sẽ ghi nhận trạng thái phiên.'
+    : 'Đã đến giờ. Bấm Bắt đầu học để chạy đồng hồ.'
+  async function change(action?: string) {
     if (busy) return
     setBusy(true); setError('')
     try {
-      await goi(c.token, `/study-sessions/${row.ma}/${action}`, { method: 'POST', version: baseline })
-      c.close(); c.reload()
+      const result = action
+        ? await goi<Phien>(c.token, path + '/' + action, { method: 'POST', version })
+        : await goi<Phien>(c.token, path)
+      setNow(Date.now())
+      setSession({ row: result.duLieu, version: result.phienBan })
+      if (action) c.reload()
     } catch (e) { setError(e instanceof Error ? e.message : 'Chưa cập nhật được phiên tự học.') }
     finally { setBusy(false) }
   }
-  return <dialog className="ht-dialog" ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else c.close() }} aria-label="Chi tiết phiên tự học">
+  async function updateProgress() {
+    if (busy) return
+    setBusy(true); setError('')
+    try {
+      const result = await goi<NhiemVu>(c.token, `/tasks/${taskId}`)
+      c.modal(result.duLieu.coNhiemVuCon || result.duLieu.checklist?.length || result.duLieu.tienDo === 100
+        ? <ChiTietNhiemVu ma={taskId} />
+        : <DoiTienDo task={result.duLieu} baseline={result.phienBan} />)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Chưa mở được tiến độ nhiệm vụ.') }
+    finally { setBusy(false) }
+  }
+  return <dialog className="ht-dialog ht-study-session" ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else c.close() }} aria-label="Chi tiết phiên tự học">
     <header><h2>Phiên tự học</h2><button disabled={busy} onClick={c.close}>Đóng</button></header>
-    {error && <p role="alert" className="ht-error">{error}</p>}
-    <p>{hienGio(row.batDauDuKien, c.zone)} → {hienGio(row.ketThucDuKien, c.zone)}</p><p>{trangThai[row.trangThai]}</p>
-    <div className="ht-toolbar"><button disabled={busy} onClick={() => c.modal(<ChiTietNhiemVu ma={row.maNhiemVu} />)}>Xem nhiệm vụ</button>
-      {row.trangThai === 'Planned' && before && <button disabled={busy} onClick={() => c.modal(<DatPhien row={row} baseline={baseline} />)}>Dời phiên</button>}
-      {actions.map(([action, label]) => <button disabled={busy} key={action} onClick={() => void change(action)}>{label}</button>)}
-    </div><p className="ht-note">Các thao tác được mở theo thời gian diễn ra phiên. Sau khi học, cập nhật riêng phần trăm nhiệm vụ theo kết quả thực tế.</p>
+    {error && <div className="ht-error"><span role="alert">{error}</span> <button disabled={busy} onClick={() => void change()}>Tải lại phiên</button></div>}
+    <h3>{task?.tieuDe ?? 'Nhiệm vụ #' + taskId}</h3>
+    <p>{hienGio(row.batDauDuKien, c.zone)} → {hienGio(row.ketThucDuKien, c.zone)} · {plannedMinutes} phút dự kiến</p>
+    <p>{running ? 'Đang học' : trangThai[row.trangThai]}</p>
+    {(running && row.batDauBamGio || completed && measured) && <div className="ht-stopwatch">
+      <span>{running ? 'Đang bấm giờ' : 'Thời gian đã học'}</span>
+      <strong role="timer" aria-label="Thời gian đã học">{dinhDangBamGio(elapsed)}</strong>
+    </div>}
+    {(completed || running) && !measured && <p className="ht-note">Phiên này chưa có thời lượng ghi bằng đồng hồ.</p>}
+    {description && <p className="ht-preserve">{description}</p>}
+    {row.ghiChu && <p className="ht-preserve">{row.ghiChu}</p>}
+    {links.length > 0 && <ul className="ht-study-materials" aria-label="Tài liệu của nhiệm vụ">
+      {links.map((link, index) => <li key={link}><a href={link} target="_blank" rel="noopener noreferrer">Mở tài liệu{links.length > 1 ? ' ' + (index + 1) : ''} · {new URL(link).hostname}</a></li>)}
+    </ul>}
+    {nextStep && <p className="ht-note">{nextStep}</p>}
+    <div className="ht-toolbar">
+      {actions.map(([action, label]) => <button type="button" className={action === 'start' || action === 'finish' ? 'ht-primary' : undefined} disabled={busy} key={action} onClick={() => void change(action)}>{label}</button>)}
+      {completed && task?.tienDo !== 100 && <button className="ht-primary" disabled={busy} onClick={() => void updateProgress()}>Cập nhật tiến độ nhiệm vụ</button>}
+      {missed && <button className="ht-primary" disabled={busy} onClick={() => { c.close(); c.moTab('planning') }}>Tạo gợi ý mới</button>}
+      {planned && before && <button disabled={busy} onClick={() => c.modal(<DatPhien row={row} baseline={version} />)}>Dời phiên</button>}
+      <button disabled={busy} onClick={() => c.modal(<ChiTietNhiemVu ma={taskId} />)}>Xem nhiệm vụ</button>
+    </div>
   </dialog>
 }

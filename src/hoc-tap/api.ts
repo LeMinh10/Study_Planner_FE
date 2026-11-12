@@ -9,7 +9,7 @@ const loiDeHieu: Record<string, string> = {
   TASK_TREE_LIMIT: 'Một nhiệm vụ có thể chia tối đa 10 cấp và tổng cộng 1.000 bước. Hãy tách bớt thành nhiệm vụ riêng.',
   TASK_NOT_LEAF: 'Hãy chọn một việc chưa được chia nhỏ để đặt phiên tự học.',
   TASK_ROOT_REQUIRED: 'Hãy mở nhiệm vụ lớn nhất để đổi học kỳ hoặc môn cho cả nhóm việc.',
-  TASK_PROGRESS_IS_DERIVED: 'Tiến độ nhiệm vụ lớn được tính từ các bước nhỏ. Hãy cập nhật tiến độ từng bước.',
+  TASK_PROGRESS_IS_DERIVED: 'Tiến độ được tính từ checklist. Hãy tick các mục đã hoàn thành trong chi tiết nhiệm vụ.',
   TASK_ESTIMATE_IS_DERIVED: 'Hãy nhập thời gian ước lượng cho từng bước nhỏ.',
   TASK_SCOPE_CONFLICT: 'Nhiệm vụ lớn và các bước nhỏ cần thuộc cùng học kỳ và môn học.',
   TASK_DEADLINE_CONFLICT: 'Hạn của bước nhỏ phải cùng lúc hoặc sớm hơn hạn của nhiệm vụ lớn.',
