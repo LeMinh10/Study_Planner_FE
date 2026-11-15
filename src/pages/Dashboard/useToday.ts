@@ -31,7 +31,7 @@ export function useToday() {
     const controller = new AbortController()
     if (!enabled) { setTasks(undefined); setCalendar(undefined); setTaskLoading(false); setCalendarLoading(false); return }
     setTaskError(''); setCalendarError(''); setTaskLoading(true); setCalendarLoading(true)
-    // The first cancelled StrictMode effect never starts network requests.
+    // Lượt effect đầu bị StrictMode hủy sẽ không phát sinh yêu cầu mạng.
     void Promise.resolve().then(async () => {
       if (controller.signal.aborted) return
       const token = session()

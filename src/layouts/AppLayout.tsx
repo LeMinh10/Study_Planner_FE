@@ -5,11 +5,13 @@ import type { IconName } from '../components/Icon'
 import { usePlanner } from '../contexts/PlannerContext'
 import { NotificationBell } from '../components/NotificationBell'
 import { Brand } from '../components/Brand'
+import { FocusDock } from '../focus/FocusDock'
 
 const destinations: { path: string; title: string; icon: IconName }[] = [
   { path: '/today', title: 'Hôm nay', icon: 'sun' },
   { path: '/tasks', title: 'Nhiệm vụ', icon: 'list' },
   { path: '/calendar', title: 'Lịch học', icon: 'calendar' },
+  { path: '/focus', title: 'Tập trung', icon: 'headphones' },
 ]
 const secondaryDestinations: typeof destinations = [
   { path: '/subjects', title: 'Các môn học', icon: 'book' },
@@ -35,7 +37,7 @@ export function AppLayout() {
   const navigate = useNavigate()
   const params = new URLSearchParams(location.search)
   const workspaceMode = location.pathname === '/' || location.pathname === '/tasks'
-  const sidebarCollapsed = sidebarPreference ?? (workspaceMode || location.pathname === '/calendar')
+  const sidebarCollapsed = sidebarPreference ?? (workspaceMode || location.pathname === '/calendar' || location.pathname === '/focus')
   const coreWorkspace = ['/tasks', '/calendar', '/schedule'].includes(location.pathname)
   const subjects = data.subjects.filter((subject) => subject.semesterId === data.selectedSemesterId)
   const scopedSubject = workspaceMode ? data.subjects.find((subject) => subject.id === params.get('subject')) : undefined
@@ -132,6 +134,7 @@ export function AppLayout() {
               onClick={() => window.dispatchEvent(new Event('studyplanner:create-task'))}><Icon name="plus" size={15} /><span>Tạo nhiệm vụ</span></button>}
         </div>
       </header>
+      <FocusDock />
       <main id="main-content" tabIndex={-1}>{!['/subjects', '/subjects/new'].includes(location.pathname) && academicLoading && <p role="status">Đang tải học kỳ và môn học…</p>}{!['/subjects', '/subjects/new'].includes(location.pathname) && academicError && <div className="inline-notice" role="alert">Không tải được dữ liệu học kỳ/môn học: {academicError} <button className="text-button" disabled={academicBusy} onClick={retryAcademic}>Thử lại</button></div>}<Outlet /></main>
 
     </div>

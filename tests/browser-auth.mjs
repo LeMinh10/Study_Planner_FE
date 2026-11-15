@@ -1,5 +1,5 @@
-// Two browser passes: Swagger contract responses through CDP, then the actual
-// frontend mock adapter with persistence. Neither pass needs a backend.
+// Chạy trình duyệt hai lượt: phản hồi theo hợp đồng Swagger qua CDP, sau đó dùng
+// bộ giả lập frontend thật có lưu dữ liệu. Cả hai lượt đều không cần backend.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
@@ -116,7 +116,7 @@ try {
       } else if (route === '/api/v1/admin/users' || route.startsWith('/api/v1/admin/users/')) {
         const authorization = Object.entries(request.headers).find(([name]) => name.toLowerCase() === 'authorization')?.[1]
         let role
-        try { role = JSON.parse(Buffer.from(authorization.split(' ')[1].split('.')[1], 'base64url').toString()).role } catch { /* Missing/invalid credentials are rejected below. */ }
+        try { role = JSON.parse(Buffer.from(authorization.split(' ')[1].split('.')[1], 'base64url').toString()).role } catch { /* Thông tin xác thực thiếu hoặc không hợp lệ sẽ bị từ chối bên dưới. */ }
         if (role !== 'admin') { status = role ? 403 : 401; response = { thongBao: 'Tài khoản không có quyền quản trị.' } }
         else if (route === '/api/v1/admin/users') {
           const query = requestUrl.searchParams
@@ -137,7 +137,7 @@ try {
       } else { status = 404; response = { message: 'Unexpected test endpoint' } }
       await cdp('Fetch.fulfillRequest', { requestId, responseCode: status, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], ...(response === undefined ? {} : { body: Buffer.from(JSON.stringify(response)).toString('base64') }) })
     } catch (error) {
-      // StrictMode or navigation can abort a paused fetch before it is fulfilled.
+      // StrictMode hoặc chuyển trang có thể hủy yêu cầu đang tạm giữ trước khi trả phản hồi.
       if (!String(error).includes('Invalid InterceptionId')) errors.push(String(error))
     }
   })
@@ -242,7 +242,7 @@ try {
     await go('/register'); await waitFor('!!document.querySelector("input[name=fullName]")')
     await fillRegistration(); await click('button[type="submit"]'); await waitFor(at('/login'))
     await waitFor('document.body.innerText.includes("Đăng ký thành công")')
-    // Account data survives a page reload before any session has been created.
+    // Dữ liệu tài khoản vẫn còn sau khi tải lại trang trước khi có phiên đăng nhập.
     await go('/login'); await waitFor('!!document.querySelector("input[name=taiKhoan]")')
     await click('a[href="/register"]'); await waitFor('!!document.querySelector("input[name=fullName]")')
     await fillRegistration(); await input('studentCode', '0991234568')
@@ -289,7 +289,7 @@ try {
     assert.equal(await evaluate('document.querySelector("input[name=className]").value'), updatedProfile.className)
     await click('.profile-summary button'); await waitFor(at('/login'))
 
-    // Admin uses the same local account database as registration and profile editing.
+    // Quản trị dùng chung kho tài khoản cục bộ với luồng đăng ký và sửa hồ sơ.
     await go('/admin'); await waitFor('document.body.innerText.includes("Đăng nhập admin")')
     await login('admin@caothang.edu.vn', '0306231303'); await waitFor(at('/admin/students'))
     await waitFor(userRows + ' === 6')
@@ -474,10 +474,10 @@ try {
   socket?.close()
   chrome?.kill()
   await vite.close()
-  // Delete only this test's freshly created temporary browser profile.
+  // Chỉ xóa thư mục hồ sơ trình duyệt tạm do lượt kiểm thử này vừa tạo.
   const resolved = path.resolve(userDir)
   if (resolved.startsWith(path.resolve(tempPrefix)) && path.dirname(resolved) === path.resolve(os.tmpdir())) {
-    try { fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch { /* Chrome may briefly retain file handles. */ }
+    try { fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch { /* Chrome có thể còn giữ tạm quyền truy cập tệp. */ }
   }
 }
 }

@@ -1,4 +1,4 @@
-/* Sky: luminous blue surfaces, stronger accents and layered white cards. */
+/* Giao diện tông trời xanh: nền xanh sáng, điểm nhấn đậm và thẻ trắng phân lớp. */
 :root {
   --paper: #f4f8ff;
   --panel: #ffffff;
@@ -23,7 +23,7 @@
   --blue-gradient: linear-gradient(115deg, #245bd0, #3474d9);
   --card-shadow: 0 5px 18px #3062a80a, 0 1px 3px #3062a805;
   --card-hover-shadow: 0 10px 28px #3062a818, 0 2px 5px #3062a808;
-  /* Keep existing components using these legacy tokens in the same palette. */
+  /* Giữ các thành phần dùng biến màu cũ trong cùng bảng màu hiện hành. */
   --green: var(--accent);
   --green-dark: var(--accent-hover);
   --yellow: var(--coral);
@@ -44,7 +44,7 @@ progress::-moz-progress-bar { background: var(--accent); }
 .lavender { --subject-bg: #eee2fa; --subject-border: #d9bfee; --subject-accent: #a278c4; --subject-ink: #714296; }
 .blue { --subject-bg: #e2effb; --subject-border: #b9d5ee; --subject-accent: #72a8d6; --subject-ink: #345f88; }
 
-/* Sky navigation stays light, including expanded subject lists. */
+/* Thanh điều hướng giữ nền sáng, kể cả danh sách môn đang mở rộng. */
 .flow-layout { background: var(--paper); color: var(--ink); }
 .flow-layout .sidebar {
   background: linear-gradient(165deg, #dcecff 0%, #edf5ff 45%, #f5f9ff 100%);
@@ -84,7 +84,7 @@ progress::-moz-progress-bar { background: var(--accent); }
 .flow-sidebar-tools > a:hover, .flow-sign-in:hover { color: var(--accent); }
 .flow-layout .avatar { background: #d2e7fb; border-color: #f7fbff; color: var(--sky-ink); }
 
-/* Light surfaces keep dense task lists comfortable to scan. */
+/* Nền sáng giúp danh sách nhiều nhiệm vụ dễ đọc. */
 .flow-layout .topbar { background: var(--panel); border-color: var(--line); box-shadow: 0 2px 12px #3062a804; }
 .flow-top-location, .flow-top-location > strong,
 .flow-active-semester select { color: var(--muted); }
@@ -140,7 +140,7 @@ progress::-moz-progress-bar { background: var(--accent); }
 .flow-setup-notice { background: var(--sky-soft); border-color: var(--sky-border); color: var(--muted); border-radius: 10px; }
 .flow-setup-notice strong { color: var(--green); }
 
-/* Status colors have the same meaning in lists, boards and statistics. */
+/* Màu trạng thái giữ cùng ý nghĩa trong danh sách, bảng và thống kê. */
 .flow-label-todo, .status-todo { background: var(--sky-soft); color: #526c86; }
 .flow-label-doing, .status-doing, .working-label { background: var(--coral-soft); color: var(--coral-ink); }
 .flow-label-done, .status-done { background: var(--mint-soft); color: var(--mint-ink); }
@@ -192,7 +192,7 @@ progress::-moz-progress-bar { background: var(--accent); }
 .flow-board-card-meta { border-color: var(--line); }
 .flow-board-empty { border-color: var(--sky-border); color: var(--muted); border-radius: 8px; }
 
-/* Academic cards carry their subject's color, rather than a second palette. */
+/* Thẻ học tập dùng màu của môn để thống nhất nhận diện. */
 .paper-panel, .student-task-list { background: var(--panel); border-color: var(--line); border-radius: 14px; box-shadow: var(--card-shadow); }
 .subject-study-card { background: linear-gradient(180deg, var(--subject-bg) 0, var(--subject-bg) 88px, #fff 88px); border-color: var(--subject-border); border-top: 4px solid var(--subject-accent); border-radius: 16px; box-shadow: var(--card-shadow); transition: border-color .18s, box-shadow .18s; }
 .subject-study-card:hover { border-color: var(--subject-accent); box-shadow: var(--card-hover-shadow); }
@@ -249,7 +249,7 @@ progress::-moz-progress-bar { background: var(--accent); }
 .today-clear strong { color: var(--mint-ink); }
 .student-overdue-note, .inline-notice { background: var(--coral-soft); border-color: #efd3c5; color: var(--coral-ink); }
 
-/* Calendars, charts and tables share the same surface and highlight colors. */
+/* Lịch, biểu đồ và bảng dùng chung màu nền và màu nhấn. */
 .flow-calendar-toolbar, .flow-calendar-weekdays, .flow-calendar-day,
 .flow-layout .student-calendar-nav, .task-detail-facts,
 .task-detail-actions, .task-detail-subtasks label { border-color: var(--line); }
@@ -294,7 +294,7 @@ progress::-moz-progress-bar { background: var(--accent); }
 .timetable-header, .calendar-weekday-header { background: var(--sky-soft); color: var(--muted); }
 .timetable-header .today-column { background: var(--sky-soft); color: var(--sky-ink); }
 
-/* Menus and forms use the same light surfaces as the workspace. */
+/* Menu và biểu mẫu dùng cùng nền sáng với không gian làm việc. */
 .flow-layout .search-results, .flow-layout .action-menu-items, .action-menu-items,
 .flow-filter-popover > div { background: var(--panel); border-color: #cbdbf0; border-radius: 12px; box-shadow: 0 12px 36px #3062a820, 0 2px 6px #3062a808; }
 .flow-layout .search-caption, .flow-layout .search-results a,

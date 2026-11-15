@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { xacNhan } from './xacNhan'
 import { Icon } from '../components/Icon'
 import { BieuMau, ChonPhamVi, useHocTap } from './HocTapPage'
@@ -8,6 +9,9 @@ import { congNgay, dauTuan, doiKhoang, gioNhap, hienGio, ngay, thu, thoiDiemGui,
 import type { GioRanh, Lich, LopHoc, NhiemVu, Phien, SuKien } from './types'
 import { mocDauNgay, nhanLoaiLich } from './lich'
 import { LichKhungNhin } from './LichKhungNhin'
+import { NgoaiLeGioRanh } from './NgoaiLeGioRanh'
+import { useStudySettings } from './StudySettings'
+import './planning-upgrade.css'
 
 const calendarModes = { day: 'Ngày', threeDays: '3 ngày', week: 'Tuần', twoWeeks: '2 tuần', month: 'Tháng', agenda: 'Danh sách 7 ngày' }
 const sessionModes = { period: '7 ngày trước đến 31 ngày tới', day: 'Ngày', week: 'Tuần', month: 'Tháng', agenda: 'Danh sách 7 ngày' }
@@ -90,7 +94,7 @@ export function LichView({ tab, studyBatch, scheduleDate }: { tab: string; study
       if (event.loai === 'HanNhiemVu' || event.loai === 'SuKien') { c.modal(<ChiTietNhiemVu ma={event.maNguon} />); return }
       if (event.loai === 'GioRanh') {
         const r = await goi<GioRanh>(c.token, `/availability-windows/${event.maNguon}`)
-        c.modal(<SuaLich row={r.duLieu} kind="free" baseline={r.phienBan} />)
+        c.modal(<NgoaiLeGioRanh row={r.duLieu} initialDay={ngay(event.batDau, c.zone)} />)
       } else if (event.loai === 'LichHoc') {
         const r = await goi<LopHoc>(c.token, `/class-sessions/${event.maNguon}`)
         c.modal(<SuaLich row={r.duLieu} kind="classes" baseline={r.phienBan} />)
@@ -204,7 +208,7 @@ export function LichView({ tab, studyBatch, scheduleDate }: { tab: string; study
         </div>
         <span className="ht-study-badge" data-tone={row.dangSuDung ? 'done' : undefined}>{row.dangSuDung ? 'Đang dùng' : 'Đã tắt'}</span>
         <div className="ht-study-row-actions">
-          <button type="button" onClick={() => c.modal(<SuaLich row={row} kind="free" baseline={baseline!} />)}>Chỉnh sửa</button>
+          <button type="button" onClick={() => c.modal(<SuaLich row={row} kind="free" baseline={baseline!} />)}>Sửa lịch lặp</button><button type="button" onClick={() => c.modal(<NgoaiLeGioRanh row={row} />)}>Điều chỉnh một ngày</button>
           <button type="button" className="ht-danger" onClick={() => void c.run(async () => {
             if (!await xacNhan({ tieuDe: 'Xóa giờ rảnh?', noiDung: `Xóa khung giờ rảnh ${thu[row.thuTrongTuan - 1]}, ${row.gioBatDau.slice(0, 5)}–${row.gioKetThuc.slice(0, 5)}?`, nguyHiem: true, nhanXacNhan: 'Xóa giờ rảnh' })) return
             const result = await thayDoi(c.token, `/availability-windows/${row.ma}`, 'DELETE', undefined, baseline!, { path: '/calendar/change-preview', body: { loai: 'GioRanh', ma: row.ma, xoa: true } })
@@ -257,6 +261,7 @@ function SuaLich({ kind, row, baseline }: { kind: 'free' | 'classes'; row?: GioR
   const [toanHocKy, setToanHocKy] = useState(!lesson?.ngayApDungTu && !lesson?.ngayApDungDen)
   const [tuNgay, setTuNgay] = useState(lesson?.ngayApDungTu ?? '')
   const [denNgay, setDenNgay] = useState(lesson?.ngayApDungDen ?? '')
+  const [weekdays, setWeekdays] = useState<number[]>([1])
   return <BieuMau title={isFree ? 'Giờ rảnh để tự học' : 'Buổi học theo môn'} onSubmit={async form => {
     const subject = lesson?.maMonHoc ?? Number(form.get('maMonHoc'))
     const shared = {
@@ -265,6 +270,10 @@ function SuaLich({ kind, row, baseline }: { kind: 'free' | 'classes'; row?: GioR
       gioKetThuc: form.get('gioKetThuc') === row?.gioKetThuc.slice(0, 5) ? row.gioKetThuc : String(form.get('gioKetThuc')) + ':00',
     }
     const body = isFree ? { ...shared, ngayBatDau: String(form.get('ngayBatDau')), ngayKetThuc: String(form.get('ngayKetThuc')), dangSuDung: form.has('dangSuDung') } : { ...shared, phongHoc: String(form.get('phongHoc') ?? '') || null, ngayApDungTu: form.has('toanHocKy') ? null : String(form.get('ngayBatDau') ?? '') || null, ngayApDungDen: form.has('toanHocKy') ? null : String(form.get('ngayKetThuc') ?? '') || null }
+    if (isFree && !row) {
+      if (!weekdays.length) throw new Error('Chọn ít nhất một ngày trong tuần.')
+      return goi(c.token, '/availability-windows/batch', { method: 'POST', version: baseline, body: { ...body, thuTrongTuan: [...weekdays].sort((a, b) => a - b) } })
+    }
     const path = isFree ? '/availability-windows' + (row ? '/' + row.ma : '') : row ? '/class-sessions/' + row.ma : `/courses/${subject}/class-sessions`
     const result = await thayDoi(c.token, path, row ? 'PUT' : 'POST', body, baseline, { path: '/calendar/change-preview', body: { loai: isFree ? 'GioRanh' : 'LichHoc', ma: row?.ma ?? null, maMonHoc: isFree ? null : subject, khungGioRanh: isFree ? body : null, lichHoc: isFree ? null : body } })
     if (result && !isFree && !row) c.chonMonHoc(String(subject))
@@ -272,7 +281,7 @@ function SuaLich({ kind, row, baseline }: { kind: 'free' | 'classes'; row?: GioR
   }}>
     {!isFree && <ChonPhamVi subject={lesson?.maMonHoc?.toString() ?? c.monHoc} semester={c.hocKy} requiredSubject locked={!!row} />}
     {!isFree && !c.subjects.length && <p className="ht-note">Tạo môn học ở mục Các môn học rồi quay lại chọn tên môn.</p>}
-    <label>Ngày trong tuần<select name="thuTrongTuan" defaultValue={row?.thuTrongTuan ?? 1}>{thu.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}</select></label>
+    {isFree && !row ? <fieldset className="ht-weekday-picker"><legend>Ngày trong tuần</legend><div className="ht-weekday-shortcuts"><button type="button" onClick={() => setWeekdays([1, 2, 3, 4, 5])}>Thứ Hai–Thứ Sáu</button><button type="button" onClick={() => setWeekdays([1, 2, 3, 4, 5, 6, 7])}>Cả tuần</button><button type="button" onClick={() => setWeekdays([])}>Bỏ chọn</button></div><div className="ht-weekday-choices">{thu.map((name, index) => <label key={name}><input type="checkbox" name="thuDuocChon" value={index + 1} checked={weekdays.includes(index + 1)} onChange={event => setWeekdays(current => event.target.checked ? [...current, index + 1] : current.filter(day => day !== index + 1))} />{name}</label>)}</div><small>Nhập một lần, tự lặp mỗi tuần trong khoảng ngày bên dưới.</small></fieldset> : <label>Ngày trong tuần<select name="thuTrongTuan" defaultValue={row?.thuTrongTuan ?? 1}>{thu.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}</select></label>}
     <div className="ht-fields"><label>Bắt đầu<input name="gioBatDau" type="time" required defaultValue={row?.gioBatDau.slice(0, 5) ?? '19:00'} /></label><label>Kết thúc<input name="gioKetThuc" type="time" required defaultValue={row?.gioKetThuc.slice(0, 5) ?? '21:00'} /></label></div>
     {!isFree && <label className="ht-check"><input name="toanHocKy" type="checkbox" checked={toanHocKy} onChange={event => setToanHocKy(event.target.checked)} />Áp dụng suốt học kỳ</label>}
     {isFree ? <div className="ht-fields"><label>Áp dụng từ ngày<input type="date" required name="ngayBatDau" defaultValue={free?.ngayBatDau ?? today} /></label><label>Đến ngày<input type="date" required name="ngayKetThuc" defaultValue={free?.ngayKetThuc ?? congNgay(today, 90)} /></label></div> : !toanHocKy && <div className="ht-fields"><label>Áp dụng từ ngày<input type="date" required name="ngayBatDau" value={tuNgay} onChange={event => setTuNgay(event.target.value)} /></label><label>Đến ngày<input type="date" required name="ngayKetThuc" min={tuNgay || undefined} value={denNgay} onChange={event => setDenNgay(event.target.value)} /></label></div>}
@@ -295,6 +304,7 @@ function ThemVaoLich({ baseline }: { baseline: number }) {
 }
 function DatPhien({ row, task, baseline }: { row?: Phien; task?: NhiemVu; baseline: number }) {
   const c = useHocTap()
+  const studySettings = useStudySettings(c.token)
   const [choices, setChoices] = useState<NhiemVu[]>([])
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
@@ -305,12 +315,12 @@ function DatPhien({ row, task, baseline }: { row?: Phien; task?: NhiemVu; baseli
     }, 250)
     return () => { clearTimeout(timer); controller.abort() }
   }, [c.token, search])
-  return <BieuMau title={row ? 'Dời phiên tự học' : 'Đặt phiên tự học'} onSubmit={form => goi(c.token, '/study-sessions' + (row ? '/' + row.ma : ''), { method: row ? 'PUT' : 'POST', version: baseline, body: {
+  return <BieuMau disabled={!studySettings.data || studySettings.loading} title={row ? 'Dời phiên tự học' : 'Đặt phiên tự học'} onSubmit={form => goi(c.token, '/study-sessions' + (row ? '/' + row.ma : ''), { method: row ? 'PUT' : 'POST', version: baseline, body: {
     maNhiemVu: row?.maNhiemVu ?? task?.ma ?? Number(form.get('maNhiemVu')), batDauDuKien: thoiDiemGui(String(form.get('batDau')), row?.batDauDuKien ?? null, c.zone), ketThucDuKien: thoiDiemGui(String(form.get('ketThuc')), row?.ketThucDuKien ?? null, c.zone), ghiChu: String(form.get('ghiChu') ?? '') || null,
   } })}>
     {task && <p className="ht-note">Đặt phiên cho “{task.tieuDe}”.</p>}
     {!row && !task && <><label>Tìm nhiệm vụ theo tên<input value={search} onChange={e => setSearch(e.target.value)} /></label>{error && <p role="alert">{error}</p>}<label>Nhiệm vụ<select name="maNhiemVu" required><option value="">Chọn việc cần học</option>{choices.map(t => <option value={t.ma} key={t.ma}>{t.tieuDe}</option>)}</select></label></>}
-    <label>Bắt đầu<input name="batDau" required type="datetime-local" defaultValue={gioNhap(row?.batDauDuKien ?? null, c.zone)} /></label><label>Kết thúc<input name="ketThuc" required type="datetime-local" defaultValue={gioNhap(row?.ketThucDuKien ?? null, c.zone)} /></label><label>Ghi chú<textarea name="ghiChu" maxLength={2000} defaultValue={row?.ghiChu ?? ''} /></label><p className="ht-note">Phiên thường dài 25–50 phút, cách phiên khác tối thiểu 10 phút và nằm trong giờ rảnh.</p>
+    <label>Bắt đầu<input name="batDau" required type="datetime-local" defaultValue={gioNhap(row?.batDauDuKien ?? null, c.zone)} /></label><label>Kết thúc<input name="ketThuc" required type="datetime-local" defaultValue={gioNhap(row?.ketThucDuKien ?? null, c.zone)} /></label><label>Ghi chú<textarea name="ghiChu" maxLength={2000} defaultValue={row?.ghiChu ?? ''} /></label><p className="ht-note">{studySettings.data ? `Phiên tối đa ${studySettings.data.phienHocPhut} phút, nghỉ ${studySettings.data.nghiGiuaPhienPhut} phút và nằm trong giờ rảnh.` : "Đang tải cấu hình học…"}</p>{studySettings.error && <p className="ht-error" role="alert">{studySettings.error} <button type="button" onClick={studySettings.refresh}>Tải lại cấu hình</button></p>}
   </BieuMau>
 }
 function dinhDangBamGio(seconds: number) {
@@ -322,6 +332,7 @@ function dinhDangBamGio(seconds: number) {
 
 function PhienChiTiet({ row: initialRow, baseline: initialVersion }: { row: Phien; baseline: number }) {
   const c = useHocTap()
+  const navigate = useNavigate()
   const dialog = useRef<HTMLDialogElement>(null)
   const [{ row, version }, setSession] = useState({ row: initialRow, version: initialVersion })
   const [task, setTask] = useState<NhiemVu | null>(null)
@@ -349,7 +360,7 @@ function PhienChiTiet({ row: initialRow, baseline: initialVersion }: { row: Phie
   const completed = row.trangThai === 'Completed'
   const missed = row.trangThai === 'Missed'
   const planned = row.trangThai === 'Planned'
-  const actions = running ? [['finish', 'Kết thúc phiên']] : !planned ? [] : before ? [['cancel', 'Hủy phiên']] : ended ? [['finish', 'Xác nhận đã học xong'], ['miss', 'Xác nhận bỏ lỡ']] : [['start', 'Bắt đầu học']]
+  const actions = running ? [] : !planned ? [] : before ? [['start', 'Bắt đầu ngay'], ['cancel', 'Hủy phiên']] : ended ? [['finish', 'Xác nhận đã học xong'], ['miss', 'Xác nhận bỏ lỡ']] : [['start', 'Bắt đầu học']]
   const lines = task?.moTa?.split(/\r?\n/) ?? []
   const isLink = (line: string) => /^https?:\/\/\S+$/i.test(line.trim()) && URL.canParse(line.trim())
   const checklistTitles = task?.checklist?.map(item => item.tieuDe) ?? []
@@ -359,15 +370,16 @@ function PhienChiTiet({ row: initialRow, baseline: initialVersion }: { row: Phie
   const elapsed = (row.soGiayDaHoc ?? 0) + (row.batDauBamGio ? Math.max(0, Math.floor((now - Date.parse(row.batDauBamGio)) / 1000)) : 0)
   const plannedMinutes = Math.round((Date.parse(row.ketThucDuKien) - Date.parse(row.batDauDuKien)) / 60000)
   const path = `/study-sessions/${row.ma}`
-  const nextStep = running ? 'Bạn có thể mở tài liệu hoặc làm bài ở ứng dụng khác. Bấm Kết thúc phiên khi dừng học.'
-    : completed ? 'Cập nhật tiến độ nhiệm vụ theo phần bạn thực sự làm được.'
+  const nextStep = running ? 'Mở đồng hồ Tập trung để xem thời gian, tạm dừng, tiếp tục hoặc kết thúc phiên. Tiến độ nhiệm vụ có thể cập nhật sau khi học.'
+    : completed ? 'Phiên đã kết thúc. Bạn có thể cập nhật tiến độ theo phần thực sự làm được hoặc để sau. Kết thúc phiên không tự hoàn thành nhiệm vụ.'
     : missed ? 'Bạn có thể tạo gợi ý mới để xếp lại phần việc chưa làm.'
     : !planned ? ''
-    : before ? 'Đến giờ đã đặt, quay lại đây để bắt đầu học. Bạn có thể mở tài liệu trước.'
+    : before ? 'Bạn có thể bắt đầu ngay khi sẵn sàng. Đồng hồ ghi giờ thực tế và giữ lịch dự kiến để đối chiếu.'
     : ended ? 'Chọn kết quả theo thực tế. Xác nhận học xong ở đây sẽ ghi nhận trạng thái phiên.'
     : 'Đã đến giờ. Bấm Bắt đầu học để chạy đồng hồ.'
   async function change(action?: string) {
     if (busy) return
+    if (action === 'start') { c.close(); navigate('/focus?session=' + row.ma); return }
     setBusy(true); setError('')
     try {
       const result = action
@@ -396,8 +408,8 @@ function PhienChiTiet({ row: initialRow, baseline: initialVersion }: { row: Phie
     <h3>{task?.tieuDe ?? 'Nhiệm vụ #' + taskId}</h3>
     <p>{hienGio(row.batDauDuKien, c.zone)} → {hienGio(row.ketThucDuKien, c.zone)} · {plannedMinutes} phút dự kiến</p>
     <p>{running ? 'Đang học' : trangThai[row.trangThai]}</p>
-    {(running && row.batDauBamGio || completed && measured) && <div className="ht-stopwatch">
-      <span>{running ? 'Đang bấm giờ' : 'Thời gian đã học'}</span>
+    {completed && measured && <div className="ht-stopwatch">
+      <span>Thời gian đã học</span>
       <strong role="timer" aria-label="Thời gian đã học">{dinhDangBamGio(elapsed)}</strong>
     </div>}
     {(completed || running) && !measured && <p className="ht-note">Phiên này chưa có thời lượng ghi bằng đồng hồ.</p>}
@@ -406,8 +418,10 @@ function PhienChiTiet({ row: initialRow, baseline: initialVersion }: { row: Phie
     {links.length > 0 && <ul className="ht-study-materials" aria-label="Tài liệu của nhiệm vụ">
       {links.map((link, index) => <li key={link}><a href={link} target="_blank" rel="noopener noreferrer">Mở tài liệu{links.length > 1 ? ' ' + (index + 1) : ''} · {new URL(link).hostname}</a></li>)}
     </ul>}
+    {completed && task && <p>Tiến độ nhiệm vụ: {task.tienDo}%</p>}
     {nextStep && <p className="ht-note">{nextStep}</p>}
     <div className="ht-toolbar">
+      {running && <button type="button" className="ht-primary" disabled={busy} onClick={() => { c.close(); navigate('/focus?session=' + row.ma) }}>Mở đồng hồ tập trung</button>}
       {actions.map(([action, label]) => <button type="button" className={action === 'start' || action === 'finish' ? 'ht-primary' : undefined} disabled={busy} key={action} onClick={() => void change(action)}>{label}</button>)}
       {completed && task?.tienDo !== 100 && <button className="ht-primary" disabled={busy} onClick={() => void updateProgress()}>Cập nhật tiến độ nhiệm vụ</button>}
       {missed && <button className="ht-primary" disabled={busy} onClick={() => { c.close(); c.moTab('planning') }}>Tạo gợi ý mới</button>}

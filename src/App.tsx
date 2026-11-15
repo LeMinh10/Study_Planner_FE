@@ -10,6 +10,7 @@ import { SubjectDetailPage } from './pages/SubjectDetailPage'
 import { CreateSubjectPage } from './pages/CreateSubjectPage'
 import { TaskDetails } from './components/StudentTasks'
 import { HocTapPage } from './hoc-tap/HocTapPage'
+import { FocusPage } from './focus/FocusPage'
 import { StatisticsPage } from './pages/StatisticsPage'
 import { ProfilePage } from './pages/Profile/ProfilePage'
 import { AuthPage } from './pages/Auth/AuthPage'
@@ -47,6 +48,7 @@ export function AppRoutes() {
         <Route path="schedule" element={<HocTapPage mode="schedule" />} />
         <Route path="tasks" element={<HocTapPage mode="tasks" />} />
         <Route path="calendar" element={<HocTapPage mode="calendar" />} />
+        <Route path="focus" element={<FocusPage />} />
         <Route path="notifications" element={<Navigate to="/tasks" replace />} />
         <Route path="statistics" element={<StatisticsPage key={data.selectedSemesterId} />} />
         <Route path="priorities" element={<Navigate to="/tasks?view=priority" replace />} />

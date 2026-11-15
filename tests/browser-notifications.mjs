@@ -5,6 +5,9 @@ export function createNotificationFixture() {
   const row = i => ({ ma: i, maNhiemVu: i, tieuDe: i === 1 ? 'Nhiệm vụ đã quá hạn' : 'Nhiệm vụ sắp đến hạn', tenNhiemVu: i === 1 ? 'Việc quá hạn ' + 'a'.repeat(200) : 'Nhiệm vụ ' + i, noiDung: 'Thông báo nhắc hạn.', hanHieuLuc: '2026-11-10T17:00:00+07:00', maHocKy: i === 1 ? 12 : 11, tenHocKy: i === 1 ? 'Học kỳ II' : 'Học kỳ I', maMonHoc: null, tenMonHoc: null, quaHan: i === 1, daHoanThanh: false, ngayPhat: '2026-11-10T03:00:00Z', ngayDoc: i <= 2 ? null : '2026-11-10T03:01:00Z' })
   const state = { rows: Array.from({ length: 21 }, (_, i) => row(i + 1)), fail: false }
   return { state, handle(url, method, body) {
+    if (url.pathname === '/api/v1/planning-reminders/settings' && method === 'GET') return { status: 200, response: { phienBan: 5, duLieu: { dangBat: false } } }
+    if (url.pathname === '/api/v1/planning-reminders' && method === 'GET') return { status: 200, response: { phienBan: 5, duLieu: { danhSach: [], trang: 1, kichThuocTrang: 10, tongSo: 0, tongChuaDoc: 0, muiGio: 'Asia/Ho_Chi_Minh', docDenLuc: '2026-11-10T04:00:00Z' } } }
+    if (url.pathname === '/api/v1/planning-reminders/read-all' && method === 'POST') return { status: 204 }
     if (!url.pathname.startsWith('/api/v1/notifications')) return null
     if (state.fail) return { status: 503, response: { detail: 'Thông báo tạm gián đoạn.' } }
     if (method === 'GET') {

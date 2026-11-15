@@ -1,5 +1,5 @@
-// Local account simulation for frontend development. These tokens are accepted
-// only by this adapter; they do not authenticate against a real backend.
+// Giả lập tài khoản cục bộ để phát triển frontend. Token này chỉ được chấp nhận
+// bởi bộ giả lập này; không dùng để xác thực với backend thật.
 import { demoStudents } from '../admin/studentAccounts'
 
 interface MockUser {
@@ -43,7 +43,7 @@ function failure(status: number, thongBao: string, code = '', errors?: Record<st
 function publicUser(account: MockAccount) { return { ...account.user } }
 function saveDatabase(database: MockDatabase) {
   memoryDatabase = database
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(database)) } catch { /* The current tab can still use the in-memory data. */ }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(database)) } catch { /* Tab hiện tại vẫn có thể dùng dữ liệu trong bộ nhớ. */ }
 }
 function storedDatabase(): MockDatabase | null {
   try {

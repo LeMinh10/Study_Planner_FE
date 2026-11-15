@@ -51,7 +51,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     name: auth.user.name, email: auth.user.email, studentId: auth.user.studentId,
     school: auth.user.school, className: auth.user.className, major: auth.user.major,
   } : plannerData.profile }
-  // Tasks and schedules remain read-only until their APIs are integrated.
+  // Khóa thao tác nhiệm vụ/lịch trong context cũ; màn học tập dùng API riêng để lưu các dữ liệu này.
   const canMutate = false
   const [semesterReady, setSemesterReady] = useState(false)
   const [subjectReady, setSubjectReady] = useState(false)

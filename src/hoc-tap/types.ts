@@ -33,6 +33,8 @@ export interface GioRanh {
   ma: number; thuTrongTuan: number; gioBatDau: string; gioKetThuc: string
   ngayBatDau: string; ngayKetThuc: string; dangSuDung: boolean
 }
+export interface NgoaiLeGioRanh { maKhungGioRanh: number; ngay: string; boQua: boolean; gioBatDau: string | null; gioKetThuc: string | null }
+export interface CauHinhHoc { phienHocPhut: number; nghiGiuaPhienPhut: number; gioiHanHocMoiNgayPhut: number }
 export interface LopHoc {
   ma: number; maMonHoc: number; tenMonHoc: string; thuTrongTuan: number
   gioBatDau: string; gioKetThuc: string; phongHoc: string | null
@@ -47,8 +49,9 @@ export interface ApDungLich { maLanApDung: number; phien: Phien[] }
 export interface DeXuat { maNhiemVu: number; tieuDe: string; batDauDuKien: string; ketThucDuKien: string; lyDo: string }
 export interface GoiY {
   tokenPreview: string; phien: DeXuat[]; muiGio: string; hetHanLuc: string
+  maPhienThayThe?: number[]; cauHinhHoc?: CauHinhHoc
   tongPhutCanXep: number; tongPhutDaDat: number; tongPhutDeXuat: number; tongPhutChuaXep: number
   canhBao: { tieuDe: string; thongBao: string; soPhutChuaXep: number }[]
 }
-export interface AnhHuong { soNhiemVu?: number; maPhienBiHuy?: number[]; maPhienBiXoa?: number[]; phienBiAnhHuong?: number[]; lichHocTrung?: number[]; canKetThucPhienDangHoc?: boolean }
+export interface AnhHuong { soNhiemVu?: number; maPhienBiHuy?: number[]; maPhienBiXoa?: number[]; phienBiAnhHuong?: number[]; lichHocTrung?: number[]; canKetThucPhienDangHoc?: boolean; maNhiemVuMoLai?: number[]; maChecklistChuyenThanhBuoc?: number[]; maTienDoChuyenThanhBuoc?: number[] }
 export interface LichSu { ma: number; tieuDeNhiemVu: string; hanhDong: string; nguonThayDoi: string; ngayThayDoi: string; duLieuTruoc: string | null; duLieuSau: string | null }

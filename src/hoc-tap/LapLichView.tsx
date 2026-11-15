@@ -5,6 +5,8 @@ import { useHocTap } from './HocTapPage'
 import { goi, LoiHocTap } from './api'
 import { gioNhap, hienGio, ngay } from './time'
 import type { ApDungLich, GoiY, NhiemVu, Trang } from './types'
+import { StudySettingsPanel } from './StudySettings'
+import './planning-upgrade.css'
 
 interface YeuCauCho {
   key: string
@@ -21,6 +23,7 @@ export function LapLichView() {
   const [pending, setPending] = useState<YeuCauCho | null>(null)
   const [selected, setSelected] = useState(new Set<number>())
   const [specificTasks, setSpecificTasks] = useState(false)
+  const [replaceFuture, setReplaceFuture] = useState(false)
   const [taskSelection, setTaskSelection] = useState<{ scope: string; ids: Set<number> } | null>(null)
   const [choiceResult, setChoiceResult] = useState<{ key: string; tasks?: NhiemVu[]; error?: string } | null>(null)
   const [choiceRetry, setChoiceRetry] = useState(0)
@@ -62,6 +65,7 @@ export function LapLichView() {
     try { if (value) sessionStorage.setItem(storageKey, JSON.stringify(value)); else sessionStorage.removeItem(storageKey) }
     catch { setNotice('Trình duyệt chưa lưu được yêu cầu chờ. Giữ tab mở để thử lại cùng yêu cầu nếu mất kết nối.') }
   }
+  // Giữ nguyên khóa và nội dung khi thử lại: mất phản hồi không có nghĩa là máy chủ chưa lưu lịch.
   async function apply(attempt: YeuCauCho) {
     if (busy) return
     setBusy(true); setError(''); persist(attempt)
@@ -86,7 +90,8 @@ export function LapLichView() {
   })
   return <section className="ht-study-view ht-study-planning">
     {notice && <p role="status" className="ht-note">{notice}</p>}{error && <p role="alert" className="ht-error">{error}</p>}
-    <form onSubmit={async event => {
+    {!pending && <StudySettingsPanel token={c.token} onSaved={() => { setPreview(null); setSelected(new Set()); c.reload() }} />}
+    <form onChange={() => { if (!pending) setPreview(null) }} onSubmit={async event => {
       event.preventDefault()
       if (pending || busy || (specificTasks && !taskIds.size)) return
       const form = new FormData(event.currentTarget)
@@ -95,7 +100,7 @@ export function LapLichView() {
         const result = await goi<GoiY>(c.token, '/planning/preview', { method: 'POST', body: {
           ngayBatDau: form.get('ngayBatDau'), soNgay: Number(form.get('soNgay')),
           maHocKy: c.hocKy ? Number(c.hocKy) : null, maMonHoc: c.monHoc ? Number(c.monHoc) : null,
-          danhSachMaNhiemVu: specificTasks ? [...taskIds] : [],
+          danhSachMaNhiemVu: specificTasks ? [...taskIds] : [], capNhatKeHoach: replaceFuture,
         } })
         setPreview(result.duLieu); setSelected(new Set(result.duLieu.phien.map((_, i) => i)))
       } catch (e) { setError(e instanceof Error ? e.message : 'Chưa tạo được gợi ý.') }
@@ -106,6 +111,7 @@ export function LapLichView() {
           <label>Ngày bắt đầu<input name="ngayBatDau" type="date" required min={ngay(Date.now(), c.zone)} defaultValue={ngay(Date.now(), c.zone)} /></label>
           <label>Số ngày<input name="soNgay" type="number" required min={1} max={31} defaultValue={14} /></label>
         </div>
+        <fieldset className="ht-study-task-scope"><legend>Cách lập kế hoạch</legend><div className="ht-study-choices"><label className="ht-study-choice"><input type="radio" name="cachLapKeHoach" checked={!replaceFuture} onChange={() => { setReplaceFuture(false); setPreview(null) }} />Tạo thêm lịch</label><label className="ht-study-choice"><input type="radio" name="cachLapKeHoach" checked={replaceFuture} onChange={() => { setReplaceFuture(true); setPreview(null) }} />Cập nhật phần chưa học</label></div><p className="ht-study-caption">Cập nhật sẽ đề xuất thay thế các phiên chưa bắt đầu trong khoảng đã chọn. Phiên đang học và lịch sử đã học được giữ nguyên.</p></fieldset>
         <fieldset className="ht-study-task-scope">
           <legend>Nhiệm vụ đưa vào lịch</legend>
           <div className="ht-study-choices">
@@ -143,13 +149,17 @@ export function LapLichView() {
       if (await xacNhan({ tieuDe: 'Bỏ yêu cầu đang chờ?', noiDung: 'Bạn đã kiểm tra các phiên trong lịch để biết yêu cầu trước có được lưu chưa?', luuY: 'Bỏ yêu cầu chờ sẽ kết thúc khả năng thử lại yêu cầu này từ màn hình hiện tại.', nhanXacNhan: 'Đã kiểm tra, bỏ yêu cầu' })) { persist(null); setPreview(null); setNotice('Có thể tạo lại gợi ý từ dữ liệu mới nhất.') }
     }}>Đã kiểm tra lịch, bỏ yêu cầu chờ</button></div>}
     {preview && <section className="ht-study-results">
+      {!!preview.maPhienThayThe?.length && <p className="ht-replan-summary">Đề xuất thay thế {preview.maPhienThayThe.length} phiên chưa bắt đầu bằng các phiên bạn chọn bên dưới. Chưa thay đổi lịch cho đến khi bạn áp dụng.</p>}
+      {preview.cauHinhHoc && <p className="ht-study-caption">Mỗi phiên tối đa {preview.cauHinhHoc.phienHocPhut} phút · nghỉ {preview.cauHinhHoc.nghiGiuaPhienPhut} phút · tối đa {preview.cauHinhHoc.gioiHanHocMoiNgayPhut} phút/ngày.</p>}
       <header className="ht-study-toolbar"><h2>Lịch đề xuất</h2><p>Dùng trước {hienGio(preview.hetHanLuc, c.zone)}</p></header>
       <div className="ht-metrics">{[['Cần xếp', preview.tongPhutCanXep], ['Đã đặt', preview.tongPhutDaDat], ['Đề xuất', preview.tongPhutDeXuat], ['Chưa xếp', preview.tongPhutChuaXep]].map(([name, minutes]) => <div key={name}><strong>{minutes} phút</strong><span>{name}</span></div>)}</div>
       {!pending && preview.phien.length > 0 && <div className="ht-study-toolbar"><div className="ht-study-row-actions">
         <button type="button" disabled={busy} onClick={() => setSelected(new Set(preview.phien.map((_, i) => i)))}>Chọn tất cả</button>
         <button type="button" disabled={busy} onClick={() => setSelected(new Set())}>Bỏ chọn</button>
       </div><button type="button" className="ht-primary" disabled={busy || selected.size === 0} onClick={async () => {
-        if (!await xacNhan({ tieuDe: 'Áp dụng lịch tự học?', noiDung: `Lưu ${selected.size} phiên đã chọn vào thời khóa biểu?`, nhanXacNhan: 'Áp dụng lịch' })) return
+        // Phải báo đủ số phiên cũ bị thay thế, kể cả khi người dùng chỉ chọn một phần phiên mới.
+        // Máy chủ kiểm tra token rồi hủy cũ/thêm mới trong cùng giao dịch sau bước xác nhận này.
+        if (!await xacNhan({ tieuDe: 'Áp dụng lịch tự học?', noiDung: preview.maPhienThayThe?.length ? `Thay thế ${preview.maPhienThayThe.length} phiên chưa bắt đầu bằng ${selected.size} phiên đã chọn? Các phiên đang học và lịch sử đã học được giữ nguyên.` : `Lưu ${selected.size} phiên đã chọn vào thời khóa biểu?`, nhanXacNhan: 'Áp dụng lịch' })) return
         const phien = preview.phien.filter((_, i) => selected.has(i)).map(p => ({ maNhiemVu: p.maNhiemVu, batDauDuKien: p.batDauDuKien, ketThucDuKien: p.ketThucDuKien }))
         void apply({ key: crypto.randomUUID(), body: { tokenPreview: preview.tokenPreview, phien }, preview })
       }}>Áp dụng {selected.size} phiên đã chọn</button></div>}
@@ -174,8 +184,8 @@ export function LapLichView() {
           })}
         </div>
       </section>)}
-      {preview.phien.some(row => Date.parse(row.ketThucDuKien) - Date.parse(row.batDauDuKien) < 25 * 60000) &&
-        <p className="ht-study-caption">Phiên dưới 25 phút có thể cần chọn cùng các phiên trước của nhiệm vụ.</p>}
+      {preview.phien.some(row => Date.parse(row.ketThucDuKien) - Date.parse(row.batDauDuKien) < 15 * 60000) &&
+        <p className="ht-study-caption">Phiên dưới 15 phút có thể cần chọn cùng các phiên trước của nhiệm vụ.</p>}
       {!!preview.canhBao.length && <section className="ht-study-warnings"><h3>Việc chưa xếp được</h3>
         <ul>{preview.canhBao.map((item, index) => <li key={index}>
           <strong>{item.tieuDe}</strong><p>{item.thongBao}{item.soPhutChuaXep > 0 ? ` Còn thiếu ${item.soPhutChuaXep} phút.` : ''}</p>

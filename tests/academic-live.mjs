@@ -1,5 +1,5 @@
-// Run from StudyPlanner.AcademicChecks with STUDYPLANNER_FE_ROOT set to this repo.
-// Tokens and API address belong to its temporary database and host, never printed.
+// Chạy từ StudyPlanner.AcademicChecks, đặt STUDYPLANNER_FE_ROOT trỏ đến repo này.
+// Token và địa chỉ API thuộc cơ sở dữ liệu/máy chủ tạm của kiểm thử, không in ra ngoài.
 import assert from 'node:assert/strict'
 import { createServer } from 'vite'
 
