@@ -12,7 +12,7 @@ export function createStatisticsFixture() {
     const q = url.searchParams
     assert.notEqual(q.get('chiLa'), 'true', 'Statistics and task list must both request root tasks')
     assert.equal(q.get('cheDo'), 'all', 'Include completed tasks from the whole semester')
-    const rows = state.empty ? [] : state.tasks.filter(task => (!q.get('maHocKy') || String(task.maHocKy) === q.get('maHocKy')) && task.maNhiemVuCha === null &&
+    const rows = state.empty ? [] : state.tasks.filter(task => (!q.get('maHocKy') || String(task.maHocKy) === q.get('maHocKy')) && (task.trangThai === 'Completed' || task.maNhiemVuCha === null || state.tasks.some(parent => parent.ma === task.maNhiemVuCha && parent.trangThai === 'Completed')) &&
       (!q.get('maMonHoc') || String(task.maMonHoc) === q.get('maMonHoc')) && (q.get('trangThai') ? task.trangThai === q.get('trangThai') : task.trangThai !== 'Completed'))
     const page = Number(q.get('trang'))
     const size = Number(q.get('kichThuocTrang')) === 20 ? 20 : 2
@@ -94,9 +94,9 @@ export async function runStatisticsChecks({ go, click, select, waitFor, evaluate
   assert.equal(await evaluate(value('pending')), '1')
   assert.equal(await evaluate(value('completed')), '1')
   await click('.statistics-completed-link')
-  await waitFor('location.pathname === "/tasks" && document.querySelector(".ht-list-caption span")?.textContent === "1 nhiệm vụ"')
+  await waitFor('location.pathname === "/tasks" && document.querySelector(".ht-list-caption span")?.textContent === "2 nhiệm vụ"')
   assert.equal(await evaluate('new URLSearchParams(location.search).get("status")'), 'Completed')
-  assert.equal(await evaluate('document.querySelectorAll(".ht-task-completed").length'), 1)
+  assert.equal(await evaluate('document.querySelectorAll(".ht-task-completed").length'), 2)
   await click('.sidebar a[href="/statistics"]'); await waitFor(ready(2))
   await select('.flow-active-semester select', '11'); await go('/statistics'); await waitFor(ready(4))
   assert.equal(await evaluate(value('pending')), '0')
@@ -109,5 +109,5 @@ export async function runStatisticsChecks({ go, click, select, waitFor, evaluate
   assert(await evaluate('document.querySelector(".statistics-page").getBoundingClientRect().width > 0'))
   assert(calls.filter(call => call.route === '/api/v1/tasks' && call.query.includes('maHocKy=')).every(call => call.method === 'GET'))
   assert.deepEqual(errors, [])
-  console.log('PASS: six unfinished main tasks including five personal and one semester task; empty semester history gives zero/one, adding four/one completed roots gives four/two; completed-task links match the actual task-list UI; pagination, timeliness, cache refresh failures, retry and empty states; no task mutations.')
+  console.log('PASS: six unfinished main tasks including five personal and one semester task; empty semester history gives zero/one, adding four/one completed roots gives four/two; completed-task links can show child tasks while statistics count only roots; pagination, timeliness, cache refresh failures, retry and empty states; no task mutations.')
 }

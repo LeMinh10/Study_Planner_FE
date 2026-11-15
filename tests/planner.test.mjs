@@ -327,7 +327,7 @@ test('academic and statistics pages display empty states instead of seeded recor
   assert(render('/semesters').includes('Chưa có học kỳ'))
   assert(render('/tasks?subject=math').includes('Không tìm thấy môn học'))
   const statistics = render('/statistics')
-  assert(statistics.includes('Chưa có dữ liệu thống kê'))
+  assert(statistics.includes('Chưa có học kỳ'))
   assert(!statistics.includes('status-chart'))
   const profile = render('/profile')
   assert(profile.includes('Chưa có thông tin cá nhân'))

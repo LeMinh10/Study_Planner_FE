@@ -1,5 +1,4 @@
 .priority-page-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.priority-page-heading .button { flex-shrink: 0; }
 .priority-active { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 24px; padding: 21px 24px; border: 1px solid var(--sky-border); border-radius: 10px; background: var(--sky-soft); }
 .priority-active > div { min-width: 0; }
 .priority-active > div > span { font-size: 11px; color: var(--muted); }

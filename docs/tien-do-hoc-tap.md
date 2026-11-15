@@ -47,7 +47,7 @@ Hai trang cùng gọi API `/tasks`, nhưng cần đối chiếu cùng phạm vi 
 - Trang Tiến độ luôn theo học kỳ đang chọn, có ghi tên học kỳ ngay trên thống kê. Không được suy ra việc cá nhân thuộc học kỳ chỉ từ tổng số. Sáu việc đang hiện trong danh sách mặc định chưa đủ để kết luận toàn bộ tài khoản chỉ có sáu việc, vì danh sách này ẩn việc đã hoàn thành.
 - Trang Nhiệm vụ dùng bộ lọc học kỳ/môn trong URL; nếu URL không có bộ lọc, có thể đang xem tất cả học kỳ và việc cá nhân. Học kỳ trên thanh chung không tự bảo đảm danh sách nhiệm vụ đã lọc học kỳ đó.
 - BE mặc định ẩn nhiệm vụ đã hoàn thành trong chế độ `all` nếu không chỉ định `trangThai`. Tiến độ lấy đủ ba trạng thái nên tổng có gồm đã xong. Cần cộng số chưa xong và số đã xong ở cùng phạm vi khi so tổng.
-- Ngay dưới Tổng nhiệm vụ có tách số chưa xong và đã xong. Hai liên kết **Xem nhiệm vụ chưa xong** và **Xem nhiệm vụ đã hoàn thành** truyền cùng học kỳ/môn sang trang Nhiệm vụ. Liên kết đã xong dùng `view=all&status=Completed` để lấy nhiệm vụ chính, cùng cách đếm với thống kê; `view=completed` của module hiện tại trả việc chưa chia nhỏ nên không dùng để đối chiếu nhiệm vụ chính. Không thêm liên kết khi chỉ lọc nhóm không gắn môn vì trang Nhiệm vụ chưa có bộ lọc tương đương.
+- Ngay dưới Tổng nhiệm vụ có tách số chưa xong và đã xong. Hai liên kết **Xem nhiệm vụ chưa xong** và **Xem nhiệm vụ đã hoàn thành** truyền cùng học kỳ/môn sang trang Nhiệm vụ. Liên kết đã xong dùng `view=all&status=Completed`; API hiện trả cả nhiệm vụ con đã hoàn thành nên danh sách này có thể nhiều dòng hơn số nhiệm vụ chính trong thống kê; `view=completed` của module hiện tại trả việc chưa chia nhỏ nên không dùng để đối chiếu nhiệm vụ chính. Không thêm liên kết khi chỉ lọc nhóm không gắn môn vì trang Nhiệm vụ chưa có bộ lọc tương đương.
 - Không sửa trang Nhiệm vụ hoặc thay đổi các bộ lọc của module đó.
 
 ### Trường hợp đã xác minh ngày 12/11/2026
@@ -64,7 +64,7 @@ Năm việc cá nhân chưa xong đều có `MaHocKy = null`, không được c�
 ## Nguồn dữ liệu và cập nhật
 
 - `src/statistics/statisticsApi.ts`: đọc API có sẵn, không thêm/sửa backend hoặc module Nhiệm vụ.
-- GET `/tasks` riêng cho ba trạng thái `NotStarted`, `InProgress`, `Completed`, với `maHocKy`, `chiLa=false`, `cheDo=all`. Chỉ chấp nhận nhiệm vụ chính, đọc đủ các trang, không chỉ trang đầu và không chỉ nhiệm vụ hoàn thành hôm nay. Không dùng `cheDo=completed` để lấy nhóm đã xong vì BE trả nhiệm vụ chưa chia nhỏ ở chế độ đó.
+- GET `/tasks` riêng cho ba trạng thái `NotStarted`, `InProgress`, `Completed`, với `maHocKy`, `chiLa=false`, `cheDo=all`. API có thể trả nhiệm vụ con ở nhóm Completed hoặc khi cha đã hoàn thành; kiểm tra toàn bộ dữ liệu và đọc đủ phân trang theo tổng số dòng API trước khi chỉ giữ nhiệm vụ chính. Đọc đủ các trang, không chỉ trang đầu và không chỉ nhiệm vụ hoàn thành hôm nay. Không dùng `cheDo=completed` để lấy nhóm đã xong vì BE trả nhiệm vụ chưa chia nhỏ ở chế độ đó.
 - Đối chiếu phiên bản dữ liệu giữa các trang/nhóm. Nếu có thay đổi trong lúc đọc, thử tải lại một lần; nếu vẫn thay đổi hoặc dữ liệu không hợp lệ, báo lỗi, không tính trên kết quả thiếu hoặc trộn.
 - Đã bỏ yêu cầu đọc hồ sơ lấy múi giờ do không còn lọc ngày. So sánh đúng/trễ hạn bằng thời điểm tuyệt đối từ API. JWT luôn gửi trong Bearer header. Tất cả thao tác của trang là đọc.
 - `statisticsModel.ts` lọc và tính số liệu; `useStatistics.ts` quản lý tải, hủy yêu cầu, cache theo phiên/học kỳ và cập nhật khi quay lại tab hoặc nhận sự kiện lưu/đồng bộ. Cache chỉ nằm trong bộ nhớ, dùng tối đa 60 giây khi vào lại trang và vẫn cập nhật từ API.
@@ -73,7 +73,11 @@ Năm việc cá nhân chưa xong đều có `MaHocKy = null`, không được c�
 
 ## Kiểm chứng
 
-- 7 kiểm thử trong `tests/statistics.test.mjs` đạt: phạm vi học kỳ/môn, cha có nhiều bước vẫn tính một nhiệm vụ, hoàn thành lịch sử, đúng/trễ/không hạn/thiếu ngày hoàn thành, đọc đủ phân trang, JWT, không ghi dữ liệu, thay đổi phiên bản và dữ liệu lỗi. Có trường hợp 5 việc cá nhân + 1 nhiệm vụ học kỳ và trường hợp bổ sung lịch sử hoàn thành khiến số học kỳ là 4 và 2.
+- 9 kiểm thử trong `tests/statistics.test.mjs` đạt: phạm vi học kỳ/môn, cha có nhiều bước vẫn tính một nhiệm vụ, hoàn thành lịch sử, đúng/trễ/không hạn/thiếu ngày hoàn thành, đọc đủ phân trang, JWT, không ghi dữ liệu, thay đổi phiên bản và dữ liệu lỗi. Có trường hợp 5 việc cá nhân + 1 nhiệm vụ học kỳ và trường hợp bổ sung lịch sử hoàn thành khiến số học kỳ là 4 và 2.
 - Chrome `--statistics` kiểm tra cả trang Nhiệm vụ thực tế và Tiến độ với cùng API fixture, gồm nhóm chưa xong/đã xong, lọc môn, đổi học kỳ/F5, cache khi cập nhật thất bại, thử lại, rỗng và lỗi lần đầu. Các kiểm tra trình duyệt dùng dữ liệu mô phỏng tách biệt; việc xác minh số 4 và 2 phía trên dùng truy vấn database chỉ đọc riêng.
 - Ảnh desktop `.backend-integration/screenshots/statistics-desktop.png` được cập nhật từ fixture kiểm thử sau thay đổi.
 - Không ghi/sửa nhiệm vụ hoặc tài khoản thật. Không sửa `src/hoc-tap` hay backend.
+
+## Sửa lỗi dữ liệu có nhiệm vụ con ngày 13/11/2026
+
+Sau khi main cập nhật bộ lọc Nhiệm vụ, `chiLa=false&cheDo=all` không bảo đảm chỉ có nhiệm vụ chính: nhóm Completed trả cả nhiệm vụ con; các trạng thái khác có thể trả con của cha đã hoàn thành. Bộ đọc Tiến độ trước đó từ chối các dòng này nên báo dữ liệu chưa hợp lệ. Nay vẫn xác minh ID, trạng thái, học kỳ, ngày giờ, phiên bản và trùng mã trên tất cả dòng; đọc đủ phân trang theo tổng API rồi lọc `maNhiemVuCha === null`. Nhiệm vụ con hợp lệ không làm lỗi trang và không được cộng vào tổng. Không đổi dữ liệu hoặc bộ lọc backend. Kiểm thử dùng fixture cùng quy tắc API này, gồm cả trang đầu toàn nhiệm vụ con, nhiệm vụ chính ở trang sau và dữ liệu con sai định dạng.
