@@ -4,7 +4,8 @@ import type { AuthCredentials, AuthUser, ChangePasswordInput } from '../types/au
 import type { Profile } from '../types/planner'
 import { clearAuthCredentials, readAuthCredentials, saveAuthCredentials } from '../auth/session'
 import { changeCurrentPassword, getCurrentUser, loginAccount, registerStudent, updateCurrentUser } from '../api/auth'
-import { ApiError, SESSION_INVALID_EVENT } from '../api/client'
+import { ACCOUNT_LOCKED_NOTICE, ApiError, isAccountDisabled, SESSION_INVALID_EVENT } from '../api/client'
+import { watchSession } from '../auth/sessionEvents'
 import { clearDemoSession, readDemoSession, saveDemoSession, tryDemoLogin } from '../auth/demo'
 import { useMockApi } from '../api/config'
 
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!controller.signal.aborted && version.current === currentVersion) setState({ credentials, user, isDemo: useMockApi, status: 'authenticated', notice: '', error: '' })
     }).catch((error: unknown) => {
       if (controller.signal.aborted || version.current !== currentVersion) return
-      if (error instanceof ApiError && [401, 403].includes(error.status)) endSession(error.message)
+      if (error instanceof ApiError && [401, 403].includes(error.status)) endSession(isAccountDisabled(error.code) ? ACCOUNT_LOCKED_NOTICE : error.message)
       else setState({ credentials, user: null, isDemo: false, status: 'error', notice: '', error: error instanceof Error ? error.message : 'Không tải được thông tin tài khoản.' })
     })
     return () => controller.abort()
@@ -56,28 +57,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       else timer = setTimeout(checkExpiry, Math.min(remaining, 2147483647))
     }
     function onInvalid(event: Event) {
-      if ((event as CustomEvent<{ token: string }>).detail.token === credentials!.token) endSession('Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.')
+      const detail = (event as CustomEvent<{ token: string; code?: string }>).detail
+      if (detail.token === credentials!.token) endSession(isAccountDisabled(detail.code || '') ? ACCOUNT_LOCKED_NOTICE : 'Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.')
     }
     checkExpiry()
     window.addEventListener(SESSION_INVALID_EVENT, onInvalid)
     return () => { clearTimeout(timer); window.removeEventListener(SESSION_INVALID_EVENT, onInvalid) }
   }, [state.credentials, endSession])
 
-  async function login(taiKhoan: string, password: string, role: 'sinhvien' | 'admin') {
+  useEffect(() => {
+    if (state.status === 'authenticated' && state.credentials) return watchSession(state.credentials.token)
+  }, [state.status, state.credentials])
+
+  async function login(taiKhoan: string, password: string): Promise<AuthUser> {
     const currentVersion = ++version.current
-    const demoUser = useMockApi ? null : tryDemoLogin(taiKhoan, password, role)
+    const demoUser = useMockApi ? null : tryDemoLogin(taiKhoan, password)
     if (demoUser) {
       clearAuthCredentials()
       saveDemoSession(demoUser.role)
       setState({ credentials: null, user: demoUser, isDemo: true, status: 'authenticated', notice: '', error: '' })
-      return
+      return demoUser
     }
-    const session = await loginAccount(taiKhoan, password, role)
+    const session = await loginAccount(taiKhoan, password)
     if (currentVersion !== version.current) throw new ApiError('Yêu cầu đăng nhập đã bị hủy. Vui lòng thử lại.')
     const credentials = { token: session.token, expiresAt: session.expiresAt }
     clearDemoSession()
     saveAuthCredentials(credentials)
     setState({ credentials, user: session.user, isDemo: useMockApi, status: 'authenticated', notice: '', error: '' })
+    return session.user
   }
   const requireSession = useCallback(() => {
     const current = state

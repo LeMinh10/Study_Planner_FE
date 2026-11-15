@@ -12,13 +12,16 @@ import { runTaskProgressChecks } from './browser-task-progress.mjs'
 import { createPlanningUpgradeFixture } from './upgrade-fixture.mjs'
 import { runPlanningUpgradeChecks } from './browser-planning-upgrade.mjs'
 import { runReminderChecks } from './browser-planning-reminders.mjs'
+import { createSessionLockFixture } from './browser-session-lock.mjs'
 
 // Dữ liệu giả lập kiểm tra các trang và biểu mẫu thật mà không ghi vào cơ sở dữ liệu người dùng.
 const browserPath = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 assert(browserPath, 'A Chromium browser is required')
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-core-ui-')
 const userDir = fs.mkdtempSync(tempPrefix)
-const vite = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': '"false"' }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
+const sessionFixture = createSessionLockFixture()
+// Mỗi lượt có cache riêng để các bộ kiểm thử chạy song song không ghi đè bộ tối ưu Vite.
+const vite = await createServer({ cacheDir: path.join(userDir, 'vite-cache'), plugins: [{ name: 'session-fixture-stream', configureServer(server) { server.middlewares.use(sessionFixture.middleware) } }], define: { 'import.meta.env.VITE_USE_MOCK_API': '"false"' }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
 let browser, socket
 let checksPassed = false
 const waiting = new Map()
@@ -106,6 +109,8 @@ try {
     try {
       const url = new URL(request.url)
       const route = url.pathname.replace('/api/v1', '')
+      // Cho luồng phiên đăng nhập đi qua HTTP streaming thật của fixture, không giả thành JSON.
+      if (route === '/users/me/session-events') { await cdp('Fetch.continueRequest', { requestId }); return }
       const body = request.postData ? JSON.parse(request.postData) : undefined
       const method = request.method
       calls.push({ route, query: url.searchParams.toString(), method, body, headers: request.headers })
@@ -125,6 +130,7 @@ try {
       }
       else if (route === '/auth/login') response = { tokenTruyCap: token, loaiToken: 'Bearer', hetHanLuc: new Date(Date.now() + 3600000).toISOString(), nguoiDung: user }
       else if (route === '/users/me') response = user
+      else if (route === '/priority-rules/active') response = { ma: 0, ten: 'Mặc định', phienBan: 0, dangSuDung: true, cauHinh: { phienBanSchema: 1, tieuChi: ['Deadline', 'Importance', 'InProgress'] }, ngayTao: null }
       else if (route === '/notifications' && method === 'GET') response = { danhSach: [], trang: Number(url.searchParams.get('trang') ?? 1), kichThuocTrang: 20, tongSo: 0, tongChuaDoc: 0, muiGio: user.muiGio, docDenLuc: new Date().toISOString() }
       else if (route === '/semesters') response = page([{ ma: 103, ten: 'Học kỳ thực hành', ngayBatDau: '2026-01-01', ngayKetThuc: '2027-12-31' }])
       else if (route === '/semesters/103/courses') response = page([{ ma: 207, maHocKy: 103, ten: 'Cơ sở dữ liệu', kyHieu: 'CSDL', soTinChi: 3, giangVien: null, mauSac: '#306BB5' }])
@@ -248,7 +254,7 @@ try {
     }
     throw new Error('Wait failed: ' + expression + '\n' + await evaluate('document.body.innerText'))
   }
-  const click = async selector => { await waitFor(`!!document.querySelector(${JSON.stringify(selector)})`); await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`) }
+  const click = async selector => { await waitFor(`!!document.querySelector(${JSON.stringify(selector)}) && !document.querySelector(${JSON.stringify(selector)}).disabled`); await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`) }
   const button = async text => {
     const expression = `Array.from((Array.from(document.querySelectorAll('dialog[open]')).at(-1) || document).querySelectorAll('button')).find(b => b.getClientRects().length && b.textContent.trim() === ${JSON.stringify(text)})`
     await waitFor('!!(' + expression + ') && !(' + expression + ').disabled'); await evaluate('(' + expression + ').click()')
@@ -739,6 +745,7 @@ try {
   for (const task of waiting.values()) clearTimeout(task.timer)
   waiting.clear()
   socket?.close(); browser?.kill()
+  sessionFixture.close()
   vite.httpServer?.closeAllConnections()
   let closeTimer
   await Promise.race([vite.close(), new Promise(resolve => { closeTimer = setTimeout(resolve, 3000) })])

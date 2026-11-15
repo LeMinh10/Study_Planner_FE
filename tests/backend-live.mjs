@@ -24,7 +24,7 @@ try {
   const demo = await vite.ssrLoadModule('/src/auth/demo.ts')
   assert.equal(config.useMockApi, false)
   assert.equal(demo.demoEnabled, false)
-  assert.equal(demo.tryDemoLogin('demo@studyplanner.vn', '123456', 'sinhvien'), null)
+  assert.equal(demo.tryDemoLogin('demo@studyplanner.vn', '123456'), null)
   const swaggerResponse = await nativeFetch(backend + '/swagger/v1/swagger.json')
   assert.equal(swaggerResponse.status, 200)
   const swagger = await swaggerResponse.json()
@@ -40,7 +40,7 @@ try {
   if (!process.env.TEST_ADMIN_EMAIL || !process.env.TEST_ADMIN_PASSWORD) {
     console.log('Full account integration skipped: set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD to an existing admin account.')
   } else {
-    admin = await api.loginAccount(process.env.TEST_ADMIN_EMAIL, process.env.TEST_ADMIN_PASSWORD, 'admin')
+    admin = await api.loginAccount(process.env.TEST_ADMIN_EMAIL, process.env.TEST_ADMIN_PASSWORD)
     email = 'frontend-sync-' + Date.now() + '-' + randomUUID().slice(0, 8) + '@example.com'
     const password = randomUUID() + 'Aa1!'
     const changedPassword = randomUUID() + 'Aa2!'
@@ -51,7 +51,7 @@ try {
     assert.equal(listed.total, 1)
     accountId = listed.items[0].id
     assert.equal(listed.items[0].studentId, input.studentCode)
-    const student = await api.loginAccount(email, password, 'sinhvien')
+    const student = await api.loginAccount(email, password)
     const detail = await users.getUser(admin.token, accountId)
     assert.equal(detail.email, email)
     assert.equal(detail.role, 'sinhvien')
@@ -59,21 +59,21 @@ try {
     const saved = await api.updateCurrentUser(student.token, { ...student.user, name: 'Kiểm thử đã cập nhật', studentId: updatedCode, school: '', className: '', major: '' })
     assert.equal(saved.studentId, updatedCode)
     assert.equal(saved.school, '')
-    const mssvSession = await api.loginAccount(updatedCode, password, 'sinhvien')
+    const mssvSession = await api.loginAccount(updatedCode, password)
     assert.equal(mssvSession.user.email, email)
     await assert.rejects(users.listUsers(student.token), (error) => error.status === 403)
     await api.changeCurrentPassword(mssvSession.token, { currentPassword: password, newPassword: changedPassword })
     await assert.rejects(api.getCurrentUser(student.token), (error) => error.status === 401)
     await assert.rejects(api.getCurrentUser(mssvSession.token), (error) => error.status === 401)
-    await assert.rejects(api.loginAccount(email, password, 'sinhvien'), (error) => error.status === 401)
-    const renewed = await api.loginAccount(updatedCode, changedPassword, 'sinhvien')
+    await assert.rejects(api.loginAccount(email, password), (error) => error.status === 401)
+    const renewed = await api.loginAccount(updatedCode, changedPassword)
     await users.setUserActive(admin.token, accountId, false)
     await assert.rejects(api.getCurrentUser(renewed.token), (error) => error.status === 401)
-    await assert.rejects(api.loginAccount(email, changedPassword, 'sinhvien'), (error) => error.status === 401)
+    await assert.rejects(api.loginAccount(email, changedPassword), (error) => error.status === 401)
     const locked = await users.listUsers(admin.token, { search: email, isActive: false })
     assert.equal(locked.items[0].id, accountId)
     await users.setUserActive(admin.token, accountId, true)
-    assert.equal((await api.loginAccount(email, changedPassword, 'sinhvien')).user.studentId, updatedCode)
+    assert.equal((await api.loginAccount(email, changedPassword)).user.studentId, updatedCode)
     console.log('PASS: real backend registration, email/MSSV login, profile update, password change, user administration and activate/deactivate through FE adapters and Vite proxy.')
   }
 } finally {

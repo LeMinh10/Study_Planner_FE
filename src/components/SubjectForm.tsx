@@ -3,6 +3,7 @@ import type { CSSProperties, FormEvent } from 'react'
 import { usePlanner } from '../contexts/PlannerContext'
 import { FormActions } from './PlannerUI'
 import { Icon } from './Icon'
+import { CourseNameInput } from './CourseNameInput'
 import { subjectColors } from '../api/academic'
 import type { Subject, SubjectColor } from '../types/planner'
 
@@ -15,6 +16,8 @@ export function SubjectForm({ subject, defaultSemesterId, onCancel, onSaved }: {
   const { canManageSubjects, data, saveSubject, academicBusy } = usePlanner()
   const [error, setError] = useState('')
   const [name, setName] = useState(subject?.name ?? '')
+  const [code, setCode] = useState(subject?.code ?? '')
+  const [credits, setCredits] = useState(String(subject ? subject.credits || '' : 3))
   const [color, setColor] = useState<SubjectColor>(subject?.color ?? 'sage')
   const [colorChanged, setColorChanged] = useState(false)
   const [pending, setPending] = useState(false)
@@ -38,8 +41,8 @@ export function SubjectForm({ subject, defaultSemesterId, onCancel, onSaved }: {
     <form className="session-form course-editor" aria-busy={pending} onSubmit={submit}>
       <div className={`course-editor-preview ${color}`} style={{ '--course-color': hex } as CSSProperties}><span className="course-card-icon"><Icon name="book" size={25} /></span><div><small>MÔN HỌC CỦA BẠN</small><strong>{name.trim() || 'Tên môn học'}</strong></div></div>
       <fieldset disabled={pending || academicBusy || !canManageSubjects} className="course-editor-fields">
-        <label>Tên môn học <span className="sr-only">(bắt buộc)</span><input name="name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} placeholder="Ví dụ: Lập trình web" required autoFocus /></label>
-        <div className="form-grid"><label>Mã môn<input name="code" defaultValue={subject?.code} maxLength={50} placeholder="Ví dụ: IT301" /></label><label>Số tín chỉ<input name="credits" type="number" min="1" max="2147483647" step="1" defaultValue={subject ? subject.credits || '' : 3} placeholder="Chưa xác định" /></label></div>
+        {subject ? <label>Tên môn học <span className="sr-only">(bắt buộc)</span><input name="name" value={name} onChange={event => setName(event.target.value)} maxLength={200} placeholder="Ví dụ: Lập trình web" required autoFocus /></label> : <CourseNameInput value={name} onChange={setName} onSelect={course => { setName(course.ten); setCode(course.kyHieu); setCredits(String(course.soTinChi)) }} />}
+        <div className="form-grid"><label>Mã môn<input name="code" value={code} onChange={event => setCode(event.target.value)} maxLength={50} placeholder="Ví dụ: IT301" /></label><label>Số tín chỉ<input name="credits" type="number" min="1" max="2147483647" step="1" value={credits} onChange={event => setCredits(event.target.value)} placeholder="Chưa xác định" /></label></div>
         <label>Học kỳ<select disabled={!!subject} name="semesterId" defaultValue={subject?.semesterId ?? defaultSemesterId ?? data.selectedSemesterId} required>{data.semesters.map((semester) => <option value={semester.id} key={semester.id}>{semester.name}</option>)}</select></label>
         <label>Giảng viên<input name="teacher" defaultValue={subject?.teacher} maxLength={200} placeholder="Tên giảng viên (không bắt buộc)" /></label>
         <fieldset className="course-color-picker"><legend>Màu nhận diện</legend><div>{colors.map((item) => <label key={item.value} className={item.value}><input type="radio" name="color" value={item.value} checked={color === item.value} onChange={() => { setColor(item.value); setColorChanged(true) }} /><span className="course-color-swatch" style={{ backgroundColor: subjectColors[item.value] }}><Icon name="check" size={17} /></span><span>{item.label}</span></label>)}</div></fieldset>

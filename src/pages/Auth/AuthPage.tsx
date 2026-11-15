@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Brand } from '../../components/Brand'
 import { useAuth } from '../../contexts/AuthContext'
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, registrationError } from '../../auth/validation'
@@ -38,13 +38,14 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         await auth.register(registrationInput)
         navigate('/login', { replace: true, state: { registered: true } })
       } else {
-        await auth.login(taiKhoan, password, 'sinhvien')
-        navigate(roleHome('sinhvien'), { replace: true })
+        const user = await auth.login(taiKhoan, password)
+        navigate(roleHome(user.role), { replace: true })
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Không thực hiện được yêu cầu. Vui lòng thử lại.')
     } finally { setPending(false) }
   }
+  if (auth.status === 'authenticated' && auth.user) return <Navigate to={roleHome(auth.user.role)} replace />
   return <div className="auth-page">
     <main className="auth-main">
       <div className={'auth-form-container' + (register ? ' auth-register-container' : '')}>

@@ -39,7 +39,7 @@ BE đã mở rộng lịch lặp theo học kỳ/ngày áp dụng, nên FE dùng
 
 Chỉ nhận nhiệm vụ **chưa hoàn thành** và **không có nhiệm vụ con**. Dùng `hanHieuLuc` do BE tính, bao gồm hạn kế thừa từ cha; không chỉ dùng hạn nhập riêng trên nhiệm vụ.
 
-Mỗi nhiệm vụ được gán vào một nhóm, từ trước đến sau:
+Mỗi nhiệm vụ được gán vào một nhóm mô tả độ gấp:
 
 | Nhóm | Điều kiện tại thời điểm tính |
 | --- | --- |
@@ -51,14 +51,14 @@ Mỗi nhiệm vụ được gán vào một nhóm, từ trước đến sau:
 | 5 | Còn hơn 168 giờ |
 | 6 | Chưa có hạn hiệu lực |
 
-Trong cùng nhóm, so sánh lần lượt:
+Khi sắp xếp, chia ba nhóm chính: quá hạn trước, có hạn chưa quá tiếp theo, chưa có hạn cuối cùng. Trong mỗi nhóm chính, mặc định so sánh lần lượt:
 
 1. Hạn hiệu lực: thời điểm sớm hơn trước.
 2. Nếu cùng hạn (hoặc đều chưa có hạn), xét mức quan trọng: High → Medium → Low.
 3. Trạng thái: InProgress trước NotStarted nếu hai tiêu chí trên bằng nhau.
 4. Mã nhiệm vụ tăng dần nếu tất cả vẫn bằng nhau, để tránh thứ tự thay đổi ngẫu nhiên.
 
-Đây là so sánh theo thứ tự tiêu chí, không cộng một điểm tổng. Không có chuyện mức quan trọng cao của việc còn xa hạn tự vượt một việc thuộc nhóm gấp hơn.
+Đây là so sánh theo thứ tự tiêu chí, không cộng một điểm tổng. Mặc định việc mức quan trọng cao nhưng còn xa hạn không vượt việc có hạn sớm hơn. Việc quá hạn và việc chưa có hạn luôn giữ hai nhóm biên ngay cả khi admin đổi thứ tự tiêu chí.
 
 Ví dụ, lúc 10:00:
 
@@ -68,7 +68,7 @@ Ví dụ, lúc 10:00:
 | B | Hôm nay 15:00 | Cao | Sau C vì hạn muộn hơn |
 | C | Hôm nay 12:00 | Trung bình | Đứng trước B vì hạn sớm hơn, dù mức quan trọng thấp hơn |
 
-Các mốc 6/24/72/168 giờ dùng để phân loại độ gấp. Vì hạn cụ thể được xét trước mức quan trọng trong mỗi nhóm, toàn bộ danh sách có hạn sớm hơn đứng trước; việc chưa có hạn nằm cuối. Khi cùng hạn mới xét mức quan trọng.
+Các mốc 6/24/72/168 giờ dùng để mô tả độ gấp. Mặc định hạn cụ thể được xét trước mức quan trọng, nên hạn sớm hơn đứng trước. Admin có thể đổi thứ tự/bỏ các tiêu chí phụ, lưu phiên bản và áp dụng tại trang Quy tắc ưu tiên. Hôm nay đọc cấu hình đang dùng từ BE; xem [quản lý quy tắc](quy-tac-uu-tien-admin.md). Nếu Mức quan trọng được đưa lên trước Hạn hoàn thành, cùng nhóm chính thì việc mức Cao có thể đứng trước việc hạn sớm hơn mức Trung bình.
 
 ## Lý do và việc cập nhật
 

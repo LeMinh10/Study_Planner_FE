@@ -26,5 +26,8 @@ export interface UserListOptions {
   page?: number
   pageSize?: number
   isActive?: boolean
+  role?: UserRole
+  createdFrom?: string
+  createdTo?: string
   signal?: AbortSignal
 }

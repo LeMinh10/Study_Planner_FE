@@ -45,4 +45,4 @@ export function clearAuthCredentials() {
   try { sessionStorage.removeItem(SESSION_KEY) } catch { /* Chế độ duyệt riêng tư có thể không cho truy cập bộ nhớ trình duyệt. */ }
 }
 
-export function roleHome(role: UserRole) { return role === 'admin' ? '/admin/students' : '/today' }
+export function roleHome(role: UserRole) { return role === 'admin' ? '/admin/overview' : '/today' }

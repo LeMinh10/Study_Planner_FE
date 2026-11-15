@@ -7,6 +7,7 @@ import { ngay } from '../../hoc-tap/time'
 import { loadTodayCalendar, loadTodayTasks } from './todayApi'
 import type { TodayCalendar } from './todayModel'
 import { cacheTodayCalendar, cacheTodayTasks, readTodayCache } from './todayCache'
+import { useActivePriorityRule } from '../../priority/useActivePriorityRule'
 
 export function useToday() {
   const auth = useAuth()
@@ -21,6 +22,7 @@ export function useToday() {
   const [taskLoading, setTaskLoading] = useState(enabled)
   const [calendarLoading, setCalendarLoading] = useState(enabled)
   const [revision, setRevision] = useState(0)
+  const priority = useActivePriorityRule(session, enabled, revision)
   const generation = useRef(0)
   const lastRead = useRef(0)
   const zone = calendar?.muiGio ?? 'Asia/Ho_Chi_Minh'
@@ -70,5 +72,6 @@ export function useToday() {
   }, [enabled])
 
   return { enabled, tasks, calendar, zone, now: planner.now, academic: planner.data, academicLoading: planner.academicLoading,
-    taskError, calendarError, taskLoading, calendarLoading, reload: () => setRevision((value) => value + 1) }
+    taskError, calendarError, taskLoading, calendarLoading, priorityRule: priority.rule, priorityLoading: priority.loading, priorityError: priority.error,
+    reload: () => setRevision((value) => value + 1) }
 }
