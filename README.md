@@ -56,6 +56,7 @@ Chạy `npm.cmd run test:backend` khi backend đang chạy để kiểm tra Swag
 | `/admin/overview` | Thống kê sinh viên, năm sinh viên mới đăng ký và quy tắc ưu tiên đang áp dụng |
 | `/admin/students` | Danh sách tài khoản có tìm kiếm, lọc trạng thái, phân trang và kích hoạt/vô hiệu hóa; yêu cầu phiên quản trị |
 | `/admin/students/:studentId` | Chi tiết tài khoản theo mã người dùng: thông tin sinh viên, vai trò, trạng thái, ngày tạo/cập nhật; có nút đổi trạng thái và quay lại danh sách |
+| `/admin/catalog` | Quản lý học kỳ/môn học mẫu, mã môn, tín chỉ, tìm kiếm và phân trang; độc lập dữ liệu sinh viên |
 | `/admin/priority-rules` | Quản lý phiên bản quy tắc: chỉnh tiêu chí/thứ tự, lưu, áp dụng và xóa bản chưa dùng |
 | `/profile` | Xem hồ sơ; cập nhật họ tên, MSSV, trường, lớp, ngành học và đổi mật khẩu; email chỉ đọc |
 | `/semesters` | Thêm, sửa, xóa và chọn học kỳ |

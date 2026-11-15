@@ -7,7 +7,6 @@ import type { PriorityRulePage } from '../api/priorityRules'
 import { criteria, criterionLabels, defaultPriorityConfig } from '../priority/rules'
 import type { PriorityConfig, PriorityCriterion, PriorityRule } from '../priority/rules'
 import { Modal } from '../components/PlannerUI'
-import { Icon } from '../components/Icon'
 import { PriorityCriteriaEditor } from './PriorityCriteriaEditor'
 import './priorityRules.css'
 
@@ -88,7 +87,7 @@ export function AdminPriorityRulesPage() {
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (event.currentTarget.reportValidity()) void mutate('save') }
 
   return <section className="admin-priority-page" aria-labelledby="priority-rules-title">
-    <header className="priority-page-heading"><div className="admin-page-heading"><h1 id="priority-rules-title">Quy tắc ưu tiên</h1></div><button type="button" className="button button-secondary" disabled={!enabled || loading || busy} onClick={refresh}><Icon name="reset" size={15} />Tải lại</button></header>
+    <header className="priority-page-heading"><div className="admin-page-heading"><h1 id="priority-rules-title">Quy tắc ưu tiên</h1></div></header>
     {!enabled ? <p className="priority-message">Vui lòng đăng nhập tài khoản quản trị.</p> : <>
       {loadError && <div className="priority-error" role="alert">{loadError} <button type="button" disabled={loading || busy} onClick={refresh}>Thử lại</button></div>}
       {actionError && <p className="priority-error" role="alert">{actionError}</p>}

@@ -1,0 +1,35 @@
+.catalog-page { max-width: 1240px; margin: 0 auto; }
+.catalog-heading, .catalog-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.catalog-heading h1 { font-size: 28px; letter-spacing: -.8px; margin: 9px 0; }
+.catalog-heading p, .catalog-card-heading p { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0; }
+.catalog-tabs { display: flex; border-bottom: 1px solid var(--line); gap: 22px; margin: 24px 0 22px; }
+.catalog-tabs button { display: inline-flex; align-items: center; gap: 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; padding: 14px 2px; cursor: pointer; }
+.catalog-tabs button[aria-current=page] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 650; }
+.catalog-card { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+.catalog-card-heading { padding: 24px; }
+.catalog-card-heading h2 { font-size: 17px; margin: 0 0 6px; }
+.catalog-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; padding: 0 24px 24px; }
+.catalog-filters label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; min-width: 190px; }
+.catalog-filters label:first-child { flex: 1; }
+.catalog-filters input, .catalog-filters select, .catalog-form input, .catalog-form select { min-height: 42px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 13px; }
+.catalog-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.catalog-table th { background: var(--paper); padding: 14px 24px; font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.catalog-table td { padding: 18px 24px; border-top: 1px solid var(--line); }
+.catalog-table td strong { font-weight: 600; overflow-wrap: anywhere; }
+.catalog-code { font-size: 11px; display: inline-block; padding: 5px 8px; border-radius: 5px; background: var(--paper); color: var(--accent); white-space: nowrap; }
+.catalog-actions { display: flex; align-items: center; gap: 14px; }
+.catalog-actions button, .catalog-text-button { display: inline-flex; align-items: center; gap: 5px; border: 0; color: var(--accent); background: transparent; cursor: pointer; font: inherit; font-size: 12px; padding: 4px 0; white-space: nowrap; }
+.catalog-actions button:last-child { color: #b34c5a; }
+.catalog-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.catalog-pagination nav { display: flex; align-items: center; gap: 12px; }
+.catalog-pagination button { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); padding: 6px 10px; cursor: pointer; }
+.catalog-page button:disabled { opacity: .45; cursor: default; }
+.catalog-message { padding: 28px 24px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.catalog-error { display: flex; gap: 14px; justify-content: space-between; align-items: center; padding: 14px; margin: 0 0 18px; border: 1px solid #f1c7ce; border-radius: 8px; background: #fff6f7; color: #9e384b; font-size: 13px; line-height: 1.7; }
+.catalog-error button { white-space: nowrap; background: transparent; border: 0; text-decoration: underline; color: inherit; cursor: pointer; }
+.catalog-form { padding: 24px; }
+.catalog-form fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.catalog-form label { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; font-size: 13px; }
+.catalog-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.catalog-help { font-size: 13px; color: var(--muted); line-height: 1.8; }
+@media (max-width: 750px) { .catalog-heading, .catalog-card-heading { align-items: flex-start; flex-wrap: wrap; } .catalog-card-heading, .catalog-filters { padding: 18px; } .catalog-table th, .catalog-table td { padding: 14px 16px; } .catalog-filters label { width: 100%; } .catalog-pagination { flex-wrap: wrap; padding: 16px; } .catalog-form-grid { grid-template-columns: 1fr; gap: 0; } }

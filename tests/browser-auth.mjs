@@ -14,6 +14,8 @@ import { createPriorityFixture, runPriorityChecks } from './browser-priority-rul
 import { createOverviewFixture, overviewUsers, runOverviewChecks } from './browser-overview.mjs'
 import { createSessionLockFixture, runSessionLockChecks } from './browser-session-lock.mjs'
 import { createStatisticsFixture, runStatisticsChecks } from './browser-statistics.mjs'
+import { createCatalogFixture, runCatalogChecks } from './browser-catalog.mjs'
+import { createSuggestionsFixture, runCourseSuggestionChecks } from './browser-course-suggestions.mjs'
 
 const chromePath = process.env.CHROME_PATH || ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 if (!chromePath) throw new Error('Set CHROME_PATH to a Chromium browser executable.')
@@ -23,8 +25,10 @@ const notificationsOnly = process.argv.includes('--notifications')
 const priorityOnly = process.argv.includes('--priority-rules')
 const overviewOnly = process.argv.includes('--overview')
 const sessionLockOnly = process.argv.includes('--session-lock')
+const suggestionsOnly = process.argv.includes('--course-suggestions')
+const catalogOnly = process.argv.includes('--catalog')
 const statisticsOnly = process.argv.includes('--statistics')
-for (const useLocalMock of subjectsOnly || todayOnly || notificationsOnly || priorityOnly || overviewOnly || sessionLockOnly || statisticsOnly ? [false] : [false, true]) {
+for (const useLocalMock of subjectsOnly || todayOnly || notificationsOnly || priorityOnly || overviewOnly || sessionLockOnly || statisticsOnly || catalogOnly || suggestionsOnly ? [false] : [false, true]) {
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-auth-test-')
 const userDir = fs.mkdtempSync(tempPrefix)
 const sessionLockFixture = createSessionLockFixture()
@@ -74,7 +78,7 @@ try {
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
   const cdp = (method, params) => send(method, params, sessionId)
   const calls = []
-  const academicFixture = subjectsOnly || todayOnly || notificationsOnly || priorityOnly || statisticsOnly ? createAcademicFixture() : null
+  const academicFixture = subjectsOnly || suggestionsOnly || todayOnly || notificationsOnly || priorityOnly || statisticsOnly ? createAcademicFixture() : null
   const statisticsFixture = createStatisticsFixture()
   const todayFixture = todayOnly || notificationsOnly || priorityOnly ? createTodayFixture() : null
   const { mockPriorityRequest } = await vite.ssrLoadModule('/src/api/mockPriorityRules.ts')
@@ -90,6 +94,8 @@ try {
     { ma: 13, hoTen: 'Quản trị viên', email: 'admin@example.com', maSoSinhVien: null, tenTruong: null, tenLop: null, nganhHoc: null, vaiTro: 'Admin', dangHoatDong: true, ngayTao: '2026-10-31T09:00:00+07:00', ngayCapNhat: '2026-10-31T09:00:00+07:00' },
   ]
   if (overviewOnly) managedUsers.splice(0, managedUsers.length, ...overviewUsers())
+  const suggestionsFixture = createSuggestionsFixture()
+  const catalogFixture = createCatalogFixture()
   const overviewFixture = createOverviewFixture(() => managedUsers)
   const token = (role) => 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expiresIn, role })).toString('base64url') + '.mock'
   let activeRole = 'sinhvien'
@@ -106,7 +112,7 @@ try {
       const body = request.postData ? JSON.parse(request.postData) : undefined
       calls.push({ route, query: requestUrl.search, method: request.method, body })
       let status = 200, response
-      const academicReply = (statisticsOnly ? await statisticsFixture.handle(requestUrl, request.method) : null) || await overviewFixture.handle(requestUrl, request.method, activeRole) || await priorityFixture.handle(requestUrl, request.method, body) || notificationFixture.handle(requestUrl, request.method, body) || (todayFixture ? await todayFixture.handle(requestUrl, request.method) : null) || (academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null)
+      const academicReply = await suggestionsFixture.handle(requestUrl, request.method) || await catalogFixture.handle(requestUrl, request.method, body, activeRole) || (statisticsOnly ? await statisticsFixture.handle(requestUrl, request.method) : null) || await overviewFixture.handle(requestUrl, request.method, activeRole) || await priorityFixture.handle(requestUrl, request.method, body) || notificationFixture.handle(requestUrl, request.method, body) || (todayFixture ? await todayFixture.handle(requestUrl, request.method) : null) || (academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null)
       if (academicReply) { status = academicReply.status; response = academicReply.response }
       else if (route === '/api/v1/auth/register') {
         if (registered) { status = 409; response = { thongBao: 'Email đã tồn tại.' } }
@@ -233,7 +239,11 @@ try {
     await input('password', password); await input('confirmPassword', password)
   }
 
-  if (statisticsOnly) {
+  if (suggestionsOnly) {
+    await runCourseSuggestionChecks({ go, login, input, click, select, waitFor, evaluate, cdp, fixture: suggestionsFixture, academic: academicFixture, calls, errors })
+  } else if (catalogOnly) {
+    await runCatalogChecks({ go, click, input, select, waitFor, evaluate, cdp, login, fixture: catalogFixture, calls, errors })
+  } else if (statisticsOnly) {
     await runStatisticsChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: statisticsFixture, calls, errors })
   } else if (sessionLockOnly) {
     await runSessionLockChecks({ go, login, waitFor, evaluate, fixture: sessionLockFixture, errors })
@@ -403,7 +413,7 @@ try {
   await waitFor('document.querySelector(".admin-topbar strong")?.textContent === "Quy tắc ưu tiên"')
   assert(await evaluate('!!document.querySelector(".admin-priority-page")'))
   assert.equal(await evaluate('document.querySelector(".admin-sidebar a[aria-current=page]").getAttribute("href")'), '/admin/priority-rules')
-  assert.deepEqual(await evaluate('[...document.querySelectorAll(".admin-sidebar nav a")].map((link) => link.getAttribute("href"))'), ['/admin/overview', '/admin/students', '/admin/priority-rules'])
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".admin-sidebar nav a")].map((link) => link.getAttribute("href"))'), ['/admin/overview', '/admin/students', '/admin/priority-rules', '/admin/catalog'])
   await go('/admin/priority-rules'); await waitFor('!!document.querySelector("#admin-content")')
   assert(await evaluate('!!document.querySelector(".admin-priority-page")'))
   await click('a[href="/admin/students"]'); await waitFor('!!document.querySelector("[role=alert]")')

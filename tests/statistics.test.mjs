@@ -35,8 +35,8 @@ function fakeApi({ mutate = response => response, version = () => 8, fail = fals
     calls.push({ path: parsed.pathname, q, options })
     if (fail) return Response.json({ title: 'Unavailable' }, { status: 503 })
     const status = q.get('trangThai'), page = Number(q.get('trang'))
-    const rows = tasks.filter(task => String(task.maHocKy) === q.get('maHocKy') && (q.get('chiLa') === 'true' ? !task.coNhiemVuCon : task.maNhiemVuCha === null) && task.trangThai === status)
-    const response = { phienBan: version(status, page), duLieu: { danhSach: rows.slice((page - 1) * 2, page * 2), trang: page, kichThuocTrang: 2, tongSo: rows.length } }
+    const rows = tasks.filter(task => String(task.maHocKy) === q.get('maHocKy') && (q.get('chiLa') === 'true' ? !task.coNhiemVuCon : task.trangThai === 'Completed' || task.maNhiemVuCha === null || tasks.some(parent => parent.ma === task.maNhiemVuCha && parent.trangThai === 'Completed')) && task.trangThai === status)
+    const response = { phienBan: version(status, page), duLieu: { danhSach: structuredClone(rows.slice((page - 1) * 2, page * 2)), trang: page, kichThuocTrang: 2, tongSo: rows.length } }
     return Response.json(mutate(response, status, page))
   }
   return calls
@@ -87,5 +87,27 @@ test('partial failures and malformed completion data cannot become plausible zer
   fakeApi({ mutate: response => { if (response.duLieu.danhSach.length) response.duLieu.danhSach[0].ngayHoanThanh = 'not-a-date'; return response } })
   await assert.rejects(api.loadStatistics('token', '11', new AbortController().signal), /chưa hợp lệ/)
   fakeApi({ mutate: response => { if (response.duLieu.danhSach.length) response.duLieu.danhSach[0].maHocKy = 12; return response } })
+  await assert.rejects(api.loadStatistics('token', '11', new AbortController().signal), /chưa hợp lệ/)
+})
+
+test('completed children fill pages without rejecting the semester or inflating root totals', async () => {
+  const child = statisticsTasks.find(task => task.ma === 9)
+  const root = statisticsTasks.find(task => task.ma === 8)
+  const otherRoot = statisticsTasks.find(task => task.ma === 3)
+  const calls = fakeApi({ tasks: [child, { ...child, ma: 90 }, root, otherRoot] })
+  const snapshot = await api.loadStatistics('token', '11', new AbortController().signal)
+  assert.deepEqual(snapshot.tasks.map(task => task.ma), [8, 3])
+  assert(calls.some(call => call.q.get('trangThai') === 'Completed' && call.q.get('trang') === '2'))
+  assert.equal(model.summarizeStatistics(snapshot.tasks, statisticsNow).completed, 2)
+  fakeApi({ tasks: [child] })
+  assert.deepEqual((await api.loadStatistics('token', '11', new AbortController().signal)).tasks, [])
+})
+
+test('unfinished child exposed below a completed parent is excluded while malformed child data still fails', async () => {
+  const parent = statisticsTasks.find(task => task.ma === 8)
+  const child = { ...statisticsTasks.find(task => task.ma === 9), trangThai: 'NotStarted', ngayHoanThanh: null }
+  fakeApi({ tasks: [parent, child] })
+  assert.deepEqual((await api.loadStatistics('token', '11', new AbortController().signal)).tasks.map(task => task.ma), [8])
+  fakeApi({ tasks: [parent, { ...child, hanHieuLuc: 'invalid' }] })
   await assert.rejects(api.loadStatistics('token', '11', new AbortController().signal), /chưa hợp lệ/)
 })

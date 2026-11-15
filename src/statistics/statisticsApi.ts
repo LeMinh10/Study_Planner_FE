@@ -22,7 +22,7 @@ async function loadTasks(token: string, semesterId: string, signal: AbortSignal)
       let version: number | undefined, total: number | undefined
       for (let page = 1; ; page++) {
         signal.throwIfAborted()
-        // The task list's "all" mode returns roots. Request every status explicitly:
+        // Request every status explicitly; Completed can include child tasks:
         // without trangThai=Completed the backend omits completed roots.
         const query = new URLSearchParams({ maHocKy: semesterId, chiLa: 'false', trangThai: status, cheDo: 'all', trang: String(page), kichThuocTrang: '100', sapXep: 'due' })
         const response = record(await apiRequest('/tasks?' + query, { token, signal }))
@@ -32,7 +32,7 @@ async function loadTasks(token: string, semesterId: string, signal: AbortSignal)
         if (version !== undefined && (version !== response.phienBan || total !== body.tongSo)) throw changed()
         version = response.phienBan; total = body.tongSo
         const rows = body.danhSach.map(parseTask)
-        if (rows.some(task => task.maNhiemVuCha !== null || task.trangThai !== status || String(task.maHocKy) !== semesterId)) invalid()
+        if (rows.some(task => task.trangThai !== status || String(task.maHocKy) !== semesterId)) invalid()
         tasks.push(...rows)
         if (tasks.length > total || (!rows.length && tasks.length < total)) invalid()
         if (tasks.length === total) break
@@ -51,7 +51,8 @@ async function loadTasks(token: string, semesterId: string, signal: AbortSignal)
       if (!attempt) continue
       throw changed()
     }
-    return tasks
+    // Pagination totals include children. Filter roots only after reading and validating all rows.
+    return tasks.filter(task => task.maNhiemVuCha === null)
   }
 }
 export async function loadStatistics(token: string, semesterId: string, signal: AbortSignal): Promise<StatisticsSnapshot> {
