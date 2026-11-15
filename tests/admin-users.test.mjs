@@ -29,7 +29,7 @@ after(async () => {
 })
 
 const dto = { ma: 7, hoTen: 'Lê Công Minh', email: '0306231307@caothang.edu.vn', maSoSinhVien: '0306231307', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: true, ngayTao: '2026-10-30T08:00:00Z', ngayCapNhat: '2026-10-31T08:00:00Z' }
-const registration = { fullName: 'Sinh viên mới', email: 'new-user@example.com', password: 'Student123!', studentCode: '0306239998', schoolName: 'Cao đẳng Kỹ Thuật Cao Thắng', className: 'CDTH23WEBC', major: 'Công nghệ thông tin' }
+const registration = { fullName: 'Sinh viên mới', email: 'newuser@example.com', password: 'Student123!', studentCode: '0306239998', schoolName: 'Cao đẳng Kỹ Thuật Cao Thắng', className: 'CDTH23WEBC', major: 'Công nghệ thông tin' }
 function fakeFetch(replies) {
   const calls = []
   globalThis.fetch = async (url, request) => {
@@ -40,7 +40,7 @@ function fakeFetch(replies) {
   }
   return calls
 }
-const adminSession = () => auth.loginAccount('admin@studyplanner.vn', '123456')
+const adminSession = () => auth.loginAccount('admin@studyplanner.vn', '12345678')
 async function registerSession() {
   await auth.registerStudent(registration)
   return auth.loginAccount(registration.email, registration.password)
@@ -202,9 +202,9 @@ test('sample accounts share the auth database and match the existing student ide
   }
   assert.equal(minh.status, 'active')
   assert.equal(ky.status, 'locked')
-  const signedIn = await auth.loginAccount(minh.studentId, '123456')
+  const signedIn = await auth.loginAccount(minh.studentId, '12345678')
   assert.equal(signedIn.user.email, minh.email)
-  await assert.rejects(auth.loginAccount(ky.email, '123456'), (error) => error.status === 401)
+  await assert.rejects(auth.loginAccount(ky.email, '12345678'), (error) => error.status === 401)
   assert.equal(new Set(listed.items.map((user) => user.id)).size, listed.total)
 })
 

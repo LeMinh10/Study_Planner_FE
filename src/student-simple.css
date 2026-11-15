@@ -243,3 +243,6 @@
 .student-app .session-form input:read-only { background: #f0f3f7; color: #617085; }
 .student-app .profile-sections { display: grid; align-content: start; gap: 24px; min-width: 0; }
 .student-app .profile-password-note { color: #617085; font-size: 13px; margin: 0 25px 20px; }
+
+.auth-page .session-form .auth-field-error { color: #b42318; font-size: 12px; line-height: 1.5; }
+.student-app .auth-page .session-form input[aria-invalid="true"] { border-color: #b42318; }

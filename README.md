@@ -104,11 +104,11 @@ Các tài khoản dưới đây chỉ có trong bộ giả lập khi đặt `VIT
 
 | Loại tài khoản | Email | MSSV | Mật khẩu ban đầu |
 | --- | --- | --- | --- |
-| Sinh viên | `demo@studyplanner.vn` | `SVDEMO001` | `123456` |
-| Quản trị | `admin@studyplanner.vn` | — | `123456` |
+| Sinh viên | `demo@studyplanner.vn` | `SVDEMO001` | Xem cấu hình tài khoản mẫu trong source |
+| Quản trị | `admin@studyplanner.vn` | — | Xem cấu hình tài khoản mẫu trong source |
 | Quản trị | `admin@caothang.edu.vn` | — | `0306231303` |
-| Lê Công Minh (đang hoạt động) | `0306231307@caothang.edu.vn` | `0306231307` | `123456` |
-| Trần Hồng Kỳ (đã khóa) | `0306231303@caothang.edu.vn` | `0306231303` | `123456` |
+| Lê Công Minh (đang hoạt động) | `0306231307@caothang.edu.vn` | `0306231307` | Xem cấu hình tài khoản mẫu trong source |
+| Trần Hồng Kỳ (đã khóa) | `0306231303@caothang.edu.vn` | `0306231303` | Xem cấu hình tài khoản mẫu trong source |
 
 Sinh viên và quản trị cùng đăng nhập tại `/login`, hệ thống chuyển trang theo vai trò tài khoản. Tài khoản sinh viên có sẵn tên trường Cao đẳng Kỹ Thuật Cao Thắng, lớp CDTH23WEBC và ngành Công nghệ thông tin; có thể sửa hồ sơ và đổi mật khẩu. Mật khẩu mới tiếp tục có hiệu lực khi tải lại trang. Có thể đăng ký tài khoản mới với đầy đủ bảy trường bắt buộc, rồi đăng nhập bằng email hoặc MSSV vừa đăng ký.
 
@@ -201,3 +201,11 @@ Link tới môn ở học kỳ khác tự chọn đúng học kỳ. Khi chủ đ
 Kịch bản `npm run test:auth:browser -- --subjects` cũng kiểm tra panel sửa/xóa, retry lỗi chi tiết/preview, giữ bộ lọc, link cũ, link khác học kỳ và đổi kỳ chủ động. Ảnh panel dùng dữ liệu kiểm thử: `.backend-integration/screenshots/subject-workspace-panel.png`.
 
 Danh sách “Môn học trong kỳ” ở sidebar có thể thu gọn/mở rộng bằng nút mũi tên. Khi mở, toàn bộ môn học được hiển thị theo chiều dài tự nhiên, không có vùng cuộn riêng bên trong danh sách. Khi thu gọn, toàn bộ danh sách và nút thêm môn được ẩn; tên học kỳ vẫn hiển thị. Trạng thái thu gọn được giữ khi chuyển trang trong ứng dụng. Kịch bản trình duyệt `--subjects` kiểm tra thêm trường hợp 100 môn và sidebar ở màn hình cao 720px.
+
+### Kiểm tra dữ liệu đăng nhập
+
+Hệ thống dùng email hoặc MSSV, chưa có trường username riêng nên không áp dụng giới hạn username 5–30 ký tự vào email/MSSV. Tài khoản bắt buộc nhập, bỏ khoảng trắng đầu/cuối; email kiểm tra định dạng và nhận dấu chấm, gạch ngang, gạch dưới, dấu cộng; MSSV nhận chữ, số và dấu _. Không nhận dấu nháy hoặc khoảng trắng ở giữa tài khoản. Giữ giới hạn email 320, MSSV khi đăng ký/sửa hồ sơ 50 ký tự. API đối chiếu tài khoản và hash mật khẩu với CSDL; sai tài khoản hoặc mật khẩu dùng chung thông báo, không tiết lộ tài khoản có tồn tại.
+
+Đăng ký/đặt mật khẩu mới bắt buộc mật khẩu 8–128 ký tự, không chỉ gồm khoảng trắng và xác nhận khớp. Cho phép chữ thường, chữ hoa, số, mọi ký tự đặc biệt (kể cả dấu nháy) và khoảng trắng bên trong/đầu/cuối; không ép phải đủ từng nhóm ký tự. Đăng nhập chỉ kiểm tra mật khẩu bắt buộc và tối đa 128 ký tự để tài khoản cũ có mật khẩu ngắn vẫn đến được bước xác thực. Mật khẩu luôn gửi nguyên văn, không trim hay lọc ký tự. Các ô mật khẩu đăng nhập, đăng ký và đổi mật khẩu mặc định ẩn, có nút Hiện/Ẩn độc lập, không gửi form khi bấm. Lỗi đăng nhập hiển thị dưới từng ô; dữ liệu lỗi không gửi API. Backend kiểm tra lại cùng quy tắc sau khi cài cập nhật DTO và khởi động lại API. Không thay đổi hash hoặc dữ liệu tài khoản đã có.
+
+Kiểm tra riêng giao diện: npm.cmd run test:auth:browser -- --login-validation.

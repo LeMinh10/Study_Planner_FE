@@ -2,8 +2,8 @@ import type { AuthUser, UserRole } from '../types/auth'
 import { ApiError } from '../api/client'
 
 export const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_AUTH === 'true'
-export const DEMO_ACCOUNT = { email: 'demo@studyplanner.vn', password: '123456' }
-export const ADMIN_DEMO_ACCOUNT = { email: 'admin@studyplanner.vn', password: '123456' }
+export const DEMO_ACCOUNT = { email: 'demo@studyplanner.vn', password: '12345678' }
+export const ADMIN_DEMO_ACCOUNT = { email: 'admin@studyplanner.vn', password: '12345678' }
 const DEMO_SESSION_KEY = 'studyplanner.demo.v1'
 
 function demoUser(role: UserRole): AuthUser {
@@ -17,7 +17,7 @@ export function tryDemoLogin(email: string, password: string): AuthUser | null {
   const accountRole = normalizedEmail === DEMO_ACCOUNT.email ? 'sinhvien' : normalizedEmail === ADMIN_DEMO_ACCOUNT.email ? 'admin' : null
   if (!accountRole) return null
   const account = accountRole === 'admin' ? ADMIN_DEMO_ACCOUNT : DEMO_ACCOUNT
-  if (password !== account.password) throw new ApiError('Email hoặc mật khẩu không đúng.')
+  if (password !== account.password) throw new ApiError('Sai tài khoản hoặc mật khẩu.')
   return demoUser(accountRole)
 }
 

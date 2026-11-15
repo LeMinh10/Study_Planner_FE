@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict'
+
+export async function runLoginValidationChecks({ go, input, click, waitFor, evaluate, cdp, calls, errors, password }) {
+  await go('/login')
+  await waitFor('!!document.querySelector("input[name=taiKhoan]")')
+  const count = () => calls.filter((call) => call.route === '/api/v1/auth/login').length
+  const initial = count()
+  await input('taiKhoan', 'SV-01')
+  await evaluate('document.querySelector("input[name=taiKhoan]").focus(); document.querySelector("input[name=taiKhoan]").blur()')
+  await waitFor('document.querySelector("#login-account-error")?.textContent.includes("email đúng định dạng")')
+  await input('taiKhoan', '')
+  await click('button[type="submit"]')
+  await waitFor('document.querySelectorAll(".auth-field-error").length === 2')
+  assert.equal(await evaluate('document.activeElement.name'), 'taiKhoan')
+  for (const account of ['an@', 'SV-001', 'SV 001', 'SV\'001', 'SV"001', 'SV“001']) {
+    await input('taiKhoan', account); await input('password', password)
+    await click('button[type="submit"]')
+    await waitFor('!!document.querySelector("#login-account-error")')
+    assert.equal(await evaluate('document.querySelector("input[name=taiKhoan]").getAttribute("aria-invalid")'), 'true')
+    assert.equal(await evaluate('document.activeElement.name'), 'taiKhoan')
+    assert.equal(await evaluate('document.querySelector("input[name=taiKhoan]").value'), account)
+  }
+  for (const value of ['', '        ', 'a'.repeat(129)]) {
+    await input('taiKhoan', 'an@example.com'); await input('password', value)
+    await click('button[type="submit"]')
+    await waitFor('!!document.querySelector("#login-password-error")')
+    assert.equal(await evaluate('document.activeElement.name'), 'password')
+    assert.equal(await evaluate('document.querySelector("input[name=password]").value'), value)
+  }
+  assert.equal(count(), initial, 'Invalid submissions must not call the backend')
+  assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
+  // Gõ/dán mật khẩu có dấu nháy: gửi nguyên văn tới bước xác thực tài khoản.
+  await input('password', '')
+  await evaluate('document.querySelector("input[name=password]").focus()')
+  await cdp('Input.insertText', { text: 'Pasted123"' })
+  await click('button[type="submit"]')
+  await waitFor('document.querySelector(".auth-error")?.textContent === "Sai tài khoản hoặc mật khẩu."')
+  assert.equal(calls.filter((call) => call.route === '/api/v1/auth/login').at(-1).body.matKhau, 'Pasted123"')
+  assert.equal(await evaluate('document.querySelector("input[name=password]").type'), 'password')
+  await click('.password-toggle')
+  assert.equal(await evaluate('document.querySelector("input[name=password]").type'), 'text')
+  assert.equal(await evaluate('document.querySelector(".password-toggle").getAttribute("aria-pressed")'), 'true')
+  assert.equal(await evaluate('document.querySelector("input[name=password]").value'), 'Pasted123"')
+  await click('.password-toggle')
+  assert.equal(await evaluate('document.querySelector("input[name=password]").type'), 'password')
+  assert.equal(count(), initial + 1, 'Toggling visibility must not submit the form')
+  assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
+  for (const [account, currentPassword] of [['an@example.com', 'wrong-password'], ['unknown@example.com', password], ['SV_01', password], ['first-last+tag@example.com', password], ['an@example.com', 'short']]) {
+    await input('taiKhoan', account); await input('password', currentPassword)
+    await click('button[type="submit"]')
+    await waitFor('document.querySelector(".auth-error")?.textContent === "Sai tài khoản hoặc mật khẩu."')
+    assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
+  }
+  await input('taiKhoan', 'servervalidation@example.com'); await input('password', password)
+  await click('button[type="submit"]')
+  await waitFor('document.querySelectorAll(".auth-field-error").length === 2')
+  assert((await evaluate('document.querySelector("#login-account-error").textContent')).includes('ký tự đặc biệt'))
+  assert((await evaluate('document.querySelector("#login-password-error").textContent')).includes('ít nhất 8'))
+  await input('taiKhoan', ' AN@EXAMPLE.COM '); await input('password', password)
+  await evaluate('document.querySelector("input[name=password]").focus()')
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+  await waitFor('location.pathname === "/today"')
+  assert.equal(count(), initial + 8)
+  assert.deepEqual(calls.filter((call) => call.route === '/api/v1/auth/login').at(-1).body, { taiKhoan: 'an@example.com', matKhau: password })
+  assert.deepEqual(errors, [])
+  console.log('PASS: login validation, MSSV underscore, email punctuation, unchanged passwords, visibility toggle, server field errors and Enter submission.')
+}

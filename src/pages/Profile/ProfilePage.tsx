@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { PageHeading } from '../../components/PlannerUI'
 import { Icon } from '../../components/Icon'
+import { PasswordInput } from '../../components/PasswordInput'
 import { newPasswordError, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../../auth/validation'
 import type { Profile } from '../../types/planner'
 import { useMockApi } from '../../api/config'
@@ -87,10 +88,10 @@ function PasswordForm() {
     <p className="profile-password-note">Mật khẩu mới cần từ 8 đến 128 ký tự. Sau khi đổi mật khẩu thành công, bạn cần đăng nhập lại.</p>
     <form className="session-form" onSubmit={submit} noValidate aria-busy={pending}>
       <fieldset className="form-fields" disabled={pending || viewOnlyDemo}>
-        <label>Mật khẩu hiện tại<input name="currentPassword" type="password" autoComplete="current-password" maxLength={PASSWORD_MAX_LENGTH} required value={currentPassword} onChange={(event) => { setCurrentPassword(event.target.value); setError('') }} /></label>
+        <label>Mật khẩu hiện tại<PasswordInput name="currentPassword" passwordLabel="mật khẩu hiện tại" autoComplete="current-password" maxLength={PASSWORD_MAX_LENGTH} required value={currentPassword} onChange={(event) => { setCurrentPassword(event.target.value); setError('') }} /></label>
         <div className="form-grid">
-          <label>Mật khẩu mới<input name="newPassword" type="password" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} required value={newPassword} onChange={(event) => { setNewPassword(event.target.value); setError('') }} /></label>
-          <label>Nhập lại mật khẩu mới<input name="confirmPassword" type="password" autoComplete="new-password" maxLength={PASSWORD_MAX_LENGTH} required value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} /></label>
+          <label>Mật khẩu mới<PasswordInput name="newPassword" passwordLabel="mật khẩu mới" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} required value={newPassword} onChange={(event) => { setNewPassword(event.target.value); setError('') }} /></label>
+          <label>Nhập lại mật khẩu mới<PasswordInput name="confirmPassword" passwordLabel="mật khẩu mới xác nhận" autoComplete="new-password" maxLength={PASSWORD_MAX_LENGTH} required value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} /></label>
         </div>
         {error && <p className="auth-error" role="alert">{error}</p>}
         <div className="profile-save-row"><button className="button button-primary" type="submit">{pending ? 'Đang đổi…' : 'Đổi mật khẩu'}</button></div>

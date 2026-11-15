@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 
-export type IconName = 'overview' | 'calendar' | 'book' | 'chart' | 'search' | 'chevron-left' | 'chevron-right' | 'arrow-right' | 'plus' | 'check' | 'clock' | 'menu' | 'close' | 'sun' | 'headphones' | 'play' | 'pause' | 'reset' | 'code' | 'language' | 'math' | 'panel-left' | 'leaf' | 'edit' | 'trash' | 'bell' | 'user' | 'logout' | 'flag' | 'list' | 'layers'
+export type IconName = 'overview' | 'calendar' | 'book' | 'chart' | 'search' | 'chevron-left' | 'chevron-right' | 'arrow-right' | 'plus' | 'check' | 'clock' | 'menu' | 'close' | 'sun' | 'headphones' | 'play' | 'pause' | 'reset' | 'code' | 'language' | 'math' | 'panel-left' | 'leaf' | 'edit' | 'trash' | 'bell' | 'user' | 'logout' | 'flag' | 'list' | 'layers' | 'eye' | 'eye-off'
 
 const paths: Record<IconName, ReactNode> = {
+  eye: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
+  'eye-off': <><path d="m3 3 18 18M10.6 5.1 12 5c6.5 0 10 7 10 7a19 19 0 0 1-3 3.9M6.3 6.3A20 20 0 0 0 2 12s3.5 7 10 7a11 11 0 0 0 5.7-1.7M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>,
   edit: <><path d="m15 4 5 5M4 20l5-1 12-12a2 2 0 0 0-5-5L4 14Z" /></>,
   trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></>,
   bell: <><path d="M5 9a7 7 0 0 1 14 0c0 7 2 7 2 8H3c0-1 2-1 2-8M9 21h6" /></>,
