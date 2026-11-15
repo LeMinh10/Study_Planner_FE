@@ -1,6 +1,6 @@
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 
-// Preserve saved links while keeping one workspace for each subject.
+// Giữ các liên kết đã lưu và đưa mỗi môn về cùng một không gian làm việc.
 export function SubjectDetailPage() {
   const { subjectId } = useParams()
   const location = useLocation()

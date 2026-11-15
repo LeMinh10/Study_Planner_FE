@@ -89,7 +89,7 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   const root = '.backend-integration/screenshots'
   fs.mkdirSync(root, { recursive: true })
   fs.writeFileSync(root + '/today-priorities-desktop.png', Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
-  // Re-entering via client navigation keeps the last view while refreshing the BE.
+  // Khi quay lại bằng điều hướng trong ứng dụng, giữ nội dung cũ trong lúc tải dữ liệu backend mới.
   await click('.sidebar a[href="/profile"]'); await waitFor('location.pathname === "/profile"')
   fixture.state.delay = 400
   fixture.state.tasks[0].tieuDe = 'Bài quá hạn vừa cập nhật'
@@ -100,7 +100,7 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   await waitFor(has('Bài quá hạn vừa cập nhật')); await waitFor(ready)
   fixture.state.delay = 0
 
-  // Each source can fail independently; no false empty state or invented zeroes.
+  // Mỗi nguồn có thể lỗi riêng; không hiển thị rỗng hoặc số 0 khi chưa tải được dữ liệu.
   fixture.state.calendarFail = true
   await go('/today'); await waitFor(has('Lịch học tạm gián đoạn.'))
   await waitFor('document.querySelectorAll(".today-priority-list > li").length === 5')
@@ -115,7 +115,7 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   fixture.state.tasksFail = false
   await click('.today-priorities .today-error button'); await waitFor(ready)
 
-  // Long titles must wrap inside the Today drawer, including unbroken text.
+  // Tiêu đề dài phải xuống dòng trong bảng Hôm nay, kể cả chuỗi không có khoảng trắng.
   const longTitle = 'Các bước thực hiện nhiệm vụ '.repeat(8) + 'a'.repeat(180)
   fixture.state.tasks[0].tieuDe = longTitle
   await click('.today-reload')

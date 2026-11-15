@@ -35,8 +35,8 @@ export function parseCalendar(value: unknown): TodayCalendar {
   return { muiGio: body.muiGio, suKien: events }
 }
 export async function loadTodayTasks(token: string, signal: AbortSignal) {
-  // BE's default list omits completed tasks and returns roots. Ask for leaves and
-  // all pending states, plus completed leaves due today in the account timezone.
+  // Danh sách mặc định của backend trả nhiệm vụ gốc và bỏ việc hoàn thành. Cần lấy các lá,
+  // gồm mọi trạng thái chưa hoàn thành và các lá hoàn thành có hạn hôm nay theo múi giờ tài khoản.
   for (let attempt = 0; ; attempt++) {
     signal.throwIfAborted()
     const results = await Promise.allSettled(['NotStarted', 'InProgress', 'Completed'].map(async (status) => {
@@ -74,8 +74,8 @@ export async function loadTodayTasks(token: string, signal: AbortSignal) {
   }
 }
 export async function loadTodayCalendar(token: string, now: number, signal: AbortSignal) {
-  // A padded UTC range includes today and the following week in every IANA zone.
-  // The BE expands recurring classes, date bounds and study sessions for us.
+  // Nới khoảng UTC để bao phủ hôm nay và tuần kế tiếp trong mọi múi giờ IANA.
+  // Backend sinh các lần học lặp, mốc hạn và phiên tự học trong khoảng đã chọn.
   const start = new Date(now)
   start.setUTCHours(0, 0, 0, 0)
   const query = new URLSearchParams({ tu: new Date(start.getTime() - 86400000).toISOString(), den: new Date(start.getTime() + 9 * 86400000).toISOString() })

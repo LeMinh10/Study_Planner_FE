@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+
+export async function runTaskProgressChecks({ origin, cdp, evaluate, waitFor, click, button, field, tasks, calls, errors }) {
+  // Chỉ tạo dữ liệu trong môi trường trình duyệt riêng; sau khi mở trang, mọi thay đổi đều qua thao tác giao diện thật.
+  const parent = tasks.find(task => task.ma === 1)
+  const done = tasks.find(task => task.ma === 2)
+  const checklist = tasks.find(task => task.ma === 3)
+  const manual = tasks.find(task => task.ma === 4)
+  Object.assign(done, { tienDo: 100, trangThai: 'Completed' })
+  Object.assign(parent, { tienDo: 50, trangThai: 'InProgress' })
+  const pending = { ...done, ma: 40, tieuDe: 'Bước chưa xong', tienDo: 0, trangThai: 'NotStarted', ngayHoanThanh: null }
+  tasks.push(pending)
+  Object.assign(checklist, { tienDo: 50, trangThai: 'InProgress', checklist: [{ tieuDe: 'Đã làm', daXong: true }, { tieuDe: 'Còn lại', daXong: false }] })
+  Object.assign(manual, { tienDo: 40, trangThai: 'InProgress', thoiLuongDuKienPhut: 80 })
+  const open = async id => {
+    await cdp('Page.navigate', { url: origin + '/tasks?view=all&task=' + id })
+    await waitFor('!!document.querySelector(".ht-detail-title h2") && !document.querySelector(".ht-detail-header-actions .ht-row-actions-trigger").disabled')
+  }
+  await cdp('Page.navigate', { url: origin + '/tasks?view=all' })
+  await click('button[aria-label="Tiến độ aaa · 50%"]')
+  await waitFor('!!document.querySelector(".ht-derived-progress")')
+  assert(!await evaluate('!!document.querySelector(".ht-quick-progress:popover-open")'))
+  assert(!await evaluate('!!document.querySelector(".ht-detail-panel .ht-content-mode")'))
+  await click('.ht-detail-header-actions .ht-row-actions-trigger:not(:disabled)')
+  assert(!await evaluate('Array.from(document.querySelectorAll(".ht-row-actions-panel:popover-open button")).some(button => button.textContent.trim() === "Cập nhật tiến độ")'))
+  await evaluate('document.querySelector(".ht-row-actions-panel:popover-open").hidePopover()')
+  const progressWrites = calls.filter(call => /\/(complete|reopen|progress)$/.test(call.route) && call.method !== 'GET').length
+  assert.equal(progressWrites, 0, 'Opening parent progress must not mark it complete')
+  assert.equal(await evaluate('document.querySelectorAll(".ht-detail-child-row").length'), 2, 'Done children still belong to the parent')
+  await click('input[aria-label="Hoàn thành Bước chưa xong"]:not(:disabled)')
+  await waitFor('document.querySelector(".ht-detail-progress")?.value === 100 && !document.querySelector(".ht-detail-header-actions .ht-row-actions-trigger").disabled')
+  assert.equal(parent.tienDo, 100)
+  assert.equal(parent.trangThai, 'Completed')
+  await button('+ Thêm bước nhỏ')
+  await field('input[aria-label="Tên bước nhỏ"]', 'Công việc phát sinh')
+  const childPosts = () => calls.filter(call => call.route === '/tasks/1/children' && call.method === 'POST').length
+  const before = childPosts()
+  await click('.ht-inline-child button[type=submit]')
+  await waitFor('!!document.querySelector(".ht-confirm")')
+  assert(await evaluate('document.querySelector(".ht-confirm-description").textContent.includes("mở lại")'))
+  await button('Hủy')
+  await waitFor('!document.querySelector(".ht-confirm") && !document.querySelector(".ht-inline-child button[type=submit]").disabled')
+  assert.equal(childPosts(), before)
+  assert.equal(parent.tienDo, 100)
+  await click('.ht-inline-child button[type=submit]'); await button('Mở lại và tiếp tục')
+  await waitFor('document.querySelector(".ht-detail-progress")?.value === 66')
+  assert.equal(parent.trangThai, 'InProgress')
+  assert.equal(calls.filter(call => call.route === '/tasks/1/children' && call.method === 'POST').at(-1).body.xacNhanDoiCauTruc, true)
+
+  await open(checklist.ma)
+  await button('+ Thêm bước nhỏ')
+  await field('input[aria-label="Tên bước nhỏ"]', 'Bước sau checklist')
+  await click('.ht-inline-child button[type=submit]')
+  await waitFor('document.querySelector(".ht-confirm-description")?.textContent.includes("Công việc chung")')
+  await button('Chuyển và tiếp tục')
+  await waitFor('document.querySelector(".ht-detail-progress")?.value === 25 && !!document.querySelector(".ht-derived-progress")')
+  assert.equal(checklist.checklist?.length ?? 0, 0)
+  const checklistChild = tasks.find(task => task.maNhiemVuCha === checklist.ma && task.tieuDe === 'Công việc chung')
+  assert(checklistChild)
+  assert.equal(checklistChild.checklist[0].daXong, true)
+  assert.equal(checklistChild.checklist[1].daXong, false)
+  assert(!await evaluate('!!document.querySelector(".ht-detail-panel .ht-task-checklist")'))
+  assert(await evaluate('document.querySelector(".ht-detail-body").textContent.includes("Công việc chung")'))
+
+  await open(manual.ma)
+  await button('+ Thêm bước nhỏ')
+  await field('input[aria-label="Tên bước nhỏ"]', 'Bước sau tiến độ nhập tay')
+  await click('.ht-inline-child button[type=submit]')
+  await waitFor('document.querySelector(".ht-confirm-description")?.textContent.includes("Phần việc đã thực hiện")')
+  await button('Chuyển và tiếp tục')
+  await waitFor('document.querySelector(".ht-detail-progress")?.value === 20')
+  const preserved = tasks.find(task => task.maNhiemVuCha === manual.ma && task.tieuDe === 'Phần việc đã thực hiện')
+  assert(preserved)
+  assert.equal(preserved.tienDo, 40)
+  assert.equal(preserved.thoiLuongDuKienPhut, 80)
+  assert.equal(await evaluate('location.pathname'), '/tasks')
+  if (process.env.FOCUS_SCREENSHOT_DIR) {
+    fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR, { recursive: true })
+    fs.writeFileSync(path.join(process.env.FOCUS_SCREENSHOT_DIR, 'task-progress-parent.png'), Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
+  }
+  assert.deepEqual(errors, [])
+  console.log('PASS task progress UI: parent rollup, completed children, reopen confirmation/cancel, checklist conversion and manual progress preservation. ' + calls.length + ' fixture requests.')
+}

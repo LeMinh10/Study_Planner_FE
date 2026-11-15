@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+
+export async function runReminderChecks({ origin, cdp, evaluate, waitFor, click, button, calls, errors, settingsFixture }) {
+  await cdp('Page.navigate', { url: origin + '/tasks' })
+  await click('.student-notification-bell')
+  await click('button[aria-label="Cài đặt thông báo"]')
+  await waitFor('!!document.querySelector("input[name=nhacTruocGio]") && !document.querySelector(".notification-settings button[type=submit]").disabled')
+  assert.equal(await evaluate('document.querySelector("input[name=nhacTruocGio]").value'), '24')
+  assert.equal(await evaluate('document.querySelector("input[name=nhacKeHoach]").checked'), false)
+  await evaluate('(() => { const i = document.querySelector("input[name=nhacTruocGio]"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, "0"); i.dispatchEvent(new Event("input", { bubbles: true })); })()')
+  await click('input[name=nhacKeHoach]')
+  settingsFixture.failSettings = true
+  await button('Lưu thiết lập')
+  await waitFor('!!document.querySelector(".notification-settings-error")')
+  assert.equal(await evaluate('document.querySelector("input[name=nhacTruocGio]").value'), '0', 'A failed save keeps edited values')
+  await button('Lưu thiết lập')
+  await waitFor('document.querySelectorAll(".planning-reminder-list li").length === 2')
+  assert.equal(await evaluate('document.querySelector(".student-notification-count").textContent'), '2')
+  assert.equal(await evaluate('!!document.querySelector(".student-notification-empty")'), false)
+  assert.deepEqual(calls.filter(call => call.route === '/notifications/settings' && call.method === 'PUT').at(-1).body, { nhacTruocGio: 0, nhacKeHoach: true })
+  await click('button[aria-label="Cài đặt thông báo"]')
+  await waitFor('document.querySelector("input[name=nhacTruocGio]")?.value === "0"')
+  assert.equal(await evaluate('document.querySelector("input[name=nhacKeHoach]").checked'), true)
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
+  const bounds = await evaluate('(() => { const p = document.querySelector(".student-notification-popup"), b = p.getBoundingClientRect(); return { left: b.left, right: b.right, bottom: b.bottom, width: innerWidth, height: innerHeight, scroll: p.scrollWidth, client: p.clientWidth } })()')
+  assert(bounds.left >= 0 && bounds.right <= bounds.width && bounds.bottom <= bounds.height && bounds.scroll <= bounds.client + 1, 'Settings fit the mobile viewport: ' + JSON.stringify(bounds))
+  if (process.env.FOCUS_SCREENSHOT_DIR) {
+    fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR, { recursive: true })
+    fs.writeFileSync(path.join(process.env.FOCUS_SCREENSHOT_DIR, 'notification-settings-mobile.png'), Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
+  }
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false })
+  await button('Quay lại thông báo')
+  await evaluate('Array.from(document.querySelectorAll(".planning-reminder-list button")).find(button => button.textContent.includes("Rà soát kế hoạch tuần này")).click()')
+  await waitFor('location.search.includes("tab=planning") && document.querySelector(".student-notification-count")?.textContent === "1"')
+  assert(calls.some(call => call.route === '/planning-reminders/1/read' && call.method === 'PATCH'))
+  await click('.student-notification-bell')
+  await button('Đọc hết mục này')
+  await waitFor('!document.querySelector(".student-notification-count")')
+  await click('button[aria-label="Cài đặt thông báo"]')
+  await waitFor('!!document.querySelector("input[name=nhacKeHoach]") && !document.querySelector(".notification-settings button[type=submit]").disabled')
+  await click('input[name=nhacKeHoach]')
+  await button('Lưu thiết lập')
+  await waitFor('!document.querySelector(".notification-settings")')
+  assert.deepEqual(calls.filter(call => call.route === '/notifications/settings' && call.method === 'PUT').at(-1).body, { nhacTruocGio: 0, nhacKeHoach: false })
+  assert(!calls.some(call => call.route === '/planning-reminders/settings'), 'Polling the inbox does not fetch a separate settings endpoint')
+  assert.deepEqual(errors, [])
+  console.log('PASS unified notification settings UI: saved default/zero, opt-in/out, retry without lost edits, mobile, badge, read/navigation and no redundant settings polling.')
+}

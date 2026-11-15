@@ -39,10 +39,10 @@ export function readAuthCredentials(): AuthCredentials | null {
 }
 
 export function saveAuthCredentials(credentials: AuthCredentials) {
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token: credentials.token, expiresAt: credentials.expiresAt })) } catch { /* Keep the session in memory if storage is unavailable. */ }
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token: credentials.token, expiresAt: credentials.expiresAt })) } catch { /* Giữ phiên đăng nhập trong bộ nhớ nếu trình duyệt không cho lưu. */ }
 }
 export function clearAuthCredentials() {
-  try { sessionStorage.removeItem(SESSION_KEY) } catch { /* Storage can be unavailable in private browsing. */ }
+  try { sessionStorage.removeItem(SESSION_KEY) } catch { /* Chế độ duyệt riêng tư có thể không cho truy cập bộ nhớ trình duyệt. */ }
 }
 
 export function roleHome(role: UserRole) { return role === 'admin' ? '/admin/overview' : '/today' }

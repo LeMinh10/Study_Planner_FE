@@ -4,7 +4,7 @@ import { useMockApi } from '../api/config'
 import { loadNotifications, readAllNotifications, readNotification } from '../api/notifications'
 import type { NotificationInbox, NotificationItem } from '../api/notifications'
 
-// Academic/notification records stay in memory; read markers live on the server.
+// Dữ liệu học tập/thông báo chỉ giữ trong bộ nhớ; trạng thái đã đọc được lưu trên máy chủ.
 const cache = new WeakMap<() => string, NotificationInbox>()
 export function useNotifications() {
   const auth = useAuth()

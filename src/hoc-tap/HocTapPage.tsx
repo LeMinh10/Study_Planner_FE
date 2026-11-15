@@ -9,6 +9,7 @@ import { useMockApi } from '../api/config'
 import { apiRequest } from '../api/client'
 import type { Semester, Subject } from '../types/planner'
 import { goi, LoiHocTap } from './api'
+import { NhiemVuProvider, useNhiemVu } from './NhiemVuContext'
 import { loaiViec, trangThai, uuTien } from './time'
 import { cheDoNhiemVu, khoangDaHoanThanh, layCheDo, layPhamVi, taoTruyVanNhiemVu } from './boLoc'
 import type { NhiemVu, Trang } from './types'
@@ -68,7 +69,7 @@ export function BieuMau({ title, children, onSubmit, submitLabel = 'Lưu thay đ
   submitLabel?: string
   disabled?: boolean
 }) {
-  const { close, reload, zoneReady } = useHocTap()
+  const { close, reload, zoneReady } = useNhiemVu()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const dialog = useRef<HTMLDialogElement>(null)
@@ -103,7 +104,7 @@ export function BieuMau({ title, children, onSubmit, submitLabel = 'Lưu thay đ
 export function ChonPhamVi({ semester, subject, requiredSubject = false, locked = false }: {
   semester?: string; subject?: string; requiredSubject?: boolean; locked?: boolean
 }) {
-  const { semesters, subjects } = useHocTap()
+  const { semesters, subjects } = useNhiemVu()
   const initial = subject ? subjects.find(x => x.id === subject)?.semesterId : semester
   const [selected, setSelected] = useState(initial ?? '')
   return <div className="ht-fields">
@@ -374,7 +375,7 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
     {showClearFilters && <button type="button" onClick={xoaBoLoc}>Xóa bộ lọc</button>}
   </div>
   const showLearningNav = ready && (!calendar || calendarNavOpen)
-  return <Context.Provider value={value}><section className={'ht-workspace' + (taskView ? ' ht-task-workspace' : calendar ? ' ht-calendar-workspace' : study ? ' ht-study-workspace' : '')}>
+  return <Context.Provider value={value}><NhiemVuProvider value={value}><section className={'ht-workspace' + (taskView ? ' ht-task-workspace' : calendar ? ' ht-calendar-workspace' : study ? ' ht-study-workspace' : '')}>
     <div className={'ht-learning-layout' + (!showLearningNav ? ' ht-navigation-unavailable' : '')}>
     {showLearningNav && <nav id={learningNavId} className="ht-tabs" aria-label="Công cụ học tập">
         {Object.entries({ tasks: 'Nhiệm vụ', board: 'Bảng trạng thái', calendar: 'Thời khóa biểu', classes: 'Lịch học theo môn', free: 'Giờ rảnh của tôi', planning: 'Gợi ý lịch học', sessions: 'Phiên tự học' }).map(([key, label]) => <Fragment key={key}>
@@ -488,5 +489,5 @@ export function HocTapPage({ mode }: { mode: 'tasks' | 'calendar' | 'schedule' }
         onClick={() => { if (success.undo) { setSuccess(null); void run(success.undo) } }}><Icon name="undo" size={18} /></button>
         : <button type="button" aria-label="Đóng thông báo" onClick={() => setSuccess(null)}><Icon name="close" size={16} /></button>}
     </div>}
-  </section></Context.Provider>
+  </section></NhiemVuProvider></Context.Provider>
 }

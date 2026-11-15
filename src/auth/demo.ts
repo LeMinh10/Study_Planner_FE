@@ -30,8 +30,8 @@ export function readDemoSession(): AuthUser | null {
   catch { return null }
 }
 export function saveDemoSession(role: UserRole = 'sinhvien') {
-  try { sessionStorage.setItem(DEMO_SESSION_KEY, role === 'admin' ? 'admin' : 'active') } catch { /* Keep the session in memory when storage is unavailable. */ }
+  try { sessionStorage.setItem(DEMO_SESSION_KEY, role === 'admin' ? 'admin' : 'active') } catch { /* Giữ phiên dùng thử trong bộ nhớ nếu trình duyệt không cho lưu. */ }
 }
 export function clearDemoSession() {
-  try { sessionStorage.removeItem(DEMO_SESSION_KEY) } catch { /* Storage may be unavailable. */ }
+  try { sessionStorage.removeItem(DEMO_SESSION_KEY) } catch { /* Trình duyệt có thể không cho truy cập bộ nhớ lưu trữ. */ }
 }

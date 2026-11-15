@@ -1,7 +1,7 @@
 import type { Semester, Subject, SubjectColor } from '../types/planner'
 import { ApiError, apiRequest, record } from './client'
 
-// DTO contract: StudyPlanner.Application.Academic (BE).
+// Cấu trúc DTO đối chiếu với StudyPlanner.Application.Academic ở backend.
 export const subjectColors: Record<SubjectColor, string> = {
   sage: '#53A88C', clay: '#E58E73', lavender: '#A278C4', blue: '#72A8D6',
 }
@@ -23,7 +23,7 @@ export function parseSubject(value: unknown): Subject {
   const hex = optionalText(body.mauSac).toUpperCase()
   if (hex && !/^#[0-9A-F]{6}$/.test(hex)) return invalid()
   if (body.soTinChi != null && !integer(body.soTinChi, 1)) return invalid()
-  // Keep arbitrary valid BE colors for a later edit; select the closest UI palette.
+  // Giữ màu hợp lệ từ backend để lần sửa sau không mất dữ liệu; chọn màu giao diện gần nhất.
   const rgb = (color: string) => [1, 3, 5].map((start) => parseInt(color.slice(start, start + 2), 16))
   const distance = (color: string) => rgb(color).reduce((sum, channel, index) => sum + (channel - rgb(hex || subjectColors.sage)[index]) ** 2, 0)
   const color = (Object.keys(subjectColors) as SubjectColor[]).sort((a, b) => distance(subjectColors[a]) - distance(subjectColors[b]))[0]

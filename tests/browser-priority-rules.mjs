@@ -87,7 +87,7 @@ export async function runPriorityChecks({ go, input, click, waitFor, evaluate, c
   await click('.priority-confirm-submit')
   await waitFor('document.querySelector(".priority-error")?.textContent.includes("đã thay đổi") && !document.querySelector("dialog[open]")')
   assert.equal(fixture.state.priorityRules.find(x => x.dangSuDung).ma, 25)
-  await click('.priority-page-heading button'); await waitFor('document.querySelector(".priority-active h2")?.textContent === "Thay đổi từ admin khác" && !document.querySelector(".priority-editor fieldset").disabled')
+  await click('.priority-error button'); await waitFor('document.querySelector(".priority-active h2")?.textContent === "Thay đổi từ admin khác" && !document.querySelector(".priority-editor fieldset").disabled')
   await click('[data-rule-id="23"] .rule-activate'); await click('.priority-confirm-submit')
   await waitFor('document.querySelector(".priority-active h2")?.textContent === "Ưu tiên quan trọng trước" && !document.querySelector(".priority-editor fieldset").disabled')
   fs.mkdirSync('.backend-integration/screenshots', { recursive: true })

@@ -25,7 +25,7 @@ const fixtureAuth = {
   isDemo: false, status: 'authenticated', notice: '', error: '', login: async () => {}, register: async () => {},
   saveProfile: async () => {}, changePassword: async () => {}, logout: () => {}, retry: () => {}, getAccessToken: () => 'fixture-token',
 }
-// Inject a verified identity for page rendering; production auth is exercised separately.
+// Cấp danh tính đã xác thực để kiểm tra việc dựng trang; luồng xác thực thật có kiểm thử riêng.
 function App({ auth = fixtureAuth } = {}) {
   return createElement(AuthContext.Provider, { value: auth }, createElement(PlannerProvider, null, createElement(AppRoutes)))
 }
@@ -259,7 +259,7 @@ test('workspace sidebar shows empty academic data and retains navigation', () =>
   const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/tasks'] }, createElement(App)))
   const navigation = markup.match(/<nav aria-label="Menu chính">([\s\S]*?)<\/nav>/)?.[1]
   assert(navigation)
-  assert.deepEqual([...navigation.matchAll(/href="([^"]+)"/g)].map((match) => match[1]), ['/today', '/tasks', '/calendar'])
+  assert.deepEqual([...navigation.matchAll(/href="([^"]+)"/g)].map((match) => match[1]), ['/today', '/tasks', '/calendar', '/focus'])
   assert(!markup.includes('href="/?subject=math"'))
   assert(!markup.includes('href="/?subject=web"'))
   assert(markup.includes('Chưa có môn học.'))
@@ -291,6 +291,7 @@ test('sidebar marks the current page consistently across main, academic and prof
     ['/tasks?view=priority', '/tasks'],
     ['/today', '/today'],
     ['/calendar', '/calendar'],
+    ['/focus', '/focus'],
     ['/subjects', '/subjects'],
     ['/subjects/missing', '/subjects'],
     ['/statistics', '/statistics'],
@@ -348,13 +349,28 @@ test('authentication stays enabled; academic writes wait for successful API read
     assert.match(markup, /<button type="submit" class="button button-primary auth-submit"/)
     assert(!markup.includes('hiện chưa khả dụng.'))
   }
-  for (const [path, label] of [['/semesters', 'Thêm học kỳ'], ['/subjects', 'Thêm môn học'], ['/schedule', 'Thêm nhiệm vụ'], ['/tasks', 'Thêm nhiệm vụ'], ['/calendar', 'Thêm nhiệm vụ']]) {
+  for (const [path, label] of [['/semesters', 'Thêm học kỳ'], ['/subjects', 'Thêm môn học']]) {
     const markup = render(path)
     const buttons = [...markup.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
     const createButtons = buttons.filter(([, attributes, body]) => attributes.includes(label) || body.includes(label))
     assert(createButtons.length, path + ': create controls exist')
     assert(createButtons.every(([, attributes]) => attributes.includes('disabled=""')), path + ': writes wait for the API')
     assert(!markup.includes('<dialog'), path + ': no dialog')
+  }
+  const tasksMarkup = render('/tasks')
+  const quickAdd = tasksMarkup.match(/<form\b[^>]*aria-label="Thêm nhanh nhiệm vụ"[^>]*>([\s\S]*?)<\/form>/)?.[1]
+  assert(quickAdd, 'task quick add exists before data loads')
+  assert.match(quickAdd, /<input\b[^>]*disabled=""/, 'task title is disabled until the API revision and timezone are ready')
+  assert.match(quickAdd, /<button\b[^>]*disabled=""/, 'quick-add write is disabled until the API is ready')
+  assert(!tasksMarkup.includes('<dialog'), 'no task editor opens before API reads')
+  for (const path of ['/schedule', '/calendar']) {
+    const markup = render(path)
+    const main = markup.match(/<main\b[^>]*>([\s\S]*?)<\/main>/)?.[1]
+    assert(main, path + ': main content exists')
+    assert(main.includes('Đang tải múi giờ tài khoản…'), path + ': timezone read gates calendar controls')
+    assert(!main.includes('<form'), path + ': calendar write forms wait for the profile/API read')
+    assert(!main.includes('<dialog'), path + ': no calendar editor before reads')
+    assert.match(main, /<button\b[^>]*aria-expanded="false"[^>]*>[\s\S]*?Công cụ học tập<\/button>/, path + ': navigation toggle remains available')
   }
   const editor = renderToString(createElement(AuthContext.Provider, { value: fixtureAuth }, createElement(PlannerProvider, null, createElement(TaskEditor, { task: null, onClose: () => {} }))))
   assert.match(editor, /<button type="submit" class="button button-primary"/)
@@ -473,10 +489,19 @@ test('task route aliases retain the API workspace without creating local data', 
   const render = (path) => renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
   const outputs = ['list', 'board', 'calendar'].map((layout) => render('/tasks?layout=' + layout).replace(/<!--.*?-->/g, ''))
   assert(outputs[0].includes('Đang tải nhiệm vụ…'))
-  assert(outputs[1].match(/aria-pressed="true"[^>]*>([\s\S]*?)<\/button>/)?.[1].includes('Bảng trạng thái'))
+  const boardNavigation = outputs[1].match(/<nav\b[^>]*aria-label="Công cụ học tập"[^>]*>([\s\S]*?)<\/nav>/)?.[1]
+  assert(boardNavigation, 'board uses the learning navigation')
+  const selectedBoardTabs = [...boardNavigation.matchAll(/<button\b[^>]*aria-pressed="true"[^>]*>([\s\S]*?)<\/button>/g)]
+  assert.equal(selectedBoardTabs.length, 1, 'exactly one learning tab is active')
+  assert(selectedBoardTabs[0][1].includes('Bảng trạng thái'))
   assert(!outputs[1].includes('0 nhiệm vụ'))
-  assert(outputs[2].match(/aria-pressed="true"[^>]*>([\s\S]*?)<\/button>/)?.[1].includes('Thời khóa biểu'))
-  assert(outputs.every((markup) => markup.includes('class="ht-workspace"')))
+  assert(outputs[2].includes('<h1>Thời khóa biểu</h1>'))
+  assert.match(outputs[2], /<button\b[^>]*aria-controls="[^"]+"[^>]*aria-expanded="false"[^>]*>[\s\S]*?Công cụ học tập<\/button>/)
+  assert(!outputs[2].includes('class="ht-tabs"'), 'calendar learning tools start collapsed')
+  assert(outputs[2].includes('Đang tải múi giờ tài khoản…'), 'calendar waits for the account timezone')
+  assert(outputs.every((markup) => /<section\b[^>]*class="ht-workspace(?: [^"]*)?"/.test(markup)))
+  assert(outputs[0].includes('ht-task-workspace') && outputs[1].includes('ht-task-workspace'))
+  assert(outputs[2].includes('ht-calendar-workspace'))
   assert(outputs.every((markup) => !markup.includes('quick-task-form')))
   assert(outputs.every((markup) => !markup.includes('draggable="true"')))
 })

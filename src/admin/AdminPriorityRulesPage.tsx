@@ -90,7 +90,7 @@ export function AdminPriorityRulesPage() {
     <header className="priority-page-heading"><div className="admin-page-heading"><h1 id="priority-rules-title">Quy tắc ưu tiên</h1></div></header>
     {!enabled ? <p className="priority-message">Vui lòng đăng nhập tài khoản quản trị.</p> : <>
       {loadError && <div className="priority-error" role="alert">{loadError} <button type="button" disabled={loading || busy} onClick={refresh}>Thử lại</button></div>}
-      {actionError && <p className="priority-error" role="alert">{actionError}</p>}
+      {actionError && <p className="priority-error" role="alert">{actionError} <button type="button" disabled={loading || busy} onClick={() => { setActionError(''); refresh() }}>Tải dữ liệu mới</button></p>}
       {notice && <p className="admin-feedback" role="status">{notice}</p>}
       {loading && <p className="priority-message" role="status">Đang tải quy tắc…</p>}
       {active && <section className="priority-active" aria-label="Quy tắc đang áp dụng"><div><span>Đang áp dụng</span><h2>{active.ten}</h2><p>{sequence(active)}</p></div></section>}

@@ -1,6 +1,6 @@
 import type { PlannerData } from '../types/planner'
 
-// No browser storage or seeded records: only API responses may populate the app.
+// Dữ liệu ứng dụng chỉ lấy từ API; không nạp bản ghi mẫu hoặc dữ liệu lưu trong trình duyệt.
 export function createEmptyPlannerData(): PlannerData {
   return {
     version: 1,

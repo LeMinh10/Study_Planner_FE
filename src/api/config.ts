@@ -1,4 +1,4 @@
-// Keep the HTTP contract here so it can be matched to the deployed backend.
+// Tập trung cấu hình HTTP tại đây để đối chiếu với backend đang triển khai.
 const env = import.meta.env
 export const apiBaseUrl = (env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 const mockSetting = import.meta.env.VITE_USE_MOCK_API

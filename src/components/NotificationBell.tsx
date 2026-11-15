@@ -2,18 +2,23 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { notificationHref } from '../api/notifications'
 import { useNotifications } from '../hooks/useNotifications'
+import { usePlanningReminders } from '../hooks/usePlanningReminders'
+import { PlanningReminderList } from './PlanningReminderList'
+import { NotificationSettings } from './NotificationSettings'
 import { Icon } from './Icon'
 import './notifications.css'
 
 export function NotificationBell() {
   const c = useNotifications()
+  const planning = usePlanningReminders(c.unreadOnly)
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
-  const unread = c.inbox?.tongChuaDoc ?? 0
+  const unread = (c.inbox?.tongChuaDoc ?? 0) + (planning.inbox?.tongChuaDoc ?? 0)
   const rows = c.inbox?.danhSach ?? []
   const date = (value: string) => new Intl.DateTimeFormat('vi-VN', { timeZone: c.inbox?.muiGio ?? 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
 
@@ -46,13 +51,15 @@ export function NotificationBell() {
   }, [open])
 
   return <div className="student-notifications" ref={containerRef}>
-    <button ref={buttonRef} type="button" className={'student-notification-bell' + (open ? ' active' : '')} aria-label={unread ? `Thông báo, ${unread} chưa đọc` : 'Thông báo'} title="Thông báo" aria-expanded={open} aria-controls={open ? panelId : undefined} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
+    <button ref={buttonRef} type="button" className={'student-notification-bell' + (open ? ' active' : '')} aria-label={unread ? `Thông báo, ${unread} chưa đọc` : 'Thông báo'} title="Thông báo" aria-expanded={open} aria-controls={open ? panelId : undefined} aria-haspopup="dialog" onClick={() => { setSettingsOpen(false); setOpen(!open) }}>
       <Icon name="bell" size={21} />
       {unread > 0 && <span className="student-notification-count" aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}
     </button>
     {open && <div ref={panelRef} id={panelId} className="student-notification-popup" role="dialog" aria-labelledby={panelId + '-title'} tabIndex={-1}>
-      <div className="student-notification-heading"><h2 id={panelId + '-title'}>Thông báo</h2><button type="button" className="icon-button" aria-label="Đóng thông báo" onClick={close}><Icon name="close" size={17} /></button></div>
-      <div className="notification-toolbar"><div role="group" aria-label="Lọc thông báo"><button type="button" disabled={c.saving} aria-pressed={!c.unreadOnly} onClick={() => c.filter(false)}>Tất cả</button><button type="button" disabled={c.saving} aria-pressed={c.unreadOnly} onClick={() => c.filter(true)}>Chưa đọc</button></div><button type="button" className="notification-read-all" disabled={!unread || c.loading || c.saving} onClick={() => { void c.mark() }}>Đọc tất cả</button></div>
+      <div className="student-notification-heading"><h2 id={panelId + '-title'}>Thông báo</h2><button type="button" className="notification-settings-trigger" disabled={!c.enabled} onClick={() => setSettingsOpen(value => !value)} aria-label="Cài đặt thông báo" aria-pressed={settingsOpen}>Cài đặt</button><button type="button" className="icon-button" aria-label="Đóng thông báo" onClick={close}><Icon name="close" size={17} /></button></div>
+      {settingsOpen ? <NotificationSettings back={() => setSettingsOpen(false)} /> : <>
+      <div className="notification-toolbar"><div role="group" aria-label="Lọc thông báo"><button type="button" disabled={c.saving} aria-pressed={!c.unreadOnly} onClick={() => c.filter(false)}>Tất cả</button><button type="button" disabled={c.saving} aria-pressed={c.unreadOnly} onClick={() => c.filter(true)}>Chưa đọc</button></div><button type="button" className="notification-read-all" disabled={!unread || c.loading || c.saving || planning.saving} onClick={() => { if (c.inbox?.tongChuaDoc) void c.mark(); if (planning.inbox?.tongChuaDoc) void planning.mark() }}>Đọc tất cả</button></div>
+      <PlanningReminderList state={planning} open={item => { void planning.mark(item).then(ok => { if (ok) { close(); navigate(item.duongDan) } }) }} />
       {c.error && <div className="notification-error" role="alert"><p>{c.error}</p><button type="button" disabled={c.loading || c.saving} onClick={c.reload}>Thử lại</button></div>}
       {c.loading && <p className="notification-loading" role="status">{c.inbox ? 'Đang cập nhật…' : 'Đang tải thông báo…'}</p>}
       {rows.length ? <ul className="student-notification-list">{rows.map((item) => <li key={item.ma}>
@@ -63,8 +70,9 @@ export function NotificationBell() {
           {item.hanHieuLuc && <small>Hạn {date(item.hanHieuLuc)}</small>}
           <small>{item.daHoanThanh ? 'Đã hoàn thành · ' : ''}{date(item.ngayPhat)}</small>
         </button>
-      </li>)}</ul> : !c.loading && !c.error && <div className="student-notification-empty"><Icon name="bell" size={26} /><p>{c.unreadOnly ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo'}</p></div>}
+      </li>)}</ul> : !c.loading && !c.error && !planning.loading && !planning.error && !planning.inbox?.danhSach.length && <div className="student-notification-empty"><Icon name="bell" size={26} /><p>{c.unreadOnly ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo'}</p></div>}
       {c.inbox && c.inbox.tongSo > c.inbox.kichThuocTrang && <nav className="notification-pagination" aria-label="Trang thông báo"><button type="button" disabled={c.page <= 1 || c.loading || c.saving} onClick={() => c.turnPage(c.page - 1)}>Trước</button><span>{c.page}/{Math.ceil(c.inbox.tongSo / c.inbox.kichThuocTrang)}</span><button type="button" disabled={c.page * c.inbox.kichThuocTrang >= c.inbox.tongSo || c.loading || c.saving} onClick={() => c.turnPage(c.page + 1)}>Sau</button></nav>}
+      </>}
     </div>}
   </div>
 }

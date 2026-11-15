@@ -5,14 +5,26 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createServer } from 'vite'
+import { createFocusFixture } from './focus-fixture.mjs'
+import { runFocusChecks } from './browser-focus.mjs'
+import { createTaskProgressFixture } from './task-progress-fixture.mjs'
+import { runTaskProgressChecks } from './browser-task-progress.mjs'
+import { createPlanningUpgradeFixture } from './upgrade-fixture.mjs'
+import { runPlanningUpgradeChecks } from './browser-planning-upgrade.mjs'
+import { runReminderChecks } from './browser-planning-reminders.mjs'
+import { createSessionLockFixture } from './browser-session-lock.mjs'
 
-// Browser fixture exercises the production routes and forms without writing to a user's database.
+// Dữ liệu giả lập kiểm tra các trang và biểu mẫu thật mà không ghi vào cơ sở dữ liệu người dùng.
 const browserPath = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 assert(browserPath, 'A Chromium browser is required')
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-core-ui-')
 const userDir = fs.mkdtempSync(tempPrefix)
-const vite = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': '"false"' }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
+const sessionFixture = createSessionLockFixture()
+// Mỗi lượt có cache riêng để các bộ kiểm thử chạy song song không ghi đè bộ tối ưu Vite.
+const vite = await createServer({ cacheDir: path.join(userDir, 'vite-cache'), plugins: [{ name: 'session-fixture-stream', configureServer(server) { server.middlewares.use(sessionFixture.middleware) } }], define: { 'import.meta.env.VITE_USE_MOCK_API': '"false"' }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
 let browser, socket
+let checksPassed = false
+const waiting = new Map()
 try {
   await vite.listen()
   const origin = 'http://127.0.0.1:' + vite.httpServer.address().port
@@ -29,7 +41,6 @@ try {
   })
   socket = new WebSocket(endpoint)
   await once(socket, 'open')
-  const waiting = new Map()
   const handlers = new Map()
   let counter = 0
   socket.addEventListener('message', ({ data }) => {
@@ -45,7 +56,7 @@ try {
   function send(method, params = {}, sessionId) {
     const id = ++counter
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { waiting.delete(id); reject(new Error('Browser timeout: ' + method)) }, 20000)
+      const timer = setTimeout(() => { waiting.delete(id); reject(new Error('Browser timeout: ' + method)) }, 40000)
       waiting.set(id, { resolve, reject, timer })
       socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }))
     })
@@ -86,6 +97,9 @@ try {
   const envelope = duLieu => ({ phienBan: revision, duLieu })
   const page = danhSach => ({ danhSach, trang: 1, kichThuocTrang: 100, tongSo: danhSach.length })
   let failNextDelete = false
+  const focusFixture = createFocusFixture({ tasks, sessions: () => sessions, revision: () => revision, bump: () => revision++, zone: user.muiGio })
+  const taskProgressFixture = createTaskProgressFixture({ tasks, makeTask, nextId: () => nextTask++, envelope, bump: () => revision++ })
+  const planningFixture = createPlanningUpgradeFixture({ envelope, bump: () => revision++, tasks, windows: () => availability, addWindows: rows => availability.push(...rows), sessions: () => sessions, addSessions: rows => sessions.push(...rows) })
   handlers.set('Page.javascriptDialogOpening', () => {
     errors.push('Unexpected native browser dialog')
     void cdp('Page.handleJavaScriptDialog', { accept: false })
@@ -95,12 +109,29 @@ try {
     try {
       const url = new URL(request.url)
       const route = url.pathname.replace('/api/v1', '')
+      // Cho luồng phiên đăng nhập đi qua HTTP streaming thật của fixture, không giả thành JSON.
+      if (route === '/users/me/session-events') { await cdp('Fetch.continueRequest', { requestId }); return }
       const body = request.postData ? JSON.parse(request.postData) : undefined
       const method = request.method
       calls.push({ route, query: url.searchParams.toString(), method, body, headers: request.headers })
       let status = 200, response
-      if (route === '/auth/login') response = { tokenTruyCap: token, loaiToken: 'Bearer', hetHanLuc: new Date(Date.now() + 3600000).toISOString(), nguoiDung: user }
+      const focusResponse = focusFixture.handle(url, method, body)
+      const progressResponse = taskProgressFixture.handle(route, method, body)
+      const planningResponse = planningFixture.handle(url, method, body, request.headers)
+      if (planningResponse) { status = planningResponse.status; response = planningResponse.response }
+      else if (progressResponse) { status = progressResponse.status; response = progressResponse.response }
+      else if (focusResponse) { status = focusResponse.status; response = focusResponse.response }
+      else if (process.env.CORE_FOCUS_ONLY && method !== 'GET' && /^\/tasks\/\d+$/.test(route) && focusFixture.controls.failNextTaskUpdate) {
+        focusFixture.controls.failNextTaskUpdate = false; status = 503; response = { detail: 'Chưa lưu được nhiệm vụ. Hãy thử lại.' }
+      } else if (process.env.CORE_FOCUS_ONLY && method !== 'GET' && /^\/tasks\/\d+$/.test(route) && focusFixture.controls.conflictNextTaskUpdate) {
+        focusFixture.controls.conflictNextTaskUpdate = false; revision++; status = 409; response = { code: 'DATA_VERSION_CONFLICT', detail: 'Dữ liệu đã đổi. Hãy tải dữ liệu mới.' }
+      } else if (process.env.CORE_FOCUS_ONLY && method !== 'GET' && Object.entries(request.headers).some(([key, value]) => key.toLowerCase() === 'if-match' && value !== '\"ht-' + revision + '\"')) {
+        status = 409; response = { code: 'DATA_VERSION_CONFLICT', detail: 'Phiên bản chưa được làm mới sau khi sửa nhiệm vụ.' }
+      }
+      else if (route === '/auth/login') response = { tokenTruyCap: token, loaiToken: 'Bearer', hetHanLuc: new Date(Date.now() + 3600000).toISOString(), nguoiDung: user }
       else if (route === '/users/me') response = user
+      else if (route === '/priority-rules/active') response = { ma: 0, ten: 'Mặc định', phienBan: 0, dangSuDung: true, cauHinh: { phienBanSchema: 1, tieuChi: ['Deadline', 'Importance', 'InProgress'] }, ngayTao: null }
+      else if (route === '/notifications' && method === 'GET') response = { danhSach: [], trang: Number(url.searchParams.get('trang') ?? 1), kichThuocTrang: 20, tongSo: 0, tongChuaDoc: 0, muiGio: user.muiGio, docDenLuc: new Date().toISOString() }
       else if (route === '/semesters') response = page([{ ma: 103, ten: 'Học kỳ thực hành', ngayBatDau: '2026-01-01', ngayKetThuc: '2027-12-31' }])
       else if (route === '/semesters/103/courses') response = page([{ ma: 207, maHocKy: 103, ten: 'Cơ sở dữ liệu', kyHieu: 'CSDL', soTinChi: 3, giangVien: null, mauSac: '#306BB5' }])
       else if (route === '/tasks' && method === 'GET') {
@@ -145,7 +176,12 @@ try {
             for (let i = tasks.length - 1; i >= 0; i--) if (ids.has(tasks[i].ma)) tasks.splice(i, 1)
             revision++; status = 204
           }
-        } else { if (method === 'PUT') { remember({ ...task, ...body }, 'Updated', JSON.stringify(task)); Object.assign(task, body); revision++ }; response = envelope(task) }
+        } else { if (method === 'PUT') { remember({ ...task, ...body }, 'Updated', JSON.stringify(task)); Object.assign(task, body);
+          if (process.env.CORE_FOCUS_ONLY && body.checklist?.length) {
+            task.tienDo = Math.round(body.checklist.filter(item => item.daXong).length / body.checklist.length * 100);
+            task.trangThai = task.tienDo === 100 ? 'Completed' : task.tienDo > 0 ? 'InProgress' : 'NotStarted'
+          }
+          revision++ }; response = envelope(task) }
       } else if (route === '/task-history') response = envelope(page(histories.filter(h => h.maNhiemVu === Number(url.searchParams.get('maNhiemVu')))))
       else if (route === '/availability-windows' && method === 'POST') { revision++; availability.push({ ma: 8, ...body }); response = envelope(availability[0]); status = 201 }
       else if (route === '/availability-windows') response = envelope(availability)
@@ -176,16 +212,29 @@ try {
       } else if (/^\/study-sessions\/\d+(\/(start|finish|miss|cancel))?$/.test(route)) {
         const session = sessions.find(p => p.ma === Number(route.split('/')[2]))
         if (method === 'PUT') { Object.assign(session, body); revision++ }
-        else if (method === 'POST') { session.trangThai = { start: 'InProgress', finish: 'Completed', miss: 'Missed', cancel: 'Cancelled' }[route.split('/')[3]]; revision++ }
+        else if (method === 'POST') {
+          const action = route.split('/')[3]
+          if (action === 'start' && session.trangThai !== 'InProgress') {
+            session.batDauBamGio = new Date().toISOString()
+            session.soGiayDaHoc = 0
+          }
+          if (action === 'finish' && session.batDauBamGio) {
+            session.soGiayDaHoc += Math.max(0, Math.floor((Date.now() - Date.parse(session.batDauBamGio)) / 1000))
+            session.batDauBamGio = null
+          }
+          session.trangThai = { start: 'InProgress', finish: 'Completed', miss: 'Missed', cancel: 'Cancelled' }[action]
+          revision++
+        }
         response = envelope(session)
       }
       else if (route === '/calendar') response = envelope({ muiGio: user.muiGio, suKien: sessions.filter(p => p.trangThai !== 'Cancelled').map(p => ({ ma: 'session-' + p.ma, loai: 'PhienTuHoc', maNguon: p.ma, maMonHoc: 207, tieuDe: tasks.find(t => t.ma === p.maNhiemVu).tieuDe, batDau: p.batDauDuKien, ketThuc: p.ketThucDuKien, trangThai: p.trangThai })) })
-      else if (route === '/planning/preview') response = envelope({ tokenPreview: 'signed-fixture', muiGio: user.muiGio, hetHanLuc: new Date(Date.now() + 600000).toISOString(), tongPhutCanXep: 50, tongPhutDaDat: 0, tongPhutDeXuat: 50, tongPhutChuaXep: 0, canhBao: [], phien: [{ maNhiemVu: tasks.find(t => t.tieuDe === 'Luyện truy vấn SQL').ma, tieuDe: 'Luyện truy vấn SQL', batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:50:00Z', lyDo: 'Còn 50 phút, phù hợp giờ rảnh' }] })
+      else if (route === '/planning/preview') response = envelope({ tokenPreview: 'signed-fixture', cauHinhHoc: { phienHocPhut: 25, nghiGiuaPhienPhut: 5, gioiHanHocMoiNgayPhut: 180 }, maPhienThayThe: [], muiGio: user.muiGio, hetHanLuc: new Date(Date.now() + 600000).toISOString(), tongPhutCanXep: 50, tongPhutDaDat: 0, tongPhutDeXuat: 50, tongPhutChuaXep: 0, canhBao: [], phien: [{ maNhiemVu: tasks.find(t => t.tieuDe === 'Luyện truy vấn SQL').ma, tieuDe: 'Luyện truy vấn SQL', batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:50:00Z', lyDo: 'Còn 50 phút, phù hợp giờ rảnh' }] })
       else if (route === '/planning/apply') {
         if (!applied) { revision++; applied = true; sessions = body.phien.map((p, i) => ({ ...p, ma: i + 20, maLanApDung: 1, trangThai: 'Planned', ghiChu: null })) }
         if (loseApplyResponse) { loseApplyResponse = false; await cdp('Fetch.failRequest', { requestId, errorReason: 'ConnectionReset' }); return }
         response = envelope({ maLanApDung: 1, phien: sessions })
       } else { status = 404; response = { detail: 'Unexpected fixture route ' + route }; errors.push(method + ' ' + route) }
+      if (status < 300 && method !== 'GET' && /^\/tasks/.test(route) && !route.endsWith('change-preview')) taskProgressFixture.normalize()
       await cdp('Fetch.fulfillRequest', { requestId, responseCode: status, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'ETag', value: '"ht-' + revision + '"' }], ...(response === undefined ? {} : { body: Buffer.from(JSON.stringify(response)).toString('base64') }) })
     } catch (error) { if (!String(error).includes('Invalid InterceptionId')) errors.push(String(error)) }
   })
@@ -205,7 +254,7 @@ try {
     }
     throw new Error('Wait failed: ' + expression + '\n' + await evaluate('document.body.innerText'))
   }
-  const click = async selector => { await waitFor(`!!document.querySelector(${JSON.stringify(selector)})`); await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`) }
+  const click = async selector => { await waitFor(`!!document.querySelector(${JSON.stringify(selector)}) && !document.querySelector(${JSON.stringify(selector)}).disabled`); await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`) }
   const button = async text => {
     const expression = `Array.from((Array.from(document.querySelectorAll('dialog[open]')).at(-1) || document).querySelectorAll('button')).find(b => b.getClientRects().length && b.textContent.trim() === ${JSON.stringify(text)})`
     await waitFor('!!(' + expression + ') && !(' + expression + ').disabled'); await evaluate('(' + expression + ').click()')
@@ -227,9 +276,58 @@ try {
     if (confirmLabel) await button(confirmLabel)
     await waitFor('!document.querySelector("dialog[open]")')
   }
+  async function checkEarlySession(earlySession, task) {
+    const returnUrl = await evaluate('location.href')
+    const plannedInterval = [earlySession.batDauDuKien, earlySession.ketThucDuKien]
+    const progressBefore = task.tienDo
+    await button('Bắt đầu ngay')
+    await waitFor('location.pathname === "/focus" && !!document.querySelector(".focus-note-panel")')
+    assert.equal(earlySession.trangThai, 'InProgress')
+    assert.deepEqual([earlySession.batDauDuKien, earlySession.ketThucDuKien], plannedInterval)
+    const actualStart = earlySession.batDauBamGio
+    assert(Date.parse(actualStart) < Date.parse(earlySession.batDauDuKien))
+    focusFixture.advance(2000)
+    await cdp('Page.reload')
+    await waitFor('!!document.querySelector(".focus-note-panel")')
+    assert.equal(earlySession.batDauBamGio, actualStart)
+    await button('Kết thúc')
+    await button('Lưu và kết thúc')
+    await waitFor('!!document.querySelector(".focus-completion")')
+    assert.equal(earlySession.trangThai, 'Completed')
+    assert(earlySession.soGiayDaHoc >= 2)
+    assert.equal(task.tienDo, progressBefore)
+    await cdp('Page.navigate', { url: returnUrl })
+    await waitFor('!!document.querySelector(".ht-item[data-session-id]")')
+    await button('Mở phiên')
+    await waitFor('document.querySelector("dialog").textContent.includes("Cập nhật tiến độ nhiệm vụ")')
+    await button('Cập nhật tiến độ nhiệm vụ')
+    await field('input[name=tienDo]', '50')
+    await submit()
+    assert.equal(task.tienDo, 50)
+  }
   await cdp('Page.navigate', { url: origin + '/login' })
   await field('input[name=taiKhoan]', user.email); await field('input[name=password]', 'Fixture123!'); await click('button[type=submit]')
   await waitFor('location.pathname === "/today"')
+  if (process.env.CORE_REMINDERS_ONLY === '1') {
+    await runReminderChecks({ origin, cdp, evaluate, waitFor, click, button, calls, errors, settingsFixture: planningFixture.controls })
+  } else if (process.env.CORE_PLANNING_ONLY === '1') {
+    sessions.push({ ma: 900, maNhiemVu: 4, batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:25:00Z', trangThai: 'Planned' })
+    await runPlanningUpgradeChecks({ origin, cdp, evaluate, waitFor, click, button, field, tasks, calls, errors })
+  } else if (process.env.CORE_PROGRESS_ONLY === '1') {
+    await runTaskProgressChecks({ origin, cdp, evaluate, waitFor, click, button, field, submit, tasks, calls, errors })
+  } else if (process.env.CORE_FOCUS_ONLY === '1') {
+    await runFocusChecks({ origin, cdp, evaluate, waitFor, click, button, field, submit, fixture: focusFixture, tasks, calls, errors })
+  } else if (process.env.CORE_SESSION_ONLY === '1') {
+    const task = makeTask(999, { tieuDe: 'B1 bắt đầu sớm', maHocKy: null, maMonHoc: null, tienDo: 25, trangThai: 'InProgress' })
+    tasks.push(task)
+    sessions = [{ ma: 999, maNhiemVu: task.ma, batDauDuKien: tomorrow + 'T10:00:00Z', ketThucDuKien: tomorrow + 'T10:50:00Z', trangThai: 'Planned' }]
+    await cdp('Page.navigate', { url: origin + '/tasks?tab=sessions' })
+    await waitFor('!!document.querySelector(".ht-item[data-session-id]")')
+    await button('Mở phiên')
+    await checkEarlySession(sessions[0], task)
+    assert.deepEqual(errors, [])
+    console.log('PASS session UI: early start, actual stopwatch, reload recovery, finish without automatic progress, optional progress update. ' + calls.length + ' fixture requests.')
+  } else {
   await click('.sidebar a[href="/tasks"]')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("aaa")')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
@@ -516,9 +614,12 @@ try {
   await click('.ht-sidebar-sync')
   await waitFor('!!document.querySelector(\'[data-session-id="200"]\')')
   await click('[data-session-id="200"] button'); await button('Bắt đầu học')
+  await waitFor('location.pathname === "/focus" && !!document.querySelector(".focus-note-panel")')
   assert.equal(sessions.find(p => p.ma === 200).trangThai, 'InProgress')
-  await click('[data-session-id="200"] button'); await button('Kết thúc phiên')
+  await button('Kết thúc'); await button('Lưu và kết thúc')
   assert.equal(sessions.find(p => p.ma === 200).trangThai, 'Completed')
+  await cdp('Page.navigate', { url: origin + '/tasks?tab=sessions' })
+  await waitFor('!!document.querySelector(\'[data-session-id="201"]\')')
   await click('[data-session-id="201"] button'); await button('Xác nhận đã học xong')
   assert.equal(sessions.find(p => p.ma === 201).trangThai, 'Completed')
   await click('[data-session-id="202"] button'); await button('Xác nhận bỏ lỡ')
@@ -593,8 +694,8 @@ try {
   await button('Mở phiên')
   await waitFor('!!document.querySelector("dialog:modal")')
   assert(await evaluate('document.querySelector("dialog").textContent.includes("Hủy phiên")'))
-  assert(!await evaluate('document.querySelector("dialog").textContent.includes("Bắt đầu học")'))
-  await button('Đóng')
+  assert(await evaluate('document.querySelector("dialog").textContent.includes("Bắt đầu ngay")'))
+  await checkEarlySession(sessions[0], studying)
   await button('Xem trên thời khóa biểu')
   await waitFor('document.querySelectorAll(".ht-time-column").length === 7')
   if (process.env.CORE_SCREENSHOT) {
@@ -634,10 +735,24 @@ try {
   const writes = calls.filter(call => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(call.method) && call.route !== '/auth/login')
   assert(writes.every(call => /^\/(tasks|availability-windows|calendar|planning|study-sessions)(\/|$)/.test(call.route) || /^\/courses\/\d+\/class-sessions$/.test(call.route) || /^\/class-sessions\/\d+$/.test(call.route)))
   console.log('PASS core UI: named selectors, task creation, small steps, availability, planning preview/apply, session actions and month calendar. ' + calls.length + ' fixture requests. Academic/auth mutations stayed untouched.')
+  }
+  checksPassed = true
 } finally {
-  socket?.close(); browser?.kill(); await vite.close()
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ id: 1000000, method: 'Browser.close' }))
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
+  for (const task of waiting.values()) clearTimeout(task.timer)
+  waiting.clear()
+  socket?.close(); browser?.kill()
+  sessionFixture.close()
+  vite.httpServer?.closeAllConnections()
+  let closeTimer
+  await Promise.race([vite.close(), new Promise(resolve => { closeTimer = setTimeout(resolve, 3000) })])
+  clearTimeout(closeTimer)
   const resolved = path.resolve(userDir)
   if (resolved.startsWith(path.resolve(tempPrefix)) && path.dirname(resolved) === path.resolve(os.tmpdir())) {
-    try { fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch { /* Browser may briefly retain its profile. */ }
+    try { fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch { /* Trình duyệt có thể còn giữ tạm thư mục hồ sơ. */ }
   }
+  if (checksPassed) process.exit(0)
 }
