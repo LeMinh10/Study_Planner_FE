@@ -5,14 +5,26 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createServer } from 'vite'
+import { createFocusFixture } from './focus-fixture.mjs'
+import { runFocusChecks } from './browser-focus.mjs'
+import { createTaskProgressFixture } from './task-progress-fixture.mjs'
+import { runTaskProgressChecks } from './browser-task-progress.mjs'
+import { createPlanningUpgradeFixture } from './upgrade-fixture.mjs'
+import { runPlanningUpgradeChecks } from './browser-planning-upgrade.mjs'
+import { runReminderChecks } from './browser-planning-reminders.mjs'
+import { createSessionLockFixture } from './browser-session-lock.mjs'
 
-// Browser fixture exercises the production routes and forms without writing to a user's database.
+// Dữ liệu giả lập kiểm tra các trang và biểu mẫu thật mà không ghi vào cơ sở dữ liệu người dùng.
 const browserPath = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 assert(browserPath, 'A Chromium browser is required')
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-core-ui-')
 const userDir = fs.mkdtempSync(tempPrefix)
-const vite = await createServer({ define: { 'import.meta.env.VITE_USE_MOCK_API': '"false"' }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
+const sessionFixture = createSessionLockFixture()
+// Mỗi lượt có cache riêng để các bộ kiểm thử chạy song song không ghi đè bộ tối ưu Vite.
+const vite = await createServer({ cacheDir: path.join(userDir, 'vite-cache'), plugins: [{ name: 'session-fixture-stream', configureServer(server) { server.middlewares.use(sessionFixture.middleware) } }], define: { 'import.meta.env.VITE_USE_MOCK_API': '"false"' }, server: { host: '127.0.0.1', port: 0, hmr: false, ws: false } })
 let browser, socket
+let checksPassed = false
+const waiting = new Map()
 try {
   await vite.listen()
   const origin = 'http://127.0.0.1:' + vite.httpServer.address().port
@@ -29,7 +41,6 @@ try {
   })
   socket = new WebSocket(endpoint)
   await once(socket, 'open')
-  const waiting = new Map()
   const handlers = new Map()
   let counter = 0
   socket.addEventListener('message', ({ data }) => {
@@ -45,7 +56,7 @@ try {
   function send(method, params = {}, sessionId) {
     const id = ++counter
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { waiting.delete(id); reject(new Error('Browser timeout: ' + method)) }, 20000)
+      const timer = setTimeout(() => { waiting.delete(id); reject(new Error('Browser timeout: ' + method)) }, 40000)
       waiting.set(id, { resolve, reject, timer })
       socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }))
     })
@@ -86,6 +97,9 @@ try {
   const envelope = duLieu => ({ phienBan: revision, duLieu })
   const page = danhSach => ({ danhSach, trang: 1, kichThuocTrang: 100, tongSo: danhSach.length })
   let failNextDelete = false
+  const focusFixture = createFocusFixture({ tasks, sessions: () => sessions, revision: () => revision, bump: () => revision++, zone: user.muiGio })
+  const taskProgressFixture = createTaskProgressFixture({ tasks, makeTask, nextId: () => nextTask++, envelope, bump: () => revision++ })
+  const planningFixture = createPlanningUpgradeFixture({ envelope, bump: () => revision++, tasks, windows: () => availability, addWindows: rows => availability.push(...rows), sessions: () => sessions, addSessions: rows => sessions.push(...rows) })
   handlers.set('Page.javascriptDialogOpening', () => {
     errors.push('Unexpected native browser dialog')
     void cdp('Page.handleJavaScriptDialog', { accept: false })
@@ -95,12 +109,29 @@ try {
     try {
       const url = new URL(request.url)
       const route = url.pathname.replace('/api/v1', '')
+      // Cho luồng phiên đăng nhập đi qua HTTP streaming thật của fixture, không giả thành JSON.
+      if (route === '/users/me/session-events') { await cdp('Fetch.continueRequest', { requestId }); return }
       const body = request.postData ? JSON.parse(request.postData) : undefined
       const method = request.method
       calls.push({ route, query: url.searchParams.toString(), method, body, headers: request.headers })
       let status = 200, response
-      if (route === '/auth/login') response = { tokenTruyCap: token, loaiToken: 'Bearer', hetHanLuc: new Date(Date.now() + 3600000).toISOString(), nguoiDung: user }
+      const focusResponse = focusFixture.handle(url, method, body)
+      const progressResponse = taskProgressFixture.handle(route, method, body)
+      const planningResponse = planningFixture.handle(url, method, body, request.headers)
+      if (planningResponse) { status = planningResponse.status; response = planningResponse.response }
+      else if (progressResponse) { status = progressResponse.status; response = progressResponse.response }
+      else if (focusResponse) { status = focusResponse.status; response = focusResponse.response }
+      else if (process.env.CORE_FOCUS_ONLY && method !== 'GET' && /^\/tasks\/\d+$/.test(route) && focusFixture.controls.failNextTaskUpdate) {
+        focusFixture.controls.failNextTaskUpdate = false; status = 503; response = { detail: 'Chưa lưu được nhiệm vụ. Hãy thử lại.' }
+      } else if (process.env.CORE_FOCUS_ONLY && method !== 'GET' && /^\/tasks\/\d+$/.test(route) && focusFixture.controls.conflictNextTaskUpdate) {
+        focusFixture.controls.conflictNextTaskUpdate = false; revision++; status = 409; response = { code: 'DATA_VERSION_CONFLICT', detail: 'Dữ liệu đã đổi. Hãy tải dữ liệu mới.' }
+      } else if (process.env.CORE_FOCUS_ONLY && method !== 'GET' && Object.entries(request.headers).some(([key, value]) => key.toLowerCase() === 'if-match' && value !== '\"ht-' + revision + '\"')) {
+        status = 409; response = { code: 'DATA_VERSION_CONFLICT', detail: 'Phiên bản chưa được làm mới sau khi sửa nhiệm vụ.' }
+      }
+      else if (route === '/auth/login') response = { tokenTruyCap: token, loaiToken: 'Bearer', hetHanLuc: new Date(Date.now() + 3600000).toISOString(), nguoiDung: user }
       else if (route === '/users/me') response = user
+      else if (route === '/priority-rules/active') response = { ma: 0, ten: 'Mặc định', phienBan: 0, dangSuDung: true, cauHinh: { phienBanSchema: 1, tieuChi: ['Deadline', 'Importance', 'InProgress'] }, ngayTao: null }
+      else if (route === '/notifications' && method === 'GET') response = { danhSach: [], trang: Number(url.searchParams.get('trang') ?? 1), kichThuocTrang: 20, tongSo: 0, tongChuaDoc: 0, muiGio: user.muiGio, docDenLuc: new Date().toISOString() }
       else if (route === '/semesters') response = page([{ ma: 103, ten: 'Học kỳ thực hành', ngayBatDau: '2026-01-01', ngayKetThuc: '2027-12-31' }])
       else if (route === '/semesters/103/courses') response = page([{ ma: 207, maHocKy: 103, ten: 'Cơ sở dữ liệu', kyHieu: 'CSDL', soTinChi: 3, giangVien: null, mauSac: '#306BB5' }])
       else if (route === '/tasks' && method === 'GET') {
@@ -145,7 +176,12 @@ try {
             for (let i = tasks.length - 1; i >= 0; i--) if (ids.has(tasks[i].ma)) tasks.splice(i, 1)
             revision++; status = 204
           }
-        } else { if (method === 'PUT') { remember({ ...task, ...body }, 'Updated', JSON.stringify(task)); Object.assign(task, body); revision++ }; response = envelope(task) }
+        } else { if (method === 'PUT') { remember({ ...task, ...body }, 'Updated', JSON.stringify(task)); Object.assign(task, body);
+          if (process.env.CORE_FOCUS_ONLY && body.checklist?.length) {
+            task.tienDo = Math.round(body.checklist.filter(item => item.daXong).length / body.checklist.length * 100);
+            task.trangThai = task.tienDo === 100 ? 'Completed' : task.tienDo > 0 ? 'InProgress' : 'NotStarted'
+          }
+          revision++ }; response = envelope(task) }
       } else if (route === '/task-history') response = envelope(page(histories.filter(h => h.maNhiemVu === Number(url.searchParams.get('maNhiemVu')))))
       else if (route === '/availability-windows' && method === 'POST') { revision++; availability.push({ ma: 8, ...body }); response = envelope(availability[0]); status = 201 }
       else if (route === '/availability-windows') response = envelope(availability)
@@ -166,20 +202,39 @@ try {
         else response = envelope(classes[0])
       } else if (route === '/study-sessions') {
         if (method === 'POST') { revision++; const session = { ma: 100 + sessions.length, ...body, trangThai: 'Planned' }; sessions.push(session); response = envelope(session); status = 201 }
-        else response = envelope(sessions.filter(p => !url.searchParams.has('maNhiemVu') || p.maNhiemVu === Number(url.searchParams.get('maNhiemVu'))))
+        else response = envelope(sessions.filter(p =>
+          (!url.searchParams.has('maNhiemVu') || p.maNhiemVu === Number(url.searchParams.get('maNhiemVu'))) &&
+          (!url.searchParams.has('maLanApDung') || p.maLanApDung === Number(url.searchParams.get('maLanApDung')))
+        ).map(p => {
+          const task = tasks.find(t => t.ma === p.maNhiemVu)
+          return { ...p, tieuDeNhiemVu: task.tieuDe, maHocKy: task.maHocKy, maMonHoc: task.maMonHoc }
+        }))
       } else if (/^\/study-sessions\/\d+(\/(start|finish|miss|cancel))?$/.test(route)) {
         const session = sessions.find(p => p.ma === Number(route.split('/')[2]))
         if (method === 'PUT') { Object.assign(session, body); revision++ }
-        else if (method === 'POST') { session.trangThai = { start: 'InProgress', finish: 'Completed', miss: 'Missed', cancel: 'Cancelled' }[route.split('/')[3]]; revision++ }
+        else if (method === 'POST') {
+          const action = route.split('/')[3]
+          if (action === 'start' && session.trangThai !== 'InProgress') {
+            session.batDauBamGio = new Date().toISOString()
+            session.soGiayDaHoc = 0
+          }
+          if (action === 'finish' && session.batDauBamGio) {
+            session.soGiayDaHoc += Math.max(0, Math.floor((Date.now() - Date.parse(session.batDauBamGio)) / 1000))
+            session.batDauBamGio = null
+          }
+          session.trangThai = { start: 'InProgress', finish: 'Completed', miss: 'Missed', cancel: 'Cancelled' }[action]
+          revision++
+        }
         response = envelope(session)
       }
       else if (route === '/calendar') response = envelope({ muiGio: user.muiGio, suKien: sessions.filter(p => p.trangThai !== 'Cancelled').map(p => ({ ma: 'session-' + p.ma, loai: 'PhienTuHoc', maNguon: p.ma, maMonHoc: 207, tieuDe: tasks.find(t => t.ma === p.maNhiemVu).tieuDe, batDau: p.batDauDuKien, ketThuc: p.ketThucDuKien, trangThai: p.trangThai })) })
-      else if (route === '/planning/preview') response = envelope({ tokenPreview: 'signed-fixture', muiGio: user.muiGio, hetHanLuc: new Date(Date.now() + 600000).toISOString(), tongPhutCanXep: 50, tongPhutDaDat: 0, tongPhutDeXuat: 50, tongPhutChuaXep: 0, canhBao: [], phien: [{ maNhiemVu: tasks.find(t => t.tieuDe === 'Luyện truy vấn SQL').ma, tieuDe: 'Luyện truy vấn SQL', batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:50:00Z', lyDo: 'Còn 50 phút, phù hợp giờ rảnh' }] })
+      else if (route === '/planning/preview') response = envelope({ tokenPreview: 'signed-fixture', cauHinhHoc: { phienHocPhut: 25, nghiGiuaPhienPhut: 5, gioiHanHocMoiNgayPhut: 180 }, maPhienThayThe: [], muiGio: user.muiGio, hetHanLuc: new Date(Date.now() + 600000).toISOString(), tongPhutCanXep: 50, tongPhutDaDat: 0, tongPhutDeXuat: 50, tongPhutChuaXep: 0, canhBao: [], phien: [{ maNhiemVu: tasks.find(t => t.tieuDe === 'Luyện truy vấn SQL').ma, tieuDe: 'Luyện truy vấn SQL', batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:50:00Z', lyDo: 'Còn 50 phút, phù hợp giờ rảnh' }] })
       else if (route === '/planning/apply') {
-        if (!applied) { revision++; applied = true; sessions = body.phien.map((p, i) => ({ ...p, ma: i + 20, trangThai: 'Planned', ghiChu: null })) }
+        if (!applied) { revision++; applied = true; sessions = body.phien.map((p, i) => ({ ...p, ma: i + 20, maLanApDung: 1, trangThai: 'Planned', ghiChu: null })) }
         if (loseApplyResponse) { loseApplyResponse = false; await cdp('Fetch.failRequest', { requestId, errorReason: 'ConnectionReset' }); return }
-        response = envelope({ phien: sessions })
+        response = envelope({ maLanApDung: 1, phien: sessions })
       } else { status = 404; response = { detail: 'Unexpected fixture route ' + route }; errors.push(method + ' ' + route) }
+      if (status < 300 && method !== 'GET' && /^\/tasks/.test(route) && !route.endsWith('change-preview')) taskProgressFixture.normalize()
       await cdp('Fetch.fulfillRequest', { requestId, responseCode: status, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'ETag', value: '"ht-' + revision + '"' }], ...(response === undefined ? {} : { body: Buffer.from(JSON.stringify(response)).toString('base64') }) })
     } catch (error) { if (!String(error).includes('Invalid InterceptionId')) errors.push(String(error)) }
   })
@@ -199,11 +254,15 @@ try {
     }
     throw new Error('Wait failed: ' + expression + '\n' + await evaluate('document.body.innerText'))
   }
-  const click = async selector => { await waitFor(`!!document.querySelector(${JSON.stringify(selector)})`); await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`) }
+  const click = async selector => { await waitFor(`!!document.querySelector(${JSON.stringify(selector)}) && !document.querySelector(${JSON.stringify(selector)}).disabled`); await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`) }
   const button = async text => {
-    const expression = `Array.from((Array.from(document.querySelectorAll('dialog[open]')).at(-1) || document).querySelectorAll('button')).find(b => b.textContent.trim() === ${JSON.stringify(text)})`
+    const expression = `Array.from((Array.from(document.querySelectorAll('dialog[open]')).at(-1) || document).querySelectorAll('button')).find(b => b.getClientRects().length && b.textContent.trim() === ${JSON.stringify(text)})`
     await waitFor('!!(' + expression + ') && !(' + expression + ').disabled'); await evaluate('(' + expression + ').click()')
     await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+  }
+  async function detailAction(text) {
+    await click('.ht-detail-header-actions .ht-row-actions-trigger:not(:disabled)')
+    await button(text)
   }
   async function field(selector, value) {
     await evaluate(`(() => { const field = (document.querySelector('dialog[open]') || document).querySelector(${JSON.stringify(selector)}); if (field?.closest('.ht-filter-panel')?.hidden) document.querySelector('.ht-filter-toggle').click(); })()`)
@@ -217,9 +276,58 @@ try {
     if (confirmLabel) await button(confirmLabel)
     await waitFor('!document.querySelector("dialog[open]")')
   }
+  async function checkEarlySession(earlySession, task) {
+    const returnUrl = await evaluate('location.href')
+    const plannedInterval = [earlySession.batDauDuKien, earlySession.ketThucDuKien]
+    const progressBefore = task.tienDo
+    await button('Bắt đầu ngay')
+    await waitFor('location.pathname === "/focus" && !!document.querySelector(".focus-note-panel")')
+    assert.equal(earlySession.trangThai, 'InProgress')
+    assert.deepEqual([earlySession.batDauDuKien, earlySession.ketThucDuKien], plannedInterval)
+    const actualStart = earlySession.batDauBamGio
+    assert(Date.parse(actualStart) < Date.parse(earlySession.batDauDuKien))
+    focusFixture.advance(2000)
+    await cdp('Page.reload')
+    await waitFor('!!document.querySelector(".focus-note-panel")')
+    assert.equal(earlySession.batDauBamGio, actualStart)
+    await button('Kết thúc')
+    await button('Lưu và kết thúc')
+    await waitFor('!!document.querySelector(".focus-completion")')
+    assert.equal(earlySession.trangThai, 'Completed')
+    assert(earlySession.soGiayDaHoc >= 2)
+    assert.equal(task.tienDo, progressBefore)
+    await cdp('Page.navigate', { url: returnUrl })
+    await waitFor('!!document.querySelector(".ht-item[data-session-id]")')
+    await button('Mở phiên')
+    await waitFor('document.querySelector("dialog").textContent.includes("Cập nhật tiến độ nhiệm vụ")')
+    await button('Cập nhật tiến độ nhiệm vụ')
+    await field('input[name=tienDo]', '50')
+    await submit()
+    assert.equal(task.tienDo, 50)
+  }
   await cdp('Page.navigate', { url: origin + '/login' })
   await field('input[name=taiKhoan]', user.email); await field('input[name=password]', 'Fixture123!'); await click('button[type=submit]')
   await waitFor('location.pathname === "/today"')
+  if (process.env.CORE_REMINDERS_ONLY === '1') {
+    await runReminderChecks({ origin, cdp, evaluate, waitFor, click, button, calls, errors, settingsFixture: planningFixture.controls })
+  } else if (process.env.CORE_PLANNING_ONLY === '1') {
+    sessions.push({ ma: 900, maNhiemVu: 4, batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:25:00Z', trangThai: 'Planned' })
+    await runPlanningUpgradeChecks({ origin, cdp, evaluate, waitFor, click, button, field, tasks, calls, errors })
+  } else if (process.env.CORE_PROGRESS_ONLY === '1') {
+    await runTaskProgressChecks({ origin, cdp, evaluate, waitFor, click, button, field, submit, tasks, calls, errors })
+  } else if (process.env.CORE_FOCUS_ONLY === '1') {
+    await runFocusChecks({ origin, cdp, evaluate, waitFor, click, button, field, submit, fixture: focusFixture, tasks, calls, errors })
+  } else if (process.env.CORE_SESSION_ONLY === '1') {
+    const task = makeTask(999, { tieuDe: 'B1 bắt đầu sớm', maHocKy: null, maMonHoc: null, tienDo: 25, trangThai: 'InProgress' })
+    tasks.push(task)
+    sessions = [{ ma: 999, maNhiemVu: task.ma, batDauDuKien: tomorrow + 'T10:00:00Z', ketThucDuKien: tomorrow + 'T10:50:00Z', trangThai: 'Planned' }]
+    await cdp('Page.navigate', { url: origin + '/tasks?tab=sessions' })
+    await waitFor('!!document.querySelector(".ht-item[data-session-id]")')
+    await button('Mở phiên')
+    await checkEarlySession(sessions[0], task)
+    assert.deepEqual(errors, [])
+    console.log('PASS session UI: early start, actual stopwatch, reload recovery, finish without automatic progress, optional progress update. ' + calls.length + ' fixture requests.')
+  } else {
   await click('.sidebar a[href="/tasks"]')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("aaa")')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
@@ -237,25 +345,26 @@ try {
   await evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`)
   await waitFor(`!!document.querySelector(${JSON.stringify(unchecked)})`)
   await evaluate(`(() => { const checkbox = document.querySelector(${JSON.stringify(unchecked)}); checkbox.click(); checkbox.click() })()`)
-  await waitFor('document.querySelector(".ht-success-toast")?.textContent.includes("Đã hoàn thành “vbbbb”.")')
+  await waitFor('document.querySelector(".ht-success-toast p")?.textContent === "Đã hoàn thành “vbbbb”"')
   assert(await evaluate(syncIsSpinning))
   await button("Đã hoàn thành")
   await waitFor(`document.querySelector(${JSON.stringify(checked)})?.checked`)
   assert(await evaluate(`!!document.querySelector(${JSON.stringify(checked)})?.closest('.ht-task-completed')`))
   assert.equal(completionWrites(), 1)
   await click(checked)
-  await waitFor('document.querySelector(".ht-success-toast")?.textContent.includes("Đã mở lại “vbbbb”.")')
+  await waitFor('document.querySelector(".ht-success-toast p")?.textContent === "Đã mở lại “vbbbb”"')
   await button("Tất cả nhiệm vụ")
   await waitFor(`document.querySelector(${JSON.stringify(unchecked)})?.checked === false`)
   assert(!await evaluate(`document.querySelector(${JSON.stringify(unchecked)})?.closest('.ht-task-completed')`))
   await waitFor('document.querySelector(".ht-filter-toggle")?.getAttribute("aria-expanded") === "false"')
   assert(await evaluate('document.querySelector(".ht-filter-panel").hidden'))
-  assert(await evaluate('document.querySelector(".ht-task-search input").getBoundingClientRect().height > 0'))
+  assert(await evaluate('document.querySelector(".ht-task-search input").getBoundingClientRect().height === 0'))
   const beforeFilterToggle = await evaluate('location.href')
   const beforeFilterTop = await evaluate('document.querySelector(".ht-task-list").getBoundingClientRect().top')
   const readsBeforeFilterToggle = calls.filter(c => c.route === '/tasks' && c.method === 'GET').length
   await button('Mở bộ lọc')
   await waitFor('!document.querySelector(".ht-filter-panel").hidden')
+  assert(await evaluate('document.querySelector(".ht-task-search input").getBoundingClientRect().height > 0'))
   assert(await evaluate('document.querySelector(".ht-task-list").getBoundingClientRect().top') > beforeFilterTop + 100)
   await button('Thu gọn bộ lọc')
   await waitFor('document.querySelector(".ht-filter-panel").hidden')
@@ -287,6 +396,7 @@ try {
       nav.getBoundingClientRect().right <= content.left
   })()`), 'Learning navigation must be vertical and positioned to the left of content')
   assert(await evaluate('document.querySelector(".ht-workspace").getBoundingClientRect().width >= document.querySelector("#main-content").clientWidth - 2'))
+  await button('Mở bộ lọc')
   await field('select[aria-label="Lọc theo học kỳ"]', '103')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("Ôn cơ sở dữ liệu") && !document.querySelector(".ht-task-list")?.textContent.includes("aaa")')
   await field('select[aria-label="Lọc mức ưu tiên"]', 'High')
@@ -317,14 +427,14 @@ try {
   await button('Nhiệm vụ'); await waitFor('!!document.querySelector(".ht-task-list")')
   await click('input[aria-label="Hoàn thành vbbbb"]')
   await waitFor('!document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
-  await field('select:has(option[value="completed"])', 'completed')
+  await button('Đã hoàn thành')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
   await click(checked)
   await waitFor('!document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
   await button('Xóa bộ lọc')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
   await field('.ht-quick-add input', 'Ghi nhanh việc cá nhân')
-  await button('+ Thêm nhanh')
+  await button('Thêm nhanh')
   await waitFor('document.querySelector(".ht-detail-panel h2")?.textContent === "Ghi nhanh việc cá nhân"')
   const quickTask = tasks.find(task => task.tieuDe === 'Ghi nhanh việc cá nhân')
   await waitFor('!!document.querySelector(".ht-detail-divider")')
@@ -369,7 +479,8 @@ try {
   }
   assert.equal(quickTask.maHocKy, null)
   assert.equal(quickTask.maMonHoc, null)
-  await button('Sao chép liên kết')
+  await evaluate(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Fixture clipboard unavailable') } } })`)
+  await detailAction('Sao chép liên kết')
   await waitFor(`!!document.querySelector('input[aria-label="Liên kết nhiệm vụ"]')`)
   const deepLink = await evaluate(`document.querySelector('input[aria-label="Liên kết nhiệm vụ"]').value`)
   assert(deepLink.endsWith('/tasks?task=' + quickTask.ma))
@@ -379,9 +490,12 @@ try {
   await field('input[name=tieuDe]', 'Việc cá nhân đã sửa')
   await submit()
   await waitFor('document.querySelector(".ht-detail-panel h2")?.textContent === "Việc cá nhân đã sửa"')
-  await button('Xem lịch sử thay đổi')
-  await waitFor('document.querySelector(".ht-history")?.textContent.includes("Trước thay đổi")')
-  await button('Chỉnh sửa')
+  await detailAction('Hoạt động nhiệm vụ')
+  await waitFor('document.querySelector(".ht-task-history[open] .ht-history")?.textContent.includes("Đã đổi tên")')
+  assert.equal(await evaluate('document.querySelectorAll(".ht-task-history pre").length'), 0)
+  await button('Đóng')
+  await waitFor('!document.querySelector(".ht-task-history") && !!document.querySelector(".ht-detail-panel")')
+  await detailAction('Chỉnh sửa')
   await field('input[name=tieuDe]', 'Nội dung từ biểu mẫu cũ')
   const beforeStaleWrite = calls.filter(call => call.method === 'PUT' && call.route.startsWith('/tasks/')).length
   revision++
@@ -391,7 +505,7 @@ try {
   await button('Đóng'); await click('.ht-sidebar-sync')
   await waitFor('document.querySelector(".ht-detail-panel h2")?.textContent === "Việc cá nhân đã sửa"')
   const deletesBefore = calls.filter(call => call.method === 'DELETE').length
-  await button('Xóa nhiệm vụ')
+  await detailAction('Xóa nhiệm vụ')
   await waitFor('!!document.querySelector(".ht-confirm[open]")')
   assert(await evaluate('document.querySelector(".ht-confirm").textContent.includes("Việc cá nhân đã sửa")'))
   assert.equal(await evaluate('document.activeElement.textContent.trim()'), 'Hủy')
@@ -403,13 +517,13 @@ try {
   await waitFor('!document.querySelector(".ht-confirm")')
   assert(tasks.includes(quickTask))
   assert.equal(calls.filter(call => call.method === 'DELETE').length, deletesBefore)
-  await button('Xóa nhiệm vụ')
+  await detailAction('Xóa nhiệm vụ')
   await waitFor('!!document.querySelector(".ht-confirm[open]")')
   await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await waitFor('!document.querySelector(".ht-confirm")')
   assert.equal(calls.filter(call => call.method === 'DELETE').length, deletesBefore)
-  await button('Xóa nhiệm vụ')
+  await detailAction('Xóa nhiệm vụ')
   await waitFor('!!document.querySelector(".ht-confirm[open]")')
   await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
   assert(await evaluate('(() => { const b = document.querySelector(".ht-confirm").getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth && b.bottom <= innerHeight; })()'))
@@ -435,7 +549,15 @@ try {
   await submit()
   assert(calls.some(call => call.route === '/tasks' && call.method === 'POST' && call.body.tieuDe === 'Làm bài tập tuần' && call.body.maMonHoc === 207 && call.body.maHocKy === 103))
   await waitFor('document.querySelector(".ht-detail-panel h2")?.textContent === "Làm bài tập tuần"')
-  await button('+ Thêm bước nhỏ')
+  await click('button[aria-label="Thao tác với Làm bài tập tuần"]')
+  await click('.ht-row-actions-panel:popover-open button:first-of-type')
+  await field('input[name=tenBuocNho]', 'Bước nhanh từ chi tiết')
+  await evaluate('document.querySelector(".ht-inline-child").requestSubmit()')
+  await waitFor('document.querySelector(".ht-detail-panel")?.textContent.includes("Bước nhanh từ chi tiết")')
+  const quickStep = calls.findLast(call => call.route.endsWith('/children')).body.danhSach[0]
+  assert.equal(quickStep.tieuDe, 'Bước nhanh từ chi tiết')
+  assert.equal(new Intl.DateTimeFormat('en-GB', { timeZone: user.muiGio, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(quickStep.hanHoanThanh)), '23:59')
+  await button('Thêm nhiều bước hoặc tùy chọn')
   await field('input[name=tieuDe]', 'Luyện truy vấn SQL')
   await field('input[name=thoiLuongDuKienPhut]', '50')
   await field('textarea[name=nhieuTieuDe]', 'Đọc tài liệu SQL\nKiểm thử truy vấn')
@@ -446,40 +568,43 @@ try {
     const screenshot = await cdp('Page.captureScreenshot', { format: 'png' })
     fs.writeFileSync(process.env.CORE_SCREENSHOT.replace('.png', '-detail.png'), Buffer.from(screenshot.data, 'base64'))
   }
-  await waitFor('!!document.querySelector(' + JSON.stringify('button[aria-label="Xem các bước nhỏ"]') + ')')
-  await click('button[aria-label="Xem các bước nhỏ"]')
-  await waitFor('document.querySelector(".ht-task-list").textContent.includes("Luyện truy vấn SQL")')
+  await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("Luyện truy vấn SQL")')
+  assert(await evaluate(`!!document.querySelector('button[aria-label="Thu gọn các bước nhỏ"]')`))
   await evaluate('Array.from(document.querySelectorAll(".ht-task-name")).find(button => button.querySelector("strong").textContent === "Luyện truy vấn SQL").click()')
   await waitFor('document.querySelector(".ht-detail-panel h2")?.textContent === "Luyện truy vấn SQL"')
-  await button('Cập nhật tiến độ')
-  await field('input[name=tienDo]', '25'); await submit()
+  await click('button[aria-label="Thao tác với Luyện truy vấn SQL"]')
+  await waitFor('!!document.querySelector(".ht-row-actions-panel:popover-open")')
+  await evaluate('Array.from(document.querySelectorAll(".ht-row-actions-panel:popover-open button")).find(b => b.textContent === "Cập nhật tiến độ").click()')
+  await field('input[name=tienDo]', '25')
+  assert.equal(await evaluate(`document.querySelector('dialog input[type="range"]').value`), '25')
+  await submit()
   await waitFor('document.querySelector(".ht-detail-panel")?.textContent.includes("25%")')
-  await button('Chuyển vào nhiệm vụ lớn / tách riêng')
+  await detailAction('Chuyển hoặc tách nhiệm vụ')
   await field('select[name=nhomNhiemVu]', 'tach-rieng'); await submit()
   const studying = tasks.find(task => task.tieuDe === 'Luyện truy vấn SQL')
   assert.equal(studying.maNhiemVuCha, null)
-  await button('Đổi học kỳ hoặc môn')
+  await detailAction('Đổi học kỳ hoặc môn')
   await field('select[name=maHocKy]', ''); await submit()
   assert.equal(studying.maHocKy, null)
   assert.equal(studying.maMonHoc, null)
-  await button('Chuyển vào nhiệm vụ lớn / tách riêng')
+  await detailAction('Chuyển vào nhiệm vụ lớn')
   await field('select[name=nhomNhiemVu]', '1')
   await waitFor('!!document.querySelector(' + JSON.stringify('select[name="maNhiemVuCha"] option[value="2"]') + ')')
   await field('select[name=maNhiemVuCha]', '2'); await submit()
   assert.equal(studying.maNhiemVuCha, 2)
-  await button('Chuyển vào nhiệm vụ lớn / tách riêng')
+  await detailAction('Chuyển hoặc tách nhiệm vụ')
   await field('select[name=nhomNhiemVu]', 'tach-rieng'); await submit()
   assert.equal(studying.maNhiemVuCha, null)
-  await button('Xem phiên học của nhiệm vụ')
+  await detailAction('Xem phiên tự học')
   await waitFor('document.body.innerText.includes("Các phiên của “Luyện truy vấn SQL”")')
   await button('+ Đặt phiên tự học')
   await field('input[name=batDau]', tomorrow + 'T20:00')
   await field('input[name=ketThuc]', tomorrow + 'T20:50'); await submit()
   assert.equal(sessions[0].maNhiemVu, studying.ma)
-  await button('Xem và cập nhật'); await button('Dời phiên')
+  await button('Mở phiên'); await button('Dời phiên')
   await field('input[name=batDau]', tomorrow + 'T21:00')
   await field('input[name=ketThuc]', tomorrow + 'T21:50'); await submit()
-  await button('Xem và cập nhật'); await button('Hủy phiên')
+  await button('Mở phiên'); await button('Hủy phiên')
   assert.equal(sessions[0].trangThai, 'Cancelled')
   const moment = Date.now()
   for (const [ma, start, end] of [[200, -10, 10], [201, -60, -10], [202, -120, -90]]) {
@@ -489,9 +614,12 @@ try {
   await click('.ht-sidebar-sync')
   await waitFor('!!document.querySelector(\'[data-session-id="200"]\')')
   await click('[data-session-id="200"] button'); await button('Bắt đầu học')
+  await waitFor('location.pathname === "/focus" && !!document.querySelector(".focus-note-panel")')
   assert.equal(sessions.find(p => p.ma === 200).trangThai, 'InProgress')
-  await click('[data-session-id="200"] button'); await button('Kết thúc phiên')
+  await button('Kết thúc'); await button('Lưu và kết thúc')
   assert.equal(sessions.find(p => p.ma === 200).trangThai, 'Completed')
+  await cdp('Page.navigate', { url: origin + '/tasks?tab=sessions' })
+  await waitFor('!!document.querySelector(\'[data-session-id="201"]\')')
   await click('[data-session-id="201"] button'); await button('Xác nhận đã học xong')
   assert.equal(sessions.find(p => p.ma === 201).trangThai, 'Completed')
   await click('[data-session-id="202"] button'); await button('Xác nhận bỏ lỡ')
@@ -552,7 +680,7 @@ try {
   await cdp('Page.reload')
   await waitFor('document.body.innerText.includes("Có yêu cầu áp dụng chưa xác định kết quả")')
   await button('Thử lại cùng yêu cầu áp dụng')
-  await waitFor('document.body.innerText.includes("Đã lưu các phiên tự học")')
+  await waitFor('new URLSearchParams(location.search).get("studyBatch") === "1" && document.querySelector(".ht-success-toast")?.textContent.includes("Đã lưu 1 phiên tự học")')
   const applyCall = calls.find(call => call.route === '/planning/apply')
   assert(applyCall.headers['Idempotency-Key'] || applyCall.headers['idempotency-key'])
   assert.equal(applyCall.body.tokenPreview, 'signed-fixture')
@@ -560,17 +688,15 @@ try {
   assert.equal(retries.length, 2)
   assert.deepEqual(retries[0].body, retries[1].body)
   assert.equal(retries[0].headers['Idempotency-Key'], retries[1].headers['Idempotency-Key'])
-  await button('Xóa bộ lọc')
-  await button('Phiên tự học')
-  await waitFor('document.body.innerText.includes("Luyện truy vấn SQL")').catch(error => {
+  await waitFor('document.querySelector(".ht-item[data-session-id]")?.textContent.includes("Luyện truy vấn SQL")').catch(error => {
     throw new Error(error.message + '\nFixture state ' + JSON.stringify({ sessions, task: tasks.find(t => t.tieuDe === 'Luyện truy vấn SQL'), lastReads: calls.filter(c => c.method === 'GET').slice(-10).map(c => ({ route: c.route, query: c.query })) }))
   })
-  await button('Xem và cập nhật')
+  await button('Mở phiên')
   await waitFor('!!document.querySelector("dialog:modal")')
   assert(await evaluate('document.querySelector("dialog").textContent.includes("Hủy phiên")'))
-  assert(!await evaluate('document.querySelector("dialog").textContent.includes("Bắt đầu học")'))
-  await button('Đóng')
-  await button('Thời khóa biểu')
+  assert(await evaluate('document.querySelector("dialog").textContent.includes("Bắt đầu ngay")'))
+  await checkEarlySession(sessions[0], studying)
+  await button('Xem trên thời khóa biểu')
   await waitFor('document.querySelectorAll(".ht-time-column").length === 7')
   if (process.env.CORE_SCREENSHOT) {
     await evaluate('document.querySelector(".ht-time-grid-wrap").scrollTop = 18 * 60')
@@ -609,10 +735,24 @@ try {
   const writes = calls.filter(call => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(call.method) && call.route !== '/auth/login')
   assert(writes.every(call => /^\/(tasks|availability-windows|calendar|planning|study-sessions)(\/|$)/.test(call.route) || /^\/courses\/\d+\/class-sessions$/.test(call.route) || /^\/class-sessions\/\d+$/.test(call.route)))
   console.log('PASS core UI: named selectors, task creation, small steps, availability, planning preview/apply, session actions and month calendar. ' + calls.length + ' fixture requests. Academic/auth mutations stayed untouched.')
+  }
+  checksPassed = true
 } finally {
-  socket?.close(); browser?.kill(); await vite.close()
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ id: 1000000, method: 'Browser.close' }))
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
+  for (const task of waiting.values()) clearTimeout(task.timer)
+  waiting.clear()
+  socket?.close(); browser?.kill()
+  sessionFixture.close()
+  vite.httpServer?.closeAllConnections()
+  let closeTimer
+  await Promise.race([vite.close(), new Promise(resolve => { closeTimer = setTimeout(resolve, 3000) })])
+  clearTimeout(closeTimer)
   const resolved = path.resolve(userDir)
   if (resolved.startsWith(path.resolve(tempPrefix)) && path.dirname(resolved) === path.resolve(os.tmpdir())) {
-    try { fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch { /* Browser may briefly retain its profile. */ }
+    try { fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch { /* Trình duyệt có thể còn giữ tạm thư mục hồ sơ. */ }
   }
+  if (checksPassed) process.exit(0)
 }

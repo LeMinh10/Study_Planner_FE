@@ -9,7 +9,8 @@ const loiDeHieu: Record<string, string> = {
   TASK_TREE_LIMIT: 'Một nhiệm vụ có thể chia tối đa 10 cấp và tổng cộng 1.000 bước. Hãy tách bớt thành nhiệm vụ riêng.',
   TASK_NOT_LEAF: 'Hãy chọn một việc chưa được chia nhỏ để đặt phiên tự học.',
   TASK_ROOT_REQUIRED: 'Hãy mở nhiệm vụ lớn nhất để đổi học kỳ hoặc môn cho cả nhóm việc.',
-  TASK_PROGRESS_IS_DERIVED: 'Tiến độ nhiệm vụ lớn được tính từ các bước nhỏ. Hãy cập nhật tiến độ từng bước.',
+  TASK_PROGRESS_IS_DERIVED: 'Tiến độ được tính từ các bước nhỏ hoặc checklist. Hãy cập nhật các phần việc trong chi tiết nhiệm vụ.',
+  TASK_CHECKLIST_REQUIRES_LEAF: 'Nhiệm vụ đã có các bước nhỏ. Hãy thêm checklist vào một bước nhỏ thay vì nhiệm vụ lớn.',
   TASK_ESTIMATE_IS_DERIVED: 'Hãy nhập thời gian ước lượng cho từng bước nhỏ.',
   TASK_SCOPE_CONFLICT: 'Nhiệm vụ lớn và các bước nhỏ cần thuộc cùng học kỳ và môn học.',
   TASK_DEADLINE_CONFLICT: 'Hạn của bước nhỏ phải cùng lúc hoặc sớm hơn hạn của nhiệm vụ lớn.',
@@ -61,21 +62,20 @@ export async function goi<T>(token: string, path: string, options: { method?: st
 export async function thayDoi<T>(token: string, path: string, method: string, body: object | undefined, version: number, preview?: { path: string; body: object }, hoiXacNhan: typeof xacNhan = xacNhan) {
   if (preview) {
     const check = await goi<AnhHuong>(token, preview.path, { method: 'POST', body: preview.body })
+    // Kết quả xem trước chỉ có giá trị trên đúng phiên bản người dùng đang sửa; không tự xác nhận dữ liệu mới.
     if (check.phienBan !== version) throw new LoiHocTap('Dữ liệu đã đổi. Đóng biểu mẫu và tải lại trước khi sửa.', 409, 'DATA_VERSION_CONFLICT')
     if (check.duLieu.canKetThucPhienDangHoc) throw new LoiHocTap('Hãy kết thúc phiên đang học trước khi thay đổi lịch liên quan.')
-    const count = new Set([...(check.duLieu.maPhienBiHuy ?? []), ...(check.duLieu.phienBiAnhHuong ?? [])]).size
-    if (count && !await hoiXacNhan({ tieuDe: 'Thay đổi lịch tự học?', noiDung: `Thay đổi này sẽ hủy ${count} phiên tự học đã lên lịch. Bạn muốn tiếp tục?`, nhanXacNhan: 'Hủy phiên và tiếp tục', nguyHiem: true })) return null
-    body = body ? { ...body, huyPhienLienQuan: count > 0 } : undefined
-    if (method === 'DELETE' && count) path += '?huyPhienLienQuan=true'
+    const flags = await xacNhanAnhHuong(check.duLieu, hoiXacNhan)
+    if (flags === null) return null
+    body = body ? { ...body, ...flags } : undefined
+    if (method === 'DELETE' && flags.huyPhienLienQuan) path += '?huyPhienLienQuan=true'
   }
   try { return await goi<T>(token, path, { method, body, version }) }
   catch (error) {
-    if (error instanceof LoiHocTap && error.code === 'SCHEDULE_CHANGE_CONFIRMATION_REQUIRED' && body) {
-      const impact = record(error.details.anhHuong ?? error.details)
-      const count = Array.isArray(impact.maPhienBiHuy) ? impact.maPhienBiHuy.length : 0
-      if (await hoiXacNhan({ tieuDe: 'Thay đổi lịch tự học?', noiDung: `Thay đổi này ảnh hưởng ${count || 'các'} phiên tự học đã lên lịch. Các phiên liên quan sẽ bị hủy để tiếp tục.`, nhanXacNhan: 'Hủy phiên và tiếp tục', nguyHiem: true })) {
-        return goi<T>(token, path, { method, version, body: { ...body, huyPhienLienQuan: true } })
-      }
+    if (error instanceof LoiHocTap && ['SCHEDULE_CHANGE_CONFIRMATION_REQUIRED', 'TASK_STRUCTURE_CONFIRMATION_REQUIRED'].includes(error.code) && body) {
+      const impact = record(error.details.anhHuong ?? error.details) as AnhHuong
+      const flags = await xacNhanAnhHuong(impact, hoiXacNhan, error.code === 'SCHEDULE_CHANGE_CONFIRMATION_REQUIRED', error.code === 'TASK_STRUCTURE_CONFIRMATION_REQUIRED')
+      if (flags !== null) return goi<T>(token, path, { method, version, body: { ...body, ...flags } })
       return null
     }
     if (error instanceof LoiHocTap && error.code === 'CLASS_OVERLAP_CONFIRMATION_REQUIRED' && body) {
@@ -85,4 +85,22 @@ export async function thayDoi<T>(token: string, path: string, method: string, bo
     }
     throw error
   }
+}
+
+async function xacNhanAnhHuong(impact: AnhHuong, confirm: typeof xacNhan, scheduleRequired = false, structureRequired = false) {
+  const count = new Set([...(impact.maPhienBiHuy ?? []), ...(impact.phienBiAnhHuong ?? [])]).size
+  const reopened = impact.maNhiemVuMoLai?.length ?? 0
+  const checklists = impact.maChecklistChuyenThanhBuoc?.length ?? 0
+  const progress = impact.maTienDoChuyenThanhBuoc?.length ?? 0
+  const structure = structureRequired || reopened + checklists + progress > 0
+  if (!structure && !count && !scheduleRequired) return { huyPhienLienQuan: false }
+  const messages: string[] = []
+  if (structureRequired && reopened + checklists + progress === 0) messages.push('Thay đổi các bước có thể mở lại nhiệm vụ đã hoàn thành và chuyển sang cách tính tiến độ từ các bước nhỏ.')
+  if (reopened) messages.push('Thao tác này sẽ mở lại ' + reopened + ' nhiệm vụ đã hoàn thành, gồm các nhiệm vụ lớn bị ảnh hưởng.')
+  if (checklists) messages.push('Checklist hiện có sẽ được giữ trong bước “Công việc chung”. Tiến độ nhiệm vụ lớn sẽ tính từ các bước nhỏ.')
+  if (progress) messages.push('Tiến độ và ước lượng hiện có sẽ được giữ trong bước “Phần việc đã thực hiện”. Tiến độ nhiệm vụ lớn sẽ tính từ các bước nhỏ.')
+  if (count || scheduleRequired) messages.push('Thay đổi này sẽ hủy ' + (count || 'các') + ' phiên tự học đã lên lịch liên quan.')
+  if (!await confirm({ tieuDe: structure ? 'Thay đổi các bước của nhiệm vụ?' : 'Thay đổi lịch tự học?', noiDung: messages.join(' '),
+    nhanXacNhan: structure ? reopened ? 'Mở lại và tiếp tục' : 'Chuyển và tiếp tục' : 'Hủy phiên và tiếp tục', nguyHiem: count > 0 || scheduleRequired })) return null
+  return { huyPhienLienQuan: count > 0 || scheduleRequired, ...(structure ? { xacNhanDoiCauTruc: true } : {}) }
 }

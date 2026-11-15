@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-// Opt-in browser scenario, run by browser-auth.mjs with TEST_SUBJECTS_UI=1.
-// Data stays inside CDP interception; never writes to the application database.
+// Kịch bản trình duyệt tùy chọn, chạy qua browser-auth.mjs với TEST_SUBJECTS_UI=1.
+// Dữ liệu chỉ nằm trong phần chặn yêu cầu CDP; không ghi vào cơ sở dữ liệu ứng dụng.
 export function createAcademicFixture() {
   const state = {
     unavailable: false, saveFailure: false, deleteFailure: false, detailFailure: false, previewFailure: false, delay: 250,

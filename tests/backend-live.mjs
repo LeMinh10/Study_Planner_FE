@@ -1,6 +1,6 @@
-// Manual check against a running backend. Without admin credentials this only
-// checks OpenAPI, validation and anonymous access. With credentials it creates
-// one unique test account and deletes that same account in finally.
+// Kiểm tra thủ công với backend đang chạy. Khi chưa có tài khoản quản trị, chỉ
+// kiểm tra OpenAPI, dữ liệu đầu vào và truy cập ẩn danh. Khi có xác thực, tạo
+// một tài khoản kiểm thử duy nhất và xóa đúng tài khoản đó trong finally.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'vite'

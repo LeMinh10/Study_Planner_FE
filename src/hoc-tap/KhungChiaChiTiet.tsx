@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 
 const storageKey = 'studyplanner:task-detail-width'
 const minimum = 260
-const defaultWidth = 310
+const defaultWidth = 400
 
 export function KhungChiaChiTiet({ children, detail }: { children: ReactNode; detail: ReactNode }) {
   const container = useRef<HTMLDivElement>(null)
