@@ -1,8 +1,9 @@
 import type { AuthSession, AuthUser, ChangePasswordInput, RegisterInput } from '../types/auth'
 import type { Profile } from '../types/planner'
 import { jwtClaims, normalizeRole, tokenExpiry } from '../auth/session'
-import { apiRequest, ApiError, record } from './client'
+import { apiRequest, ApiError, isAccountDisabled, record } from './client'
 import { authEndpoints } from './config'
+import { loginErrors } from '../auth/validation'
 
 function unwrap(value: unknown) {
   const body = record(value)
@@ -33,8 +34,19 @@ export async function getCurrentUser(token: string, signal?: AbortSignal) {
   return parseAuthUser(await apiRequest(authEndpoints.profile, { token, signal }), token)
 }
 export async function loginAccount(taiKhoan: string, password: string): Promise<AuthSession> {
+  const errors = loginErrors(taiKhoan, password)
+  if (errors.taiKhoan || errors.password) throw new ApiError(errors.taiKhoan || errors.password!, 400, 'VALIDATION_ERROR')
   const account = taiKhoan.trim()
-  const body = unwrap(await apiRequest(authEndpoints.login, { method: 'POST', body: { taiKhoan: account.includes('@') ? account.toLowerCase() : account, matKhau: password } }))
+  let response: unknown
+  try {
+    response = await apiRequest(authEndpoints.login, { method: 'POST', body: { taiKhoan: account.includes('@') ? account.toLowerCase() : account, matKhau: password } })
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401 && !isAccountDisabled(error.code)) {
+      throw new ApiError('Sai tài khoản hoặc mật khẩu.', error.status, error.code, error.errors)
+    }
+    throw error
+  }
+  const body = unwrap(response)
   const token = text(body.tokenTruyCap ?? body.accessToken ?? body.token)
   const expiresAt = tokenExpiry(token, body.hetHanLuc ?? body.expiresAt)
   if (!token || expiresAt <= Date.now()) throw new ApiError('Máy chủ chưa trả về JWT hợp lệ hoặc token đã hết hạn.')

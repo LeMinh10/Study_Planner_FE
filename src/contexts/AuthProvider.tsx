@@ -8,6 +8,7 @@ import { ACCOUNT_LOCKED_NOTICE, ApiError, isAccountDisabled, SESSION_INVALID_EVE
 import { watchSession } from '../auth/sessionEvents'
 import { clearDemoSession, readDemoSession, saveDemoSession, tryDemoLogin } from '../auth/demo'
 import { useMockApi } from '../api/config'
+import { loginErrors } from '../auth/validation'
 
 interface AuthState {
   credentials: AuthCredentials | null
@@ -70,6 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [state.status, state.credentials])
 
   async function login(taiKhoan: string, password: string): Promise<AuthUser> {
+    const errors = loginErrors(taiKhoan, password)
+    if (errors.taiKhoan || errors.password) throw new ApiError(errors.taiKhoan || errors.password!, 400, 'VALIDATION_ERROR')
     const currentVersion = ++version.current
     const demoUser = useMockApi ? null : tryDemoLogin(taiKhoan, password)
     if (demoUser) {

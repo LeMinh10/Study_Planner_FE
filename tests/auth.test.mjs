@@ -90,7 +90,7 @@ test('shared login uses the server-confirmed role and sends no client-selected r
 
 test('wrong passwords, disabled accounts, unknown roles and expired tokens never create sessions', async () => {
   mockFetch([[401, { thongBao: 'Tài khoản hoặc mật khẩu không đúng.' }]])
-  await assert.rejects(api.loginAccount('an@example.com', 'wrong'), /mật khẩu không đúng/)
+  await assert.rejects(api.loginAccount('an@example.com', 'wrong-password'), /Sai tài khoản hoặc mật khẩu/)
   mockFetch([[403, { thongBao: 'Tài khoản đã bị vô hiệu hóa.' }]])
   await assert.rejects(api.loginAccount('an@example.com', 'Strong123!'), /vô hiệu hóa/)
   mockFetch([[200, { tokenTruyCap: jwt() }], [200, { ...profile, dangHoatDong: false }]])
@@ -199,7 +199,7 @@ test('real API mode cannot accept or restore a fake demo session by default', as
     storage().set('studyplanner.demo.v1', 'admin')
     assert.equal(settings.useMockApi, false)
     assert.equal(disabledDemo.demoEnabled, false)
-    assert.equal(disabledDemo.tryDemoLogin('admin@studyplanner.vn', '123456'), null)
+    assert.equal(disabledDemo.tryDemoLogin('admin@studyplanner.vn', '12345678'), null)
     assert.equal(disabledDemo.readDemoSession(), null)
   } finally { await live.close() }
 })
@@ -211,12 +211,12 @@ test('profile payload permits clearing optional fields and sends only backend-ed
 })
 
 test('shared demo login identifies the student account without a role selector or JWT', () => {
-  const user = demo.tryDemoLogin(' DEMO@studyplanner.vn ', '123456')
+  const user = demo.tryDemoLogin(' DEMO@studyplanner.vn ', '12345678')
   assert.equal(user.role, 'sinhvien')
   assert.equal(user.name, 'Sinh viên mẫu')
   assert.equal(user.token, undefined)
-  assert.throws(() => demo.tryDemoLogin('demo@studyplanner.vn', 'wrong'), /không đúng/)
-  assert.equal(demo.tryDemoLogin('real@example.com', '123456'), null)
+  assert.throws(() => demo.tryDemoLogin('demo@studyplanner.vn', 'wrong'), /Sai tài khoản hoặc mật khẩu/)
+  assert.equal(demo.tryDemoLogin('real@example.com', '12345678'), null)
 })
 
 test('demo session restores only the fixed student identity and logout removes the marker', () => {
@@ -232,12 +232,12 @@ test('demo session restores only the fixed student identity and logout removes t
 })
 
 test('shared demo login identifies the fixed admin account without a role selector', () => {
-  const user = demo.tryDemoLogin(' ADMIN@studyplanner.vn ', '123456')
+  const user = demo.tryDemoLogin(' ADMIN@studyplanner.vn ', '12345678')
   assert.equal(user.role, 'admin')
   assert.equal(user.email, 'admin@studyplanner.vn')
   assert.equal(user.name, 'Quản trị viên')
   assert.equal(user.token, undefined)
-  assert.throws(() => demo.tryDemoLogin('admin@studyplanner.vn', 'wrong'), /không đúng/)
+  assert.throws(() => demo.tryDemoLogin('admin@studyplanner.vn', 'wrong'), /Sai tài khoản hoặc mật khẩu/)
 })
 
 test('admin demo session restores its role and logout removes it without storing credentials', () => {

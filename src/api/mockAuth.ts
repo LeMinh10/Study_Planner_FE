@@ -75,7 +75,7 @@ async function database() {
     { ma: 1, email: 'demo@studyplanner.vn', hoTen: 'Sinh viên mẫu', maSoSinhVien: 'SVDEMO001', tenTruong: 'Cao đẳng Kỹ Thuật Cao Thắng', tenLop: 'CDTH23WEBC', nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student', dangHoatDong: true, muiGio: 'Asia/Ho_Chi_Minh', nhacTruocGio: 24, ngayTao: now, ngayCapNhat: now },
     { ma: 2, email: 'admin@studyplanner.vn', hoTen: 'Quản trị viên', maSoSinhVien: '', tenTruong: '', tenLop: '', nganhHoc: '', vaiTro: 'Admin', dangHoatDong: true, muiGio: 'Asia/Ho_Chi_Minh', nhacTruocGio: 24, ngayTao: now, ngayCapNhat: now },
   ]
-  const accounts = await Promise.all(users.map(async (user) => { const salt = randomHex(); return { user, salt, passwordHash: await hashPassword('123456', salt) } }))
+  const accounts = await Promise.all(users.map(async (user) => { const salt = randomHex(); return { user, salt, passwordHash: await hashPassword('12345678', salt) } }))
   const initial: MockDatabase = { version: 1, nextId: 3, accounts, sessions: [] }
   return addAdminSeeds(initial)
 }
@@ -85,7 +85,7 @@ async function addAdminSeeds(data: MockDatabase) {
   const candidates = [
     ...demoStudents.map((student) => ({
       email: student.email, hoTen: student.name, maSoSinhVien: student.studentId, tenTruong: student.schoolName, tenLop: student.className,
-      nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student' as const, dangHoatDong: student.status === 'active', ngayTao: student.createdAt, password: '123456',
+      nganhHoc: 'Công nghệ thông tin', vaiTro: 'Student' as const, dangHoatDong: student.status === 'active', ngayTao: student.createdAt, password: '12345678',
     })),
     { email: 'admin@caothang.edu.vn', hoTen: 'Quản trị viên', maSoSinhVien: '', tenTruong: '', tenLop: '', nganhHoc: '', vaiTro: 'Admin' as const, dangHoatDong: true, ngayTao: now, password: '0306231303' },
   ]
@@ -162,8 +162,8 @@ async function handle(path: string, request: MockRequest): Promise<Response> {
     const taiKhoan = typeof body.taiKhoan === 'string' ? body.taiKhoan.trim() : ''
     const matches = data.accounts.filter((item) => item.user.email.toLowerCase() === taiKhoan.toLowerCase() || (item.user.maSoSinhVien && item.user.maSoSinhVien === taiKhoan))
     const account = matches.length === 1 ? matches[0] : undefined
-    if (!taiKhoan || !account || typeof body.matKhau !== 'string' || await hashPassword(body.matKhau, account.salt) !== account.passwordHash) return failure(401, 'Tài khoản hoặc mật khẩu không đúng.', 'INVALID_CREDENTIALS')
-    if (!account.user.dangHoatDong) return failure(401, 'Thông tin xác thực không hợp lệ.', 'INVALID_CREDENTIALS')
+    if (!taiKhoan || !account || typeof body.matKhau !== 'string' || await hashPassword(body.matKhau, account.salt) !== account.passwordHash) return failure(401, 'Sai tài khoản hoặc mật khẩu.', 'INVALID_CREDENTIALS')
+    if (!account.user.dangHoatDong) return failure(401, 'Sai tài khoản hoặc mật khẩu.', 'INVALID_CREDENTIALS')
     abortIfNeeded(request.signal)
     const session = makeSession(account)
     data.sessions = data.sessions.filter((item) => item.expiresAt > Date.now())

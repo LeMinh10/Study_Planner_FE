@@ -101,13 +101,13 @@ test('mock login accepts email or MSSV and returns JWT, expiry and the current u
 })
 
 test('mock seeds the student and admin accounts with their correct role', async () => {
-  const student = await session('demo@studyplanner.vn', '123456')
+  const student = await session('demo@studyplanner.vn', '12345678')
   assert.equal(student.nguoiDung.vaiTro, 'Student')
   assert.equal(student.nguoiDung.maSoSinhVien, 'SVDEMO001')
   assert.equal(student.nguoiDung.tenTruong, 'Cao đẳng Kỹ Thuật Cao Thắng')
   assert.equal(student.nguoiDung.tenLop, 'CDTH23WEBC')
   assert.equal(student.nguoiDung.nganhHoc, 'Công nghệ thông tin')
-  const admin = await session('admin@studyplanner.vn', '123456')
+  const admin = await session('admin@studyplanner.vn', '12345678')
   assert.equal(admin.nguoiDung.vaiTro, 'Admin')
   assert.notEqual(admin.nguoiDung.ma, student.nguoiDung.ma)
   const ownStudentProfile = await (await me(student.tokenTruyCap)).json()
@@ -167,14 +167,28 @@ test('mock registration follows backend password and field length limits', async
   assert.equal((await register({ ...registration, matKhau: '1234567' })).status, 400)
   assert.equal((await register({ ...registration, maSoSinhVien: 'S'.repeat(51) })).status, 400)
   assert.equal((await register({ ...registration, hoTen: 'A'.repeat(201) })).status, 400)
+  assert.equal((await register({ ...registration, matKhau: ' '.repeat(8) })).status, 400)
+  assert.equal((await register({ ...registration, matKhau: 'A'.repeat(129) })).status, 400)
   assert.equal((await register({ ...registration, matKhau: '12345678', hoTen: 'A'.repeat(200) })).status, 201)
+})
+
+test('passwords containing quotes and spaces survive registration, login and password change unchanged', async () => {
+  const original = ' Aa1!\'"`‘’“” mật khẩu '
+  const updated = ' New2@#\'"`‘’“” mật khẩu '
+  assert.equal((await register({ ...registration, matKhau: original, maSoSinhVien: 'SV_001', email: 'student-name+tag@example.com' })).status, 201)
+  const first = await session('SV_001', original)
+  assert.equal((await login('SV_001', original.trim())).status, 401)
+  assert.equal((await mockAuthRequest('/users/me/change-password', { method: 'POST', token: first.tokenTruyCap, body: { matKhauHienTai: original, matKhauMoi: updated } })).status, 200)
+  assert.equal((await login('student-name+tag@example.com', original)).status, 401)
+  const current = await session('student-name+tag@example.com', updated)
+  assert.equal((await me(current.tokenTruyCap)).status, 200)
 })
 
 test('mock password change validates the current password and revokes every old session', async () => {
   await register()
   const first = await session()
   const second = await session(registration.maSoSinhVien)
-  const admin = await session('admin@studyplanner.vn', '123456')
+  const admin = await session('admin@studyplanner.vn', '12345678')
   const change = (body) => mockAuthRequest('/users/me/change-password', { method: 'POST', token: first.tokenTruyCap, body })
   assert.equal((await change({ matKhauHienTai: 'wrong-password', matKhauMoi: 'NewStrong123!' })).status, 401)
   assert.equal((await me(first.tokenTruyCap)).status, 200)

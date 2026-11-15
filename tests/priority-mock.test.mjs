@@ -14,8 +14,8 @@ test('mock priority endpoints enforce roles and keep the active config across a 
   globalThis.localStorage = { getItem: key => entries.get(key) ?? null, setItem: (key, value) => entries.set(key, value), removeItem: key => entries.delete(key) }
   globalThis.sessionStorage = { getItem: () => null, setItem() {}, removeItem() {} }
   const { auth, api } = await modules(1)
-  const admin = await auth.loginAccount('admin@studyplanner.vn', '123456')
-  const student = await auth.loginAccount('demo@studyplanner.vn', '123456')
+  const admin = await auth.loginAccount('admin@studyplanner.vn', '12345678')
+  const student = await auth.loginAccount('demo@studyplanner.vn', '12345678')
   assert.equal((await api.loadActivePriorityRule(student.token)).phienBan, 0)
   const config = { phienBanSchema: 1, tieuChi: ['Importance', 'Deadline'] }
   await assert.rejects(api.listPriorityRules(student.token), e => e.status === 403)

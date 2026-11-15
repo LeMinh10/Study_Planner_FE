@@ -24,7 +24,7 @@ try {
   const demo = await vite.ssrLoadModule('/src/auth/demo.ts')
   assert.equal(config.useMockApi, false)
   assert.equal(demo.demoEnabled, false)
-  assert.equal(demo.tryDemoLogin('demo@studyplanner.vn', '123456'), null)
+  assert.equal(demo.tryDemoLogin('demo@studyplanner.vn', '12345678'), null)
   const swaggerResponse = await nativeFetch(backend + '/swagger/v1/swagger.json')
   assert.equal(swaggerResponse.status, 200)
   const swagger = await swaggerResponse.json()
@@ -41,7 +41,7 @@ try {
     console.log('Full account integration skipped: set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD to an existing admin account.')
   } else {
     admin = await api.loginAccount(process.env.TEST_ADMIN_EMAIL, process.env.TEST_ADMIN_PASSWORD)
-    email = 'frontend-sync-' + Date.now() + '-' + randomUUID().slice(0, 8) + '@example.com'
+    email = 'frontendsync' + Date.now() + randomUUID().slice(0, 8) + '@example.com'
     const password = randomUUID() + 'Aa1!'
     const changedPassword = randomUUID() + 'Aa2!'
     const input = { ...registration, email, studentCode: 'FE' + Date.now(), password }

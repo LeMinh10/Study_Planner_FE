@@ -10,7 +10,7 @@ test('mock overview enforces admin access and reflects registrations, locks and 
   const auth = await server.ssrLoadModule('/src/api/auth.ts')
   const api = await server.ssrLoadModule('/src/api/adminOverview.ts')
   const users = await server.ssrLoadModule('/src/api/admin.ts')
-  const admin = await auth.loginAccount('admin@studyplanner.vn', '123456')
+  const admin = await auth.loginAccount('admin@studyplanner.vn', '12345678')
   const before = await api.loadAdminOverview(admin.token)
   const input = { fullName: 'Sinh viên tổng quan', email: 'overview@example.test', password: 'Strong123!', studentCode: 'OV0001', schoolName: 'Trường', className: 'Lớp', major: 'CNTT' }
   await auth.registerStudent(input)

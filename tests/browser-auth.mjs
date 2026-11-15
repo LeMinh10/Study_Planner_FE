@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createServer } from 'vite'
+import { runLoginValidationChecks } from './browser-login-validation.mjs'
 import { createAcademicFixture, runSubjectChecks } from './browser-subjects.mjs'
 import { createTodayFixture, runTodayChecks } from './browser-today.mjs'
 import { createNotificationFixture, runNotificationChecks } from './browser-notifications.mjs'
@@ -19,6 +20,7 @@ import { createSuggestionsFixture, runCourseSuggestionChecks } from './browser-c
 
 const chromePath = process.env.CHROME_PATH || ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 if (!chromePath) throw new Error('Set CHROME_PATH to a Chromium browser executable.')
+const loginValidationOnly = process.argv.includes('--login-validation')
 const subjectsOnly = process.env.TEST_SUBJECTS_UI === '1' || process.argv.includes('--subjects')
 const todayOnly = process.argv.includes('--today')
 const notificationsOnly = process.argv.includes('--notifications')
@@ -28,7 +30,7 @@ const sessionLockOnly = process.argv.includes('--session-lock')
 const suggestionsOnly = process.argv.includes('--course-suggestions')
 const catalogOnly = process.argv.includes('--catalog')
 const statisticsOnly = process.argv.includes('--statistics')
-for (const useLocalMock of subjectsOnly || todayOnly || notificationsOnly || priorityOnly || overviewOnly || sessionLockOnly || statisticsOnly || catalogOnly || suggestionsOnly ? [false] : [false, true]) {
+for (const useLocalMock of loginValidationOnly || subjectsOnly || todayOnly || notificationsOnly || priorityOnly || overviewOnly || sessionLockOnly || statisticsOnly || catalogOnly || suggestionsOnly ? [false] : [false, true]) {
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-auth-test-')
 const userDir = fs.mkdtempSync(tempPrefix)
 const sessionLockFixture = createSessionLockFixture()
@@ -123,7 +125,8 @@ try {
           response = profile; status = 201
         }
       } else if (route === '/api/v1/auth/login') {
-        if (body.taiKhoan === 'disabled@example.com') { status = 403; response = { code: 'ACCOUNT_DISABLED', thongBao: 'Tài khoản đã bị vô hiệu hóa.' } }
+        if (loginValidationOnly && body.taiKhoan === 'servervalidation@example.com') { status = 400; response = { code: 'VALIDATION_ERROR', errors: { TaiKhoan: ['Tên đăng nhập không được chứa ký tự đặc biệt, ngoại trừ @ và dấu chấm.'], MatKhau: ['Mật khẩu phải có ít nhất 8 ký tự.'] } } }
+        else if (body.taiKhoan === 'disabled@example.com') { status = 403; response = { code: 'ACCOUNT_DISABLED', thongBao: 'Tài khoản đã bị vô hiệu hóa.' } }
         else if (!['an@example.com', 'admin@example.com', profile.maSoSinhVien].filter(Boolean).includes(body.taiKhoan) || body.matKhau !== password) { status = 401; response = { thongBao: 'Tài khoản hoặc mật khẩu không đúng.' } }
         else {
           activeRole = body.taiKhoan === 'admin@example.com' ? 'admin' : 'sinhvien'
@@ -208,6 +211,22 @@ try {
     await click('button[type="submit"]')
   }
   async function openProfile() { await click('a[href="/profile"]'); await waitFor('!!document.querySelector("input[name=className]")') }
+  async function checkPasswordVisibility(names) {
+    const before = calls.length
+    for (const name of names) {
+      const selector = 'input[name="' + name + '"]'
+      const read = (property) => evaluate('document.querySelector(' + JSON.stringify(selector) + ').' + property)
+      const value = await read('value')
+      assert.equal(await read('type'), 'password')
+      const toggle = '.password-input:has(' + selector + ') .password-toggle'
+      await click(toggle)
+      assert.equal(await read('type'), 'text')
+      assert.equal(await read('value'), value)
+      await click(toggle)
+      assert.equal(await read('type'), 'password')
+    }
+    assert.equal(calls.length, before, 'Visibility controls must not submit or fetch')
+  }
   async function checkSidebarToggle() {
     await waitFor('!!document.querySelector(".sidebar-toggle")')
     const expandedWidth = await evaluate('document.querySelector(".sidebar").getBoundingClientRect().width')
@@ -235,13 +254,15 @@ try {
   }
   const alertHas = (text) => 'document.querySelector("[role=alert]")?.textContent.includes(' + JSON.stringify(text) + ')'
   const at = (route) => 'location.pathname === ' + JSON.stringify(route)
-  const registrationFields = { fullName: useLocalMock ? 'Sinh viên kiểm thử' : 'Nguyễn An', email: useLocalMock ? 'frontend-test@example.com' : 'an@example.com', studentCode: useLocalMock ? '0991234567' : '0306231307', schoolName: 'Cao đẳng Kỹ Thuật Cao Thắng', className: 'CDTH23WEBC', major: 'Công nghệ thông tin' }
+  const registrationFields = { fullName: useLocalMock ? 'Sinh viên kiểm thử' : 'Nguyễn An', email: useLocalMock ? 'frontendtest@example.com' : 'an@example.com', studentCode: useLocalMock ? '0991234567' : '0306231307', schoolName: 'Cao đẳng Kỹ Thuật Cao Thắng', className: 'CDTH23WEBC', major: 'Công nghệ thông tin' }
   async function fillRegistration() {
     for (const [field, value] of Object.entries(registrationFields)) await input(field, value)
     await input('password', password); await input('confirmPassword', password)
   }
 
-  if (suggestionsOnly) {
+  if (loginValidationOnly) {
+    await runLoginValidationChecks({ go, input, click, waitFor, evaluate, cdp, calls, errors, password })
+  } else if (suggestionsOnly) {
     await runCourseSuggestionChecks({ go, login, input, click, select, waitFor, evaluate, cdp, fixture: suggestionsFixture, academic: academicFixture, calls, errors })
   } else if (catalogOnly) {
     await runCatalogChecks({ go, click, input, select, waitFor, evaluate, cdp, login, fixture: catalogFixture, calls, errors })
@@ -267,7 +288,7 @@ try {
     await cdp('Network.enable')
 
     await go('/login'); await waitFor('!!document.querySelector("input[name=taiKhoan]")')
-    await login('demo@studyplanner.vn', '123456'); await waitFor(at('/today'))
+    await login('demo@studyplanner.vn', '12345678'); await waitFor(at('/today'))
     await checkSidebarToggle()
     await openProfile()
     assert.equal(await evaluate('document.querySelector(".profile-form-panel fieldset").disabled'), false)
@@ -277,7 +298,7 @@ try {
     assert(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'))
     await click('.profile-summary button'); await waitFor(at('/login'))
     await go('/admin'); await waitFor(at('/login'))
-    await login('admin@studyplanner.vn', '123456'); await waitFor(at('/admin/overview'))
+    await login('admin@studyplanner.vn', '12345678'); await waitFor(at('/admin/overview'))
     await click('a[href="/admin/students"]')
     await waitFor('!!document.querySelector(".admin-students-table")')
     await click('.admin-logout'); await waitFor(at('/login'))
@@ -324,7 +345,7 @@ try {
     await waitFor('document.body.innerText.includes("Đổi mật khẩu thành công")')
     const revokedStatuses = await evaluate(`(async () => { const { getCurrentUser } = await import('/src/api/auth.ts'); const statuses = []; for (const token of ${JSON.stringify([firstToken, currentToken])}) { try { await getCurrentUser(token); statuses.push(200) } catch (error) { statuses.push(error.status) } } return statuses })()`)
     assert.deepEqual(revokedStatuses, [401, 401], 'Changing password must revoke every older token for this account')
-    await login(registrationFields.email, password); await waitFor(alertHas('không đúng'))
+    await login(registrationFields.email, password); await waitFor(alertHas('Sai tài khoản hoặc mật khẩu'))
     assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
     await go('/login'); await waitFor('!!document.querySelector("input[name=taiKhoan]")')
     await login(registrationFields.studentCode, changedPassword); await waitFor(at('/today'))
@@ -354,12 +375,12 @@ try {
     assert((await evaluate('document.querySelector(".admin-topbar").innerText')).includes('Chi tiết sinh viên'))
     await go(kyLink); await waitFor('!!document.querySelector(".admin-student-details")')
     await click('.admin-student-details button'); await waitFor('document.body.innerText.includes("Kích hoạt tài khoản thành công.")')
-    const kyToken = await evaluate(`(async () => { const { loginAccount } = await import('/src/api/auth.ts'); return (await loginAccount('0306231303', '123456')).token })()`)
+    const kyToken = await evaluate(`(async () => { const { loginAccount } = await import('/src/api/auth.ts'); return (await loginAccount('0306231303', '12345678')).token })()`)
     await click('.admin-student-details button'); await waitFor('document.body.innerText.includes("Vô hiệu hóa tài khoản thành công.")')
-    const blockedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); const statuses = []; for (const action of [() => getCurrentUser(${JSON.stringify(kyToken)}), () => loginAccount('0306231303@caothang.edu.vn', '123456')]) { try { await action(); statuses.push(200) } catch (error) { statuses.push(error.status) } } return statuses })()`)
+    const blockedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); const statuses = []; for (const action of [() => getCurrentUser(${JSON.stringify(kyToken)}), () => loginAccount('0306231303@caothang.edu.vn', '12345678')]) { try { await action(); statuses.push(200) } catch (error) { statuses.push(error.status) } } return statuses })()`)
     assert.deepEqual(blockedKy, [401, 401], 'Deactivation must revoke existing tokens and block new logins')
     await click('.admin-student-details button'); await waitFor('document.body.innerText.includes("Kích hoạt tài khoản thành công.")')
-    const reactivatedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); let previousStatus; try { await getCurrentUser(${JSON.stringify(kyToken)}); previousStatus = 200 } catch (error) { previousStatus = error.status } return { previousStatus, email: (await loginAccount('0306231303', '123456')).user.email } })()`)
+    const reactivatedKy = await evaluate(`(async () => { const { loginAccount, getCurrentUser } = await import('/src/api/auth.ts'); let previousStatus; try { await getCurrentUser(${JSON.stringify(kyToken)}); previousStatus = 200 } catch (error) { previousStatus = error.status } return { previousStatus, email: (await loginAccount('0306231303', '12345678')).user.email } })()`)
     assert.deepEqual(reactivatedKy, { previousStatus: 401, email: '0306231303@caothang.edu.vn' }, 'Activation allows a fresh login without restoring revoked tokens')
     await click('.admin-back-link'); await waitFor(at('/admin/students'))
     await waitFor('new URLSearchParams(location.search).get("TuKhoa") === "0306231303" && new URLSearchParams(location.search).get("DangHoatDong") === "false"')
@@ -370,7 +391,7 @@ try {
     assert((await evaluate('document.querySelector(".admin-student-details").innerText')).includes(updatedProfile.className))
     await click('.admin-logout'); await waitFor(at('/login'))
     await go('/login'); await waitFor('!!document.querySelector("input[name=taiKhoan]")')
-    await login('0306231303', '123456'); await waitFor(at('/today'))
+    await login('0306231303', '12345678'); await waitFor(at('/today'))
     await openProfile(); await waitFor('document.querySelector("input[name=studentCode]").value === "0306231303"')
     assert.equal(await evaluate('document.querySelector("input[name=fullName]").value'), 'Trần Hồng Kỳ')
     await click('.profile-summary button'); await waitFor(at('/login'))
@@ -379,8 +400,8 @@ try {
     console.log('PASS: local frontend auth/profile persistence and admin shared accounts, pagination, search/filter, direct detail routes, activation/deactivation and token revocation without backend HTTP.')
   } else {
   await go('/login'); await waitFor('!!document.querySelector("input[name=taiKhoan]")')
-  await login('demo@studyplanner.vn', 'wrong-password'); await waitFor(alertHas('không đúng'))
-  await login('demo@studyplanner.vn', '123456'); await waitFor(at('/today'))
+  await login('demo@studyplanner.vn', 'wrong-password'); await waitFor(alertHas('Sai tài khoản hoặc mật khẩu'))
+  await login('demo@studyplanner.vn', '12345678'); await waitFor(at('/today'))
   await checkSidebarToggle()
   await waitFor('document.body.innerText.includes("Sinh viên mẫu")')
   assert.equal(await evaluate('document.querySelector(".sidebar nav a").getAttribute("href")'), '/today')
@@ -399,8 +420,8 @@ try {
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.demo.v1")'), null)
 
   await go('/admin'); await waitFor(at('/login'))
-  await login('admin@studyplanner.vn', 'wrong-password'); await waitFor(alertHas('không đúng'))
-  await login('admin@studyplanner.vn', '123456'); await waitFor(at('/admin/overview'))
+  await login('admin@studyplanner.vn', 'wrong-password'); await waitFor(alertHas('Sai tài khoản hoặc mật khẩu'))
+  await login('admin@studyplanner.vn', '12345678'); await waitFor(at('/admin/overview'))
   await waitFor('document.body.innerText.includes("Quản trị viên")')
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
   await waitFor('!!document.querySelector("[role=alert]")')
@@ -427,6 +448,7 @@ try {
   await go('/profile'); await waitFor(at('/login'))
   await click('a[href="/register"]'); await waitFor('!!document.querySelector("input[name=fullName]")')
   await fillRegistration()
+  await checkPasswordVisibility(['password', 'confirmPassword'])
   for (const field of [...Object.keys(registrationFields), 'password', 'confirmPassword']) assert.equal(await evaluate('document.querySelector(' + JSON.stringify('input[name="' + field + '"]') + ').required'), true, field)
   for (const [field, message] of [['studentCode', 'MSSV'], ['schoolName', 'tên trường'], ['className', 'tên lớp'], ['major', 'ngành học']]) {
     await input(field, ' '); await click('button[type="submit"]'); await waitFor(alertHas(message))
@@ -443,7 +465,7 @@ try {
   await fillRegistration()
   await click('button[type="submit"]'); await waitFor(alertHas('Email đã tồn tại'))
   await click('a[href="/login"]'); await waitFor(at('/login'))
-  await login('an@example.com', 'bad-password'); await waitFor(alertHas('không đúng'))
+  await login('an@example.com', 'bad-password'); await waitFor(alertHas('Sai tài khoản hoặc mật khẩu'))
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
   await login('disabled@example.com'); await waitFor(alertHas('vô hiệu hóa'))
   await login('0306231307'); await waitFor(at('/today'))
@@ -459,6 +481,7 @@ try {
   await go('/profile'); await waitFor('!!document.querySelector("input[name=className]")')
   assert.equal(await evaluate('document.querySelector("input[name=className]").value'), 'CNTT02')
   await input('currentPassword', 'wrong'); await input('newPassword', 'NewStrong123!'); await input('confirmPassword', 'NewStrong123!')
+  await checkPasswordVisibility(['currentPassword', 'newPassword', 'confirmPassword'])
   await click('.profile-password-panel button[type="submit"]'); await waitFor(at('/login'))
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
   await login(); await waitFor(at('/today')); await openProfile()
@@ -466,7 +489,7 @@ try {
   await click('.profile-password-panel button[type="submit"]'); await waitFor(at('/login'))
   assert.equal(await evaluate('sessionStorage.getItem("studyplanner.auth.v1")'), null)
   assert((await evaluate('document.body.innerText')).includes('Đổi mật khẩu thành công'))
-  await login('an@example.com', 'Strong123!'); await waitFor(alertHas('không đúng'))
+  await login('an@example.com', 'Strong123!'); await waitFor(alertHas('Sai tài khoản hoặc mật khẩu'))
   await login(); await waitFor(at('/today')); await openProfile()
   patchFailure = 401
   await click('.profile-form-panel button[type="submit"]'); await waitFor(at('/login'))
