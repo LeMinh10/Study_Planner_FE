@@ -31,11 +31,11 @@ export async function goi<T>(token: string, path: string, options: { method?: st
       method, signal: options.signal, cache: 'no-store',
       headers: {
         Accept: 'application/json', Authorization: 'Bearer ' + token,
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.body === undefined || options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         ...(options.version === undefined ? {} : { 'If-Match': `"ht-${options.version}"` }),
         ...(options.key ? { 'Idempotency-Key': options.key } : {}),
       },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+      ...(options.body === undefined ? {} : { body: options.body instanceof FormData ? options.body : JSON.stringify(options.body) }),
     })
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error
