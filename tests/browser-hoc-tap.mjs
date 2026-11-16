@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createServer } from 'vite'
 import { createFocusFixture } from './focus-fixture.mjs'
+import { runAttachmentChecks } from './browser-tep-dinh-kem.mjs'
 import { runFocusChecks } from './browser-focus.mjs'
 import { createTaskProgressFixture } from './task-progress-fixture.mjs'
 import { runTaskProgressChecks } from './browser-task-progress.mjs'
@@ -105,20 +106,31 @@ try {
     void cdp('Page.handleJavaScriptDialog', { accept: false })
   })
   handlers.set('Runtime.exceptionThrown', ({ exceptionDetails }) => errors.push(exceptionDetails.exception?.description ?? exceptionDetails.text))
+  const attachments = []; const attachmentControls = { failUpload: false }
   handlers.set('Fetch.requestPaused', async ({ requestId, request }) => {
     try {
       const url = new URL(request.url)
       const route = url.pathname.replace('/api/v1', '')
       // Cho luồng phiên đăng nhập đi qua HTTP streaming thật của fixture, không giả thành JSON.
       if (route === '/users/me/session-events') { await cdp('Fetch.continueRequest', { requestId }); return }
-      const body = request.postData ? JSON.parse(request.postData) : undefined
+      const multipart = Object.entries(request.headers).some(([k,v]) => k.toLowerCase() === 'content-type' && v.startsWith('multipart/form-data'))
+      const body = request.postData ? multipart ? request.postData : JSON.parse(request.postData) : undefined
       const method = request.method
       calls.push({ route, query: url.searchParams.toString(), method, body, headers: request.headers })
       let status = 200, response
       const focusResponse = focusFixture.handle(url, method, body)
       const progressResponse = taskProgressFixture.handle(route, method, body)
       const planningResponse = planningFixture.handle(url, method, body, request.headers)
-      if (planningResponse) { status = planningResponse.status; response = planningResponse.response }
+      if (/^\/tasks\/\d+\/attachments(?:\/\d+(?:\/download)?)?$/.test(route)) {
+        if (route.endsWith('/download')) {
+          await cdp('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{name:'Content-Type',value:'application/octet-stream'},{name:'Content-Disposition',value:'attachment; filename="Bao cao.pdf"'}], body: Buffer.from('%PDF-test').toString('base64') }); return
+        }
+        if (method === 'POST' && attachmentControls.failUpload) { attachmentControls.failUpload=false;status=503;response={detail:'Kho tệp đang bận. Hãy thử lại.'} }
+        else if (method === 'POST') { revision++; const file={ma:1,tenTep:'Bao cao.pdf',kichThuocByte:30,ngayTao:new Date().toISOString()};attachments.push(file);status=201;response=envelope(file) }
+        else if (method === 'DELETE') { revision++;attachments.splice(0);status=204 }
+        else response=envelope(attachments)
+      }
+      else if (planningResponse) { status = planningResponse.status; response = planningResponse.response }
       else if (progressResponse) { status = progressResponse.status; response = progressResponse.response }
       else if (focusResponse) { status = focusResponse.status; response = focusResponse.response }
       else if (process.env.CORE_FOCUS_ONLY && method !== 'GET' && /^\/tasks\/\d+$/.test(route) && focusFixture.controls.failNextTaskUpdate) {
@@ -308,7 +320,9 @@ try {
   await cdp('Page.navigate', { url: origin + '/login' })
   await field('input[name=taiKhoan]', user.email); await field('input[name=password]', 'Fixture123!'); await click('button[type=submit]')
   await waitFor('location.pathname === "/today"')
-  if (process.env.CORE_REMINDERS_ONLY === '1') {
+  if (process.env.CORE_ATTACHMENTS_ONLY === '1') {
+    await runAttachmentChecks({ origin, cdp, evaluate, waitFor, click, button, calls, errors, userDir, controls: attachmentControls })
+  } else if (process.env.CORE_REMINDERS_ONLY === '1') {
     await runReminderChecks({ origin, cdp, evaluate, waitFor, click, button, calls, errors, settingsFixture: planningFixture.controls })
   } else if (process.env.CORE_PLANNING_ONLY === '1') {
     sessions.push({ ma: 900, maNhiemVu: 4, batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:25:00Z', trangThai: 'Planned' })
