@@ -1,3 +1,5 @@
+import { TepDinhKemNhiemVu } from './TepDinhKemNhiemVu'
+import './tep-dinh-kem.css'
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -802,6 +804,7 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
           <button type="button" className="ht-text-action" disabled={busy || !fresh} onClick={() => c.modal(<SuaNhiemVu parent={task} baseline={result.version} onChildrenSaved={onChildrenSaved} />)}>Thêm nhiều bước hoặc tùy chọn</button>
         </> : <button type="button" className="ht-text-action" disabled={busy || !fresh} onClick={focusDraft}>+ Thêm bước nhỏ</button>}
       </section>
+      <TepDinhKemNhiemVu key={task.ma} ma={task.ma} token={c.token} revision={c.revision} version={result.version} disabled={busy || !fresh} onBusy={setBusy} onSaved={c.reload} />
       <div className="ht-detail-context"><span><Icon name="book" size={16} />{scopeName}</span><span className="ht-status-label">{trangThai[task.trangThai]}</span></div>
       <details className="ht-detail-section ht-task-metadata">
         <summary>Thông tin nhiệm vụ</summary>

@@ -1,0 +1,6 @@
+.ht-attachments ul { list-style: none; padding: 0; margin: 8px 0; }
+.ht-attachments li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border, #e7ebf3); }
+.ht-attachment-name { min-width: 0; flex: 1; text-align: left; color: var(--primary, #4b63ed); overflow-wrap: anywhere; background: transparent; border: 0; cursor: pointer; }
+.ht-attachment-name:hover { text-decoration: underline; }
+.ht-attachments li small { white-space: nowrap; color: var(--text-muted, #77849b); }
+.ht-attachments > small { display: block; margin-top: 6px; }

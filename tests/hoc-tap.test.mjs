@@ -132,3 +132,14 @@ test('day layout restores overlapping lanes, adjacent slots, and availability ba
   assert.equal(blocks.find(b => b.suKien.ma === 'a').top, 19 * 60)
   assert.equal(blocks.find(b => b.suKien.ma === 'free').soCot, 1)
 })
+
+test('tải tệp giữ FormData để trình duyệt tự gắn boundary và vẫn dùng JWT/If-Match', async () => {
+  const form = new FormData(); form.append('tep', new Blob(['noidung']), 'bao-cao.pdf')
+  let sent
+  globalThis.fetch = async (url, options) => { sent = { url, ...options }; return new Response(JSON.stringify(envelope({ ma: 3 }, 6)), { status: 201 }) }
+  await api.goi('jwt-tep', '/tasks/9/attachments', { method: 'POST', body: form, version: 5 })
+  assert.equal(sent.body, form)
+  assert.equal(sent.headers['Content-Type'], undefined)
+  assert.equal(sent.headers.Authorization, 'Bearer jwt-tep')
+  assert.equal(sent.headers['If-Match'], '"ht-5"')
+})
