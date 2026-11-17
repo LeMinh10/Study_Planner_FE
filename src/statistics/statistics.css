@@ -25,7 +25,7 @@
 .statistics-timeliness-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 0 24px 22px; }
 .statistics-timeliness-grid > div { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; font-size: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; }
 .statistics-timeliness-grid strong { width: 100%; font-size: 27px; font-weight: 600; padding-left: 18px; }
-.statistics-dot, .statistics-subject-dot { flex-shrink: 0; display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.statistics-dot { flex-shrink: 0; display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
 .statistics-dot-success { background: #21836c; }.statistics-dot-warning { background: #c08b25; }.statistics-dot-danger { background: #bf4d48; }
 .statistics-note { padding: 0 24px; margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.7; }
 .statistics-table-scroll { overflow-x: auto; }
@@ -34,7 +34,6 @@
 .statistics-subjects th, .statistics-subjects td { padding: 18px 24px; border-top: 1px solid var(--line); }
 .statistics-subjects thead th { font-size: 12px; font-weight: 500; white-space: nowrap; }
 .statistics-subjects tbody th { font-weight: 500; min-width: 200px; max-width: 340px; overflow-wrap: anywhere; }
-.statistics-subject-dot { margin-right: 10px; }
 .statistics-late-count { color: #bf4d48; font-weight: 600; }
 .statistics-progress { display: flex; align-items: center; gap: 12px; min-width: 145px; }
 .statistics-progress progress { flex: 1; width: 100px; height: 7px; accent-color: var(--accent); border: 0; border-radius: 20px; overflow: hidden; }

@@ -13,7 +13,7 @@ export function CreateSubjectPage() {
 
   return <div className="courses-page course-create-page">
     <Link to="/subjects" className="student-back-link"><Icon name="chevron-left" size={15} />Về các môn học</Link>
-    <PageHeading eyebrow="KHÔNG GIAN HỌC TẬP" title="Thêm môn học" description="Tạo không gian học tập cho một môn trong học kỳ của bạn." />
+    <PageHeading title="Thêm môn học"  />
     {academicLoading ? <section className="courses-empty" role="status"><span className="courses-empty-icon"><Icon name="book" size={28} /></span><p>Đang tải thông tin học kỳ…</p></section>
       : academicError && !canManageSubjects ? <section className="courses-empty courses-error" role="alert"><h2>Chưa thể thêm môn học</h2><p>{academicError}</p><button className="button button-primary" disabled={academicBusy} onClick={retryAcademic}><Icon name="reset" size={16} />Thử lại</button></section>
       : !data.semesters.length ? <section className="courses-empty"><span className="courses-empty-icon"><Icon name="layers" size={28} /></span><h2>Bạn cần có học kỳ trước</h2><p>Tạo một học kỳ để bắt đầu thêm môn học.</p><Link to="/semesters" className="button button-primary">Quản lý học kỳ<Icon name="arrow-right" size={16} /></Link></section>

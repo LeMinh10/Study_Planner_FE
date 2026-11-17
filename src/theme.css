@@ -1,5 +1,9 @@
 /* Giao diện tông trời xanh: nền xanh sáng, điểm nhấn đậm và thẻ trắng phân lớp. */
 :root {
+  --subject-bg: #f4f6f8;
+  --subject-border: var(--line);
+  --subject-accent: #c5cdd6;
+  --subject-ink: var(--muted);
   --paper: #f4f8ff;
   --panel: #ffffff;
   --ink: #253d57;
@@ -39,10 +43,6 @@ progress, progress::-webkit-progress-bar { background: var(--sky-soft); }
 progress::-webkit-progress-value { background: var(--accent); }
 progress::-moz-progress-bar { background: var(--accent); }
 
-.sage { --subject-bg: #e3f4ed; --subject-border: #b7dece; --subject-accent: #53a88c; --subject-ink: #24654f; }
-.clay { --subject-bg: #ffebe3; --subject-border: #f0c4b2; --subject-accent: #e58e73; --subject-ink: #98472f; }
-.lavender { --subject-bg: #eee2fa; --subject-border: #d9bfee; --subject-accent: #a278c4; --subject-ink: #714296; }
-.blue { --subject-bg: #e2effb; --subject-border: #b9d5ee; --subject-accent: #72a8d6; --subject-ink: #345f88; }
 
 /* Thanh điều hướng giữ nền sáng, kể cả danh sách môn đang mở rộng. */
 .flow-layout { background: var(--paper); color: var(--ink); }

@@ -1,0 +1,9 @@
+.semester-editor fieldset { display: flex; flex-direction: column; gap: 18px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.semester-editor fieldset > div > label, .semester-editor .form-grid label { display: block; margin-bottom: 8px; }
+.semester-editor input:not([type='hidden']) { width: 100%; }
+.semester-editor .semester-required-mark { color: #c0392b; }
+.semester-editor .form-error { margin: 6px 0 0; }
+.semester-editor input[aria-invalid='true'] { border-color: #b34c3f; }
+@media (max-width: 540px) {
+  .semester-editor .form-grid { grid-template-columns: minmax(0, 1fr); }
+}

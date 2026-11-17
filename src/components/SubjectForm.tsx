@@ -1,16 +1,13 @@
 import { useState } from 'react'
-import type { CSSProperties, FormEvent } from 'react'
+import type { FormEvent } from 'react'
 import { usePlanner } from '../contexts/PlannerContext'
 import { FormActions } from './PlannerUI'
 import { Icon } from './Icon'
 import { CourseNameInput } from './CourseNameInput'
 import { subjectColors } from '../api/academic'
-import type { Subject, SubjectColor } from '../types/planner'
-
-const colors: { value: SubjectColor; label: string }[] = [
-  { value: 'sage', label: 'Xanh lá' }, { value: 'clay', label: 'Cam đất' },
-  { value: 'lavender', label: 'Tím nhạt' }, { value: 'blue', label: 'Xanh dương' },
-]
+import type { Subject } from '../types/planner'
+import { normalizeSubjectText, validateSubject } from '../utils/subjectValidation'
+import type { SubjectErrors, SubjectFields } from '../utils/subjectValidation'
 
 export function SubjectForm({ subject, defaultSemesterId, onCancel, onSaved }: { subject?: Subject; defaultSemesterId?: string; onCancel: () => void; onSaved: (semesterId: string) => void }) {
   const { canManageSubjects, data, saveSubject, academicBusy } = usePlanner()
@@ -18,37 +15,46 @@ export function SubjectForm({ subject, defaultSemesterId, onCancel, onSaved }: {
   const [name, setName] = useState(subject?.name ?? '')
   const [code, setCode] = useState(subject?.code ?? '')
   const [credits, setCredits] = useState(String(subject ? subject.credits || '' : 3))
-  const [color, setColor] = useState<SubjectColor>(subject?.color ?? 'sage')
-  const [colorChanged, setColorChanged] = useState(false)
+  const [teacher, setTeacher] = useState(subject?.teacher ?? '')
+  const [semesterId, setSemesterId] = useState(subject?.semesterId ?? defaultSemesterId ?? data.selectedSemesterId)
+  const [submitted, setSubmitted] = useState(false)
+  const fields = { name, code, credits, teacher, semesterId }
+  const validation = validateSubject(fields, data.semesters, data.subjects, subject?.id)
+  const errors: SubjectErrors = submitted ? validation : {}
+  const fieldError = (field: keyof SubjectFields) => errors[field] ? <p id={`subject-${field}-error`} className="form-error" role="alert">{errors[field]}</p> : null
+  const attributes = (field: keyof SubjectFields) => ({ 'aria-invalid': !!errors[field], 'aria-describedby': errors[field] ? `subject-${field}-error` : undefined })
+  const color = subject?.color ?? 'sage'
   const [pending, setPending] = useState(false)
-  const hex = !colorChanged && subject?.colorHex ? subject.colorHex : subjectColors[color]
+  const hex = subject?.colorHex ?? subjectColors[color]
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canManageSubjects || pending) return
-    const form = new FormData(event.currentTarget)
-    const semesterId = subject?.semesterId ?? String(form.get('semesterId'))
-    if (!name.trim() || !data.semesters.some((semester) => semester.id === semesterId)) { setError('Nhập tên môn và chọn học kỳ.'); return }
+    if (!canManageSubjects || pending || academicBusy) return
+    setSubmitted(true); setError('')
+    if (Object.keys(validation).length) {
+      const first = Object.keys(validation)[0]
+      event.currentTarget.querySelector<HTMLElement>(`[name="${first}"]`)?.focus()
+      return
+    }
     setPending(true); setError('')
     try {
-      await saveSubject({ id: subject?.id ?? '', semesterId, name: name.trim(), code: String(form.get('code')).trim().toLocaleUpperCase('vi'), credits: Number(form.get('credits')), teacher: String(form.get('teacher')).trim(), color, colorHex: hex })
+      await saveSubject({ id: subject?.id ?? '', semesterId, name: normalizeSubjectText(name), code: code.trim().toUpperCase(), credits: Number(credits), teacher: normalizeSubjectText(teacher), color, colorHex: hex })
       onSaved(semesterId)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Không lưu được môn học.') }
     finally { setPending(false) }
   }
 
   return (
-    <form className="session-form course-editor" aria-busy={pending} onSubmit={submit}>
-      <div className={`course-editor-preview ${color}`} style={{ '--course-color': hex } as CSSProperties}><span className="course-card-icon"><Icon name="book" size={25} /></span><div><small>MÔN HỌC CỦA BẠN</small><strong>{name.trim() || 'Tên môn học'}</strong></div></div>
+    <form className="session-form course-editor" aria-busy={pending} onSubmit={submit} noValidate>
+      <div className="course-editor-preview"><span className="course-card-icon"><Icon name="book" size={25} /></span><div><small>MÔN HỌC CỦA BẠN</small><strong>{name.trim() || 'Tên môn học'}</strong></div></div>
       <fieldset disabled={pending || academicBusy || !canManageSubjects} className="course-editor-fields">
-        {subject ? <label>Tên môn học <span className="sr-only">(bắt buộc)</span><input name="name" value={name} onChange={event => setName(event.target.value)} maxLength={200} placeholder="Ví dụ: Lập trình web" required autoFocus /></label> : <CourseNameInput value={name} onChange={setName} onSelect={course => { setName(course.ten); setCode(course.kyHieu); setCredits(String(course.soTinChi)) }} />}
-        <div className="form-grid"><label>Mã môn<input name="code" value={code} onChange={event => setCode(event.target.value)} maxLength={50} placeholder="Ví dụ: IT301" /></label><label>Số tín chỉ<input name="credits" type="number" min="1" max="2147483647" step="1" value={credits} onChange={event => setCredits(event.target.value)} placeholder="Chưa xác định" /></label></div>
-        <label>Học kỳ<select disabled={!!subject} name="semesterId" defaultValue={subject?.semesterId ?? defaultSemesterId ?? data.selectedSemesterId} required>{data.semesters.map((semester) => <option value={semester.id} key={semester.id}>{semester.name}</option>)}</select></label>
-        <label>Giảng viên<input name="teacher" defaultValue={subject?.teacher} maxLength={200} placeholder="Tên giảng viên (không bắt buộc)" /></label>
-        <fieldset className="course-color-picker"><legend>Màu nhận diện</legend><div>{colors.map((item) => <label key={item.value} className={item.value}><input type="radio" name="color" value={item.value} checked={color === item.value} onChange={() => { setColor(item.value); setColorChanged(true) }} /><span className="course-color-swatch" style={{ backgroundColor: subjectColors[item.value] }}><Icon name="check" size={17} /></span><span>{item.label}</span></label>)}</div></fieldset>
+        <div>{subject ? <label>Tên môn học <span className="course-required-mark" aria-hidden="true">*</span><input name="name" value={name} onChange={event => setName(event.target.value)} {...attributes('name')} maxLength={200} placeholder="Ví dụ: Lập trình web" required autoFocus /></label> : <CourseNameInput value={name} onChange={setName} validationError={errors.name} errorId="subject-name-error" onSelect={course => { setName(course.ten); setCode(course.kyHieu); setCredits(String(course.soTinChi)) }} />}{fieldError('name')}</div>
+        <div className="form-grid"><div><label>Mã môn<input name="code" value={code} onChange={event => setCode(event.target.value)} {...attributes('code')} maxLength={50} placeholder="Ví dụ: IT301" /></label>{fieldError('code')}</div><div><label>Số tín chỉ <span className="course-required-mark" aria-hidden="true">*</span><input name="credits" type="number" min="1" max="30" step="1" required value={credits} onChange={event => setCredits(event.target.value)} {...attributes('credits')} placeholder="1–30" /></label>{fieldError('credits')}</div></div>
+        <div><label>Học kỳ <span className="course-required-mark" aria-hidden="true">*</span><select disabled={!!subject} name="semesterId" value={semesterId} onChange={event => setSemesterId(event.target.value)} {...attributes('semesterId')} required><option value="" disabled>Chọn học kỳ</option>{data.semesters.map((semester) => <option value={semester.id} key={semester.id}>{semester.name}</option>)}</select></label>{fieldError('semesterId')}</div>
+        <div><label>Giảng viên<input name="teacher" value={teacher} onChange={event => setTeacher(event.target.value)} {...attributes('teacher')} maxLength={200} placeholder="Ví dụ: Nguyễn Văn An" /></label>{fieldError('teacher')}</div>
       </fieldset>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <FormActions onClose={onCancel} disabled={pending || !canManageSubjects} label={pending ? 'Đang lưu…' : subject ? 'Lưu thay đổi' : 'Tạo môn học'} />
+      <FormActions onClose={onCancel} disabled={pending || academicBusy || !canManageSubjects} label={pending ? 'Đang lưu…' : subject ? 'Lưu thay đổi' : 'Tạo môn học'} />
     </form>
   )
 }

@@ -9,6 +9,7 @@ import path from 'node:path'
 import { createServer } from 'vite'
 import { runLoginValidationChecks } from './browser-login-validation.mjs'
 import { createAcademicFixture, runSubjectChecks } from './browser-subjects.mjs'
+import { runSemesterChecks } from './browser-semesters.mjs'
 import { createTodayFixture, runTodayChecks } from './browser-today.mjs'
 import { createNotificationFixture, runNotificationChecks } from './browser-notifications.mjs'
 import { createPriorityFixture, runPriorityChecks } from './browser-priority-rules.mjs'
@@ -21,7 +22,7 @@ import { createSuggestionsFixture, runCourseSuggestionChecks } from './browser-c
 const chromePath = process.env.CHROME_PATH || ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync)
 if (!chromePath) throw new Error('Set CHROME_PATH to a Chromium browser executable.')
 const loginValidationOnly = process.argv.includes('--login-validation')
-const subjectsOnly = process.env.TEST_SUBJECTS_UI === '1' || process.argv.includes('--subjects')
+const subjectsOnly = process.env.TEST_SUBJECTS_UI === '1' || process.argv.includes('--subjects') || process.argv.includes('--subject-form') || process.argv.includes('--semesters')
 const todayOnly = process.argv.includes('--today')
 const notificationsOnly = process.argv.includes('--notifications')
 const priorityOnly = process.argv.includes('--priority-rules')
@@ -278,8 +279,11 @@ try {
     await runNotificationChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: notificationFixture, calls, errors })
   } else if (todayOnly) {
     await runTodayChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: todayFixture, calls, errors })
+  } else if (process.argv.includes('--semesters')) {
+    await runSemesterChecks({ go, input, click, waitFor, evaluate, cdp, login, fixture: academicFixture, calls, errors })
   } else if (subjectsOnly) {
-    await runSubjectChecks({ go, input, click, select, waitFor, evaluate, cdp, login, fixture: academicFixture, calls, errors })
+    if (process.argv.includes('--semesters')) await runSemesterChecks({ go, input, click, waitFor, evaluate, cdp, login, fixture: academicFixture, calls, errors })
+    else await runSubjectChecks({ go, input, click, select, waitFor, evaluate, cdp, login, fixture: academicFixture, calls, errors })
   } else if (useLocalMock) {
     const networkAuthCalls = []
     handlers.set('Network.requestWillBeSent', ({ request }) => {
