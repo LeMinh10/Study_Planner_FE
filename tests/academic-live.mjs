@@ -20,7 +20,7 @@ try {
   assert((await api.listSemesters(token)).some((item) => item.id === semesterId))
   await assert.rejects(api.listSubjects(otherToken, semesterId), (error) => error.status === 404)
   for (const color of Object.keys(api.subjectColors)) {
-    const course = await api.saveSubject(token, { id: '', semesterId, name: 'FE ' + color, code: '', credits: 0, teacher: '', color })
+    const course = await api.saveSubject(token, { id: '', semesterId, name: 'FE ' + color, code: '', credits: 1, teacher: '', color })
     courseId = course.id
     assert.equal(course.color, color)
     assert.equal(course.colorHex, api.subjectColors[color])

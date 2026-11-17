@@ -6,7 +6,7 @@ import { loadCourseSuggestions } from '../api/courseSuggestions'
 import type { CourseSuggestion, CourseSuggestions } from '../api/courseSuggestions'
 import './courseSuggestions.css'
 
-export function CourseNameInput({ value, onChange, onSelect }: { value: string; onChange: (name: string) => void; onSelect: (course: CourseSuggestion) => void }) {
+export function CourseNameInput({ value, onChange, onSelect, validationError, errorId }: { value: string; onChange: (name: string) => void; onSelect: (course: CourseSuggestion) => void; validationError?: string; errorId?: string }) {
   const auth = useAuth(), session = auth.getAccessToken
   const enabled = auth.status === 'authenticated' && !auth.isDemo && !useMockApi
   const id = useId(), listId = id + '-options'
@@ -49,11 +49,11 @@ export function CourseNameInput({ value, onChange, onSelect }: { value: string; 
     } else if (event.key === 'Enter' && expanded && active >= 0 && rows[active]) { event.preventDefault(); choose(rows[active]) }
   }
   return <div className="course-name-field" ref={root} onBlur={event => { if (!root.current?.contains(event.relatedTarget as Node | null)) { setOpen(false); setActive(-1) } }}>
-    <label htmlFor={id}>Tên môn học <span className="sr-only">(bắt buộc)</span></label>
-    <input id={id} name="name" value={value} onChange={event => { onChange(event.target.value); setPage(1); setActive(-1); setError(''); setOpen(enabled) }} onFocus={show} onClick={() => { if (!open) show() }} onKeyDown={keys} maxLength={200} placeholder="Nhập tên hoặc chọn môn gợi ý" required autoFocus autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={expanded} aria-controls={expanded ? listId : undefined} aria-activedescendant={expanded && active >= 0 && rows[active] ? listId + '-' + active : undefined} aria-describedby={id + '-hint'} />
+    <label htmlFor={id}>Tên môn học <span className="course-required-mark" aria-hidden="true">*</span><span className="sr-only">(bắt buộc)</span></label>
+    <input id={id} name="name" value={value} onChange={event => { onChange(event.target.value); setPage(1); setActive(-1); setError(''); setOpen(enabled) }} onClick={() => { if (!open) show() }} onKeyDown={keys} maxLength={200} placeholder="Nhập tên hoặc chọn môn gợi ý" required autoFocus autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={expanded} aria-controls={expanded ? listId : undefined} aria-activedescendant={expanded && active >= 0 && rows[active] ? listId + '-' + active : undefined} aria-invalid={!!validationError} aria-describedby={[id + '-hint', validationError ? errorId : undefined].filter(Boolean).join(' ')} />
     <p className="course-suggestion-hint" id={id + '-hint'}>Chọn môn gợi ý để điền mã môn và tín chỉ, hoặc tự nhập môn của bạn.</p>
     {expanded && <div className="course-suggestions-popup">
-      <div className="course-suggestions-heading">Môn học gợi ý<span>Từ danh mục mẫu</span></div>
+      <div className="course-suggestions-heading">Môn học gợi ý<span></span></div>
       {error && <div className="course-suggestions-error" role="status"><p>Chưa tải được gợi ý. Bạn vẫn có thể tự nhập môn.</p><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => setRevision(count => count + 1)}>Thử lại</button></div>}
       {waiting && <p className="course-suggestions-message" role="status">Đang tìm môn học…</p>}
       <div className="course-suggestions-list" id={listId} role="listbox" aria-label="Môn học mẫu" aria-busy={waiting}>

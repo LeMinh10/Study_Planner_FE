@@ -23,8 +23,8 @@ function StatisticsContent({ semesterId }: { semesterId: string }) {
   const filtered = snapshot ? filterStatistics(snapshot.tasks, { semesterId, subjectId: selectedSubject }) : []
   const summary = summarizeStatistics(filtered, planner.now)
   const hasUnassigned = snapshot?.tasks.some(task => task.maMonHoc === null)
-  const rows = subjects.filter(subject => selectedSubject === 'all' || subject.id === selectedSubject).map(subject => ({ id: subject.id, name: subject.name, color: subject.colorHex }))
-  if (hasUnassigned && (selectedSubject === 'all' || selectedSubject === 'unassigned')) rows.push({ id: 'unassigned', name: 'Không gắn môn học', color: undefined })
+  const rows = subjects.filter(subject => selectedSubject === 'all' || subject.id === selectedSubject).map(subject => ({ id: subject.id, name: subject.name }))
+  if (hasUnassigned && (selectedSubject === 'all' || selectedSubject === 'unassigned')) rows.push({ id: 'unassigned', name: 'Không gắn môn học' })
   const ready = resource.enabled && !!snapshot && !planner.academicLoading
   const semesterName = planner.data.semesters.find(semester => semester.id === semesterId)?.name
   const taskQuery = new URLSearchParams({ semester: semesterId })
@@ -42,7 +42,7 @@ function StatisticsContent({ semesterId }: { semesterId: string }) {
       </select></label>
       <button type="button" className="statistics-clear" onClick={() => setSubjectId('all')} disabled={selectedSubject === 'all'}>Xóa bộ lọc</button>
     </div>
-    {semesterName && <p className="statistics-scope">{semesterName}<span>·</span>Nhiệm vụ chính, gồm cả đã hoàn thành</p>}
+    {semesterName && <p className="statistics-scope">{semesterName}<span>·</span></p>}
     {planner.academicError && <div className="statistics-feedback" role="alert"><p>{planner.academicError}</p><button type="button" onClick={planner.retryAcademic}>Thử lại môn học</button></div>}
     {resource.error && <div className="statistics-feedback" role="alert"><p>{snapshot ? 'Chưa cập nhật được tiến độ. Đang hiển thị dữ liệu lần tải trước. ' : ''}{resource.error}</p><button type="button" onClick={resource.reload} disabled={resource.loading}>Thử lại</button></div>}
     {planner.academicLoading || (!snapshot && resource.loading) ? <div className="statistics-loading" role="status">Đang tải tiến độ học tập…</div> : !semesterId ? <section className="statistics-panel"><EmptyState title="Chưa có học kỳ" description="Chọn hoặc tạo học kỳ để xem tiến độ học tập." /></section> : !resource.enabled ? <section className="statistics-panel"><EmptyState title="Chưa có dữ liệu thống kê" description="Đăng nhập tài khoản thật để xem tiến độ học tập." /></section> : null}
@@ -66,11 +66,6 @@ function StatisticsContent({ semesterId }: { semesterId: string }) {
           <div><span className="statistics-dot statistics-dot-warning" />Hoàn thành trễ hạn<strong data-stat="late">{summary.late}</strong></div>
           <div><span className="statistics-dot statistics-dot-danger" />Đang quá hạn<strong data-stat="timelinessOverdue">{summary.overdue}</strong></div>
         </div>
-        <p className="statistics-note">Tỷ lệ tính trên nhiệm vụ đã hoàn thành có hạn và ngày hoàn thành.</p>
-        {(summary.completedUndated > 0 || summary.completedUnknown > 0) && <p className="statistics-note">Không tính vào tỷ lệ: {[
-          summary.completedUndated > 0 ? `${summary.completedUndated} nhiệm vụ không có hạn` : '',
-          summary.completedUnknown > 0 ? `${summary.completedUnknown} nhiệm vụ thiếu ngày hoàn thành` : '',
-        ].filter(Boolean).join(', ')}.</p>}
       </section>
       <section className="statistics-panel statistics-subjects" aria-labelledby="statistics-subjects-title">
         <div className="statistics-panel-heading"><h2 id="statistics-subjects-title">Tiến độ theo môn học</h2></div>
@@ -78,7 +73,7 @@ function StatisticsContent({ semesterId }: { semesterId: string }) {
           <thead><tr><th>Môn học</th><th>Tổng nhiệm vụ</th><th>Hoàn thành</th><th>Quá hạn</th><th>Tiến độ</th></tr></thead>
           <tbody>{rows.map(row => {
             const stats = summarizeStatistics(filtered.filter(task => row.id === 'unassigned' ? task.maMonHoc === null : String(task.maMonHoc) === row.id), planner.now)
-            return <tr key={row.id} data-subject={row.id}><th scope="row"><span className="statistics-subject-dot" style={{ backgroundColor: row.color || 'var(--accent)' }} />{row.name}</th><td>{stats.total}</td><td>{stats.completed}/{stats.total}</td><td className={stats.overdue ? 'statistics-late-count' : ''}>{stats.overdue}</td><td><div className="statistics-progress"><progress value={stats.completionRate} max={100} aria-label={`Tiến độ ${row.name}`} /><span>{stats.completionRate}%</span></div></td></tr>
+            return <tr key={row.id} data-subject={row.id}><th scope="row">{row.name}</th><td>{stats.total}</td><td>{stats.completed}/{stats.total}</td><td className={stats.overdue ? 'statistics-late-count' : ''}>{stats.overdue}</td><td><div className="statistics-progress"><progress value={stats.completionRate} max={100} aria-label={`Tiến độ ${row.name}`} /><span>{stats.completionRate}%</span></div></td></tr>
           })}</tbody>
         </table>{!rows.length && <p className="statistics-note">Chưa có môn học trong học kỳ này.</p>}</div>}
       </section>
