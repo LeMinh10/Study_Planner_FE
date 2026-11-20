@@ -44,7 +44,7 @@ test('manual progress preservation and schedule cancellation use one combined co
   const prompts = []
   await api.thayDoi('jwt', '/tasks/1/children', 'POST', { danhSach: [] }, 7, preview, async options => { prompts.push(options); return true })
   assert.equal(prompts.length, 1)
-  assert.match(prompts[0].noiDung, /Phần việc đã thực hiện/)
+  assert.match(prompts[0].noiDung, /Nhiệm vụ đã bắt đầu/)
   assert.match(prompts[0].noiDung, /hủy 2 phiên/)
   assert.equal(calls[1].body.xacNhanDoiCauTruc, true)
   assert.equal(calls[1].body.huyPhienLienQuan, true)

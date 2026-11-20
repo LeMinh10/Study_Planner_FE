@@ -18,7 +18,9 @@ export function Modal({ title, children, onClose, wide = false, side = false }: 
     dialog?.showModal()
     return () => { dialog?.close(); document.body.style.overflow = previous }
   }, [])
-  return <dialog ref={ref} className={`session-dialog${wide ? ' wide-dialog' : ''}${side ? ' side-dialog' : ''}`} aria-labelledby="active-dialog-title" onCancel={onClose} onClick={(event) => {
+  // Escape đi qua cùng onClose với nút Hủy, để biểu mẫu đang lưu có thể chặn
+  // đóng hộp thoại; không để trình duyệt tự đóng trước khi xử lý trạng thái.
+  return <dialog ref={ref} className={`session-dialog${wide ? ' wide-dialog' : ''}${side ? ' side-dialog' : ''}`} aria-labelledby="active-dialog-title" onCancel={event => { event.preventDefault(); onClose() }} onClick={(event) => {
     if (event.target !== event.currentTarget) return
     const bounds = event.currentTarget.getBoundingClientRect()
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose()

@@ -14,6 +14,7 @@
 .today-panel-heading h2 { margin: 3px 0 0; font-size: 18px; font-weight: 600; letter-spacing: -.3px; }
 .today-kicker { display: inline-flex; align-items: center; gap: 6px; font-size: 9px; font-weight: 600; letter-spacing: 1px; color: #4779af; }
 .today-updating { color: var(--today-muted); font-size: 10px; white-space: nowrap; }
+.today-urgency-heading { margin: 0; padding: 9px clamp(13px, 2vw, 22px); border-top: 1px solid #edf1f6; color: #405b7b; background: #f8fafc; font-size: 12px; font-weight: 600; }
 .today-priority-list { list-style: none; padding: 0; margin: 0; }
 .today-priority-list > li { display: flex; align-items: flex-start; gap: 13px; padding: 19px 22px; border-top: 1px solid #edf1f6; }
 .today-priority-list > .today-first-choice { background: #f1f6ff; border-top-color: #dce8fa; border-bottom: 1px solid #dce8fa; }
@@ -87,3 +88,5 @@
 @media (max-width: 1180px) { .today-grid { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 16px; } .today-panel-heading, .today-priority-list > li { padding-left: 17px; padding-right: 17px; } .today-metrics { gap: 12px; } .today-metrics > div { padding: 15px; } }
 @media (max-width: 900px) { .today-grid { grid-template-columns: 1fr; } .today-aside { grid-template-columns: 1fr 1fr; align-items: start; } }
 @media (max-width: 600px) { .today-aside { grid-template-columns: 1fr; } .today-metrics { grid-template-columns: 1fr; gap: 8px; } .today-priority-list > li { gap: 9px; padding: 16px 13px; } .today-rank { width: 25px; height: 25px; flex-basis: 25px; } .today-panel-heading { align-items: flex-start; padding: 18px 15px; } .today-daily .today-panel-heading { flex-wrap: wrap; } .today-progress { margin-inline: 15px; } .today-progress progress { flex-basis: 75px; width: 75px; } .today-task-tabs { margin-inline: 10px; gap: 2px; } .today-daily-list article { padding-inline: 15px; } .today-daily-list article > .today-text-link { font-size: 0; gap: 0; } }
+
+.today-priority-reason { margin: 5px 0 0; color: #687c94; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }

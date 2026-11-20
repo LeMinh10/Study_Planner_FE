@@ -45,6 +45,7 @@ export function AppRoutes() {
         <Route path="subjects" element={<SubjectsPage key={data.selectedSemesterId} />} />
         <Route path="subjects/new" element={<CreateSubjectPage />} />
         <Route path="subjects/:subjectId" element={<SubjectDetailPage key={data.selectedSemesterId} />} />
+        <Route path="planning" element={<HocTapPage mode="planning" />} />
         <Route path="schedule" element={<HocTapPage mode="schedule" />} />
         <Route path="tasks" element={<HocTapPage mode="tasks" />} />
         <Route path="calendar" element={<HocTapPage mode="calendar" />} />

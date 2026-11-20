@@ -33,9 +33,10 @@ export interface KhoiLich {
   top: number
   height: number
 }
-export function xepKhoiLich(day: string, events: SuKien[], zone: string, from = mocDauNgay(day, zone), to = mocDauNgay(congNgay(day, 1), zone)): KhoiLich[] {
+export function xepKhoiLich(day: string, events: SuKien[], zone: string,
+  from = mocDauNgay(day, zone), to = mocDauNgay(congNgay(day, 1), zone), minHeight = 22,
+): KhoiLich[] {
   if (from >= to) return []
-  const minHeight = 22
   const blocks = events.flatMap(suKien => {
     const start = Date.parse(suKien.batDau)
     const end = suKien.ketThuc ? Date.parse(suKien.ketThuc) : start

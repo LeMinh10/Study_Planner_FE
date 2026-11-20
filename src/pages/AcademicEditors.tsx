@@ -16,7 +16,7 @@ export function SemesterEditor({ semester, onClose }: { semester: Semester | nul
     const name = String(form.get('name')).trim()
     const startDate = String(form.get('startDate'))
     const endDate = String(form.get('endDate'))
-    if (!name || endDate < startDate) { setError('Tên học kỳ không được trống; ngày kết thúc phải từ ngày bắt đầu trở đi.'); return }
+    if (!name || endDate < startDate) { setError('Nhập tên học kỳ và chọn ngày kết thúc từ ngày bắt đầu trở đi.'); return }
     try {
       await saveSemester({ id: semester?.id ?? '', name, startDate, endDate })
       onClose()

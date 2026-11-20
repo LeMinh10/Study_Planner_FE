@@ -75,7 +75,7 @@ export function KhungChiaChiTiet({ children, detail }: { children: ReactNode; de
           else return
           event.preventDefault()
         }}
-      ><span aria-hidden="true" /></div>
+      />
       {detail}
     </>}
   </div>

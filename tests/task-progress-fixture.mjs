@@ -28,7 +28,7 @@ export function createTaskProgressFixture({ tasks, makeTask, nextId, envelope, b
       const hasChecklist = !!parent.checklist?.length
       if (!hasChecklist && !parent.tienDo) return
       const child = makeTask(newId(), { maHocKy: parent.maHocKy, maMonHoc: parent.maMonHoc, maNhiemVuCha: parent.ma,
-        tieuDe: hasChecklist ? 'Công việc chung' : 'Phần việc đã thực hiện', tienDo: parent.tienDo, checklist: structuredClone(parent.checklist ?? []),
+        tieuDe: hasChecklist ? 'Công việc chung' : 'Nhiệm vụ đã bắt đầu', tienDo: parent.tienDo, checklist: structuredClone(parent.checklist ?? []),
         thoiLuongDuKienPhut: parent.thoiLuongDuKienPhut })
       rows.push(child); added.push(child); parent.checklist = []
       impact[hasChecklist ? 'maChecklistChuyenThanhBuoc' : 'maTienDoChuyenThanhBuoc'].push(parent.ma)

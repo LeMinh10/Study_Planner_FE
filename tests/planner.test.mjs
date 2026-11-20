@@ -243,7 +243,7 @@ test('initial planner has no personal information, seeded records or selection',
 })
 
 test('all proposal pages render correct content and the desktop shell', () => {
-  const routes = { '/today': 'Hôm nay', '/tasks?subject=math': 'Không tìm thấy môn học', '/semesters': 'Học kỳ', '/subjects': 'Môn học', '/tasks?subject=missing': 'Không tìm thấy môn học', '/schedule': 'Thời khóa biểu', '/tasks': 'Nhiệm vụ', '/tasks?view=priority': 'Ưu tiên cao trước', '/tasks?layout=board': 'Nhiệm vụ của tôi', '/tasks?layout=calendar': 'Nhiệm vụ của tôi', '/calendar': 'Lịch', '/statistics': 'Tiến độ', '/profile': 'Hồ sơ cá nhân', '/login': 'Đăng nhập', '/register': 'Đăng ký', '/missing': 'Không tìm thấy trang' }
+  const routes = { '/planning': 'Lập kế hoạch học tập', '/today': 'Hôm nay', '/tasks?subject=math': 'Không tìm thấy môn học', '/semesters': 'Học kỳ', '/subjects': 'Môn học', '/tasks?subject=missing': 'Không tìm thấy môn học', '/schedule': 'Thời khóa biểu', '/tasks': 'Nhiệm vụ', '/tasks?view=priority': 'Ưu tiên cao trước', '/tasks?layout=board': 'Nhiệm vụ của tôi', '/tasks?layout=calendar': 'Nhiệm vụ của tôi', '/calendar': 'Lịch', '/statistics': 'Tiến độ', '/profile': 'Hồ sơ cá nhân', '/login': 'Đăng nhập', '/register': 'Đăng ký', '/missing': 'Không tìm thấy trang' }
   for (const [path, heading] of Object.entries(routes)) {
     const auth = ['/login', '/register'].includes(path) ? { ...fixtureAuth, user: null, status: 'anonymous' } : fixtureAuth
     const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App, { auth })))
@@ -259,7 +259,7 @@ test('workspace sidebar shows empty academic data and retains navigation', () =>
   const markup = renderToString(createElement(MemoryRouter, { initialEntries: ['/tasks'] }, createElement(App)))
   const navigation = markup.match(/<nav aria-label="Menu chính">([\s\S]*?)<\/nav>/)?.[1]
   assert(navigation)
-  assert.deepEqual([...navigation.matchAll(/href="([^"]+)"/g)].map((match) => match[1]), ['/today', '/tasks', '/calendar', '/focus'])
+  assert.deepEqual([...navigation.matchAll(/href="([^"]+)"/g)].map((match) => match[1]), ['/today', '/tasks', '/planning', '/focus'])
   assert(!markup.includes('href="/?subject=math"'))
   assert(!markup.includes('href="/?subject=web"'))
   assert(markup.includes('Chưa có môn học.'))
@@ -288,9 +288,13 @@ test('sidebar marks the current page consistently across main, academic and prof
   const routes = [
     ['/tasks', '/tasks'],
     ['/tasks?layout=board', '/tasks'],
+    ['/tasks?layout=calendar', '/planning'],
     ['/tasks?view=priority', '/tasks'],
     ['/today', '/today'],
-    ['/calendar', '/calendar'],
+    ['/calendar', '/planning'],
+    ['/planning', '/planning'],
+    ['/planning?tab=free', '/planning'],
+    ['/tasks?tab=planning', '/planning'],
     ['/focus', '/focus'],
     ['/subjects', '/subjects'],
     ['/subjects/missing', '/subjects'],
@@ -370,7 +374,7 @@ test('authentication stays enabled; academic writes wait for successful API read
     assert(main.includes('Đang tải múi giờ tài khoản…'), path + ': timezone read gates calendar controls')
     assert(!main.includes('<form'), path + ': calendar write forms wait for the profile/API read')
     assert(!main.includes('<dialog'), path + ': no calendar editor before reads')
-    assert.match(main, /<button\b[^>]*aria-expanded="false"[^>]*>[\s\S]*?Công cụ học tập<\/button>/, path + ': navigation toggle remains available')
+    assert.match(main, /<button\b[^>]*aria-expanded="false"[^>]*>[\s\S]*?Hiện menu<\/span><\/button>/, path + ': navigation toggle remains available')
   }
   const editor = renderToString(createElement(AuthContext.Provider, { value: fixtureAuth }, createElement(PlannerProvider, null, createElement(TaskEditor, { task: null, onClose: () => {} }))))
   assert.match(editor, /<button type="submit" class="button button-primary"/)
@@ -496,12 +500,29 @@ test('task route aliases retain the API workspace without creating local data', 
   assert(selectedBoardTabs[0][1].includes('Bảng trạng thái'))
   assert(!outputs[1].includes('0 nhiệm vụ'))
   assert(outputs[2].includes('<h1>Thời khóa biểu</h1>'))
-  assert.match(outputs[2], /<button\b[^>]*aria-controls="[^"]+"[^>]*aria-expanded="false"[^>]*>[\s\S]*?Công cụ học tập<\/button>/)
-  assert(!outputs[2].includes('class="ht-tabs"'), 'calendar learning tools start collapsed')
+  const calendarNavigation = outputs[2].match(/<nav\b[^>]*aria-label="Công cụ học tập"[^>]*>([\s\S]*?)<\/nav>/)?.[1]
+  assert(calendarNavigation, 'calendar within tasks shows the learning navigation by default')
+  assert.match(outputs[2], /<button\b[^>]*class="[^"]*ht-calendar-nav-toggle"[^>]*aria-expanded="true"[^>]*>[\s\S]*?Ẩn menu<\/span><\/button>/)
+  assert.match(calendarNavigation, /<button\b[^>]*aria-pressed="true"[^>]*>[\s\S]*?Thời khóa biểu<\/span><\/button>/)
   assert(outputs[2].includes('Đang tải múi giờ tài khoản…'), 'calendar waits for the account timezone')
   assert(outputs.every((markup) => /<section\b[^>]*class="ht-workspace(?: [^"]*)?"/.test(markup)))
   assert(outputs[0].includes('ht-task-workspace') && outputs[1].includes('ht-task-workspace'))
   assert(outputs[2].includes('ht-calendar-workspace'))
   assert(outputs.every((markup) => !markup.includes('quick-task-form')))
   assert(outputs.every((markup) => !markup.includes('draggable="true"')))
+})
+
+test('task and planning workspaces expose separate learning menus', () => {
+  const menu = path => {
+    const markup = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(App)))
+    return markup.match(/<nav\b[^>]*aria-label="Công cụ học tập"[^>]*>([\s\S]*?)<\/nav>/)?.[1] ?? ''
+  }
+  const tasks = menu('/tasks')
+  assert(tasks.includes('Bảng trạng thái') && tasks.includes('Thùng rác'))
+  for (const name of ['Gợi ý lịch học', 'Giờ rảnh của tôi', 'Phiên tự học', 'Lịch học theo môn']) assert(!tasks.includes(name))
+  for (const path of ['/planning', '/planning?tab=free', '/tasks?tab=planning', '/calendar']) {
+    const planning = menu(path)
+    assert(planning.includes('Gợi ý lịch học') && planning.includes('Phiên tự học'), path)
+    for (const name of ['Thùng rác', 'Bảng trạng thái', 'Chưa phân loại', 'Danh sách nhiệm vụ']) assert(!planning.includes(name), path)
+  }
 })

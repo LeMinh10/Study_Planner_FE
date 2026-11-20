@@ -20,6 +20,7 @@ export function taoTruyVanNhiemVu(params: URLSearchParams, page: number, search:
   const view = layCheDo(params)
   const sort = view === 'completed' ? 'completed' : params.get('sort') ?? (params.get('view') === 'priority' ? 'priority' : 'due')
   const query = new URLSearchParams({ cheDo: view, trang: String(page), kichThuocTrang: '20', sapXep: sort })
+  if (view !== 'completed') query.set('ghimTruoc', 'true')
   if (view === 'completed') {
     const period = params.get('donePeriod') ?? ''
     const day = params.get('doneDay') ?? ''

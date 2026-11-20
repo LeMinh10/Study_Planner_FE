@@ -4,6 +4,7 @@ export function createPlanningUpgradeFixture({ envelope, bump, tasks, windows, a
   const controls = { failSettings: false }
   const reminderRows = []
   const exceptions = new Map(), previews = new Map(), applied = new Map()
+  let rejectedFirstApply = false
   const ok = (data, status = 200) => ({ status, response: envelope(data) })
   return { controls, handle(url, method, body, headers) {
     const route = url.pathname.replace('/api/v1', '')
@@ -55,22 +56,40 @@ export function createPlanningUpgradeFixture({ envelope, bump, tasks, windows, a
       const ids = body.danhSachMaNhiemVu?.length ? body.danhSachMaNhiemVu : [4]
       const task = tasks.find(task => ids.includes(task.ma) && !task.coNhiemVuCon) ?? tasks.find(task => task.ma === 4)
       const from = body.ngayBatDau || new Date(Date.now() + 86400000).toISOString().slice(0, 10)
-      const start = from + 'T12:00:00Z'
+      const start = body.soNgay === 4 ? new Date(Math.ceil((Date.now() + 30000) / 60000) * 60000).toISOString() : from + 'T12:00:00Z'
       const end = new Date(Date.parse(start) + settings.phienHocPhut * 60000).toISOString()
+      const phien = [{ maNhiemVu: task.ma, tieuDe: task.tieuDe, batDauDuKien: start, ketThucDuKien: end, lyDo: 'Theo cấu hình học' }]
+      const tail = body.soNgay === 2 ? 5 : 0
+      if (tail) {
+        const next = Date.parse(end) + settings.nghiGiuaPhienPhut * 60000
+        phien.push({ ...phien[0], batDauDuKien: new Date(next).toISOString(), ketThucDuKien: new Date(next + tail * 60000).toISOString() })
+      }
+      const stale = body.soNgay === 3 && !rejectedFirstApply
+      const canhBao = body.soNgay === 5 ? [
+        { maNhiemVu: task.ma, tieuDe: task.tieuDe, maLyDo: 'MISSING_ESTIMATE', thongBao: 'Chưa nhập thời lượng dự kiến.', soPhutChuaXep: 0 },
+        { maNhiemVu: task.ma, tieuDe: task.tieuDe, maLyDo: 'NO_AVAILABILITY', thongBao: 'Không có giờ rảnh khả dụng trong khoảng chọn.', soPhutChuaXep: 20 },
+      ] : []
+      if (canhBao.length) phien.length = 0
       const replacements = body.capNhatKeHoach ? sessions().filter(row => row.trangThai === 'Planned' && row.maNhiemVu === task.ma).map(row => row.ma) : []
       const row = { tokenPreview: 'upgrade-' + counter++, muiGio: 'Asia/Ho_Chi_Minh', hetHanLuc: new Date(Date.now() + 600000).toISOString(),
-        tongPhutCanXep: settings.phienHocPhut, tongPhutDaDat: 0, tongPhutDeXuat: settings.phienHocPhut, tongPhutChuaXep: 0, canhBao: [],
-        cauHinhHoc: settings, maPhienThayThe: replacements, phien: [{ maNhiemVu: task.ma, tieuDe: task.tieuDe, batDauDuKien: start, ketThucDuKien: end, lyDo: 'Theo cấu hình học' }] }
-      previews.set(row.tokenPreview, row); return ok(row)
+        tongPhutCanXep: settings.phienHocPhut + tail, tongPhutDaDat: 0, tongPhutDeXuat: phien.length ? settings.phienHocPhut + tail : 0,
+        tongPhutChuaXep: phien.length ? 0 : settings.phienHocPhut, canhBao, cauHinhHoc: settings, maPhienThayThe: replacements, phienThayThe: sessions().filter(row => replacements.includes(row.ma)).map(row => ({ ...row, tieuDe: tasks.find(task => task.ma === row.maNhiemVu)?.tieuDe ?? 'Nhiệm vụ' })), phien }
+      previews.set(row.tokenPreview, { ...row, stale, loseResponse: body.soNgay === 6 }); return ok(row)
     }
     if (route === '/planning/apply') {
       const key = Object.entries(headers).find(([key]) => key.toLowerCase() === 'idempotency-key')?.[1]
-      if (applied.has(key)) return ok(applied.get(key))
+      if (applied.has(key)) return ok({ ...applied.get(key), daApDungTruoc: true })
       const preview = previews.get(body.tokenPreview)
+      if (preview.stale) {
+        rejectedFirstApply = true
+        return { status: 409, response: { code: 'DATA_VERSION_CONFLICT', detail: 'Dữ liệu đã đổi sau khi xem gợi ý.' } }
+      }
       for (const row of sessions()) if (preview.maPhienThayThe.includes(row.ma)) row.trangThai = 'Cancelled'
       const base = Math.max(19, ...sessions().map(row => row.ma)) + 1
       const rows = body.phien.map((row, index) => ({ ...row, ma: base + index, maLanApDung: base, trangThai: 'Planned', ghiChu: null }))
-      addSessions(rows); bump(); const result = { maLanApDung: base, phien: rows }; applied.set(key, result); return ok(result)
+      addSessions(rows); bump(); const result = { maLanApDung: base, phien: rows }; applied.set(key, result)
+      if (preview.loseResponse) return { status: 503, response: { detail: 'Chưa nhận được kết quả lưu.' } }
+      return ok(result)
     }
     return null
   } }

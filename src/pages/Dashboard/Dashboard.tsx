@@ -4,7 +4,7 @@ import { Icon } from '../../components/Icon'
 import { Modal, PageHeading } from '../../components/PlannerUI'
 import { hienGio, loaiViec, ngay, trangThai, uuTien } from '../../hoc-tap/time'
 import type { NhiemVu } from '../../hoc-tap/types'
-import { agenda, dailyTasks, eventInScope, isDone, nextClass, recommend, taskHref, taskInScope } from './todayModel'
+import { agenda, dailyTasks, eventInScope, isDone, nextClass, priorityReasons, recommend, taskHref, taskInScope, urgencyLabels } from './todayModel'
 import { useToday } from './useToday'
 import './today.css'
 
@@ -29,6 +29,14 @@ export function Dashboard() {
   const scoped = (c.tasks ?? []).filter((task) => taskInScope(task, semester))
   const events = (c.calendar?.suKien ?? []).filter((event) => eventInScope(event, semester))
   const ranked = recommend(scoped, c.now, c.priorityRule?.cauHinh)
+  const visibleRecommendations = allRecommendations ? ranked : ranked.slice(0, 5)
+  const urgencyGroups = new Map<number, { task: NhiemVu; rank: number }[]>()
+  visibleRecommendations.forEach(({ task, group }, index) => {
+    const row = { task, rank: index + 1 }
+    const rows = urgencyGroups.get(group)
+    if (rows) rows.push(row)
+    else urgencyGroups.set(group, [row])
+  })
   const dueToday = dailyTasks(scoped, c.now, c.zone)
   const pendingToday = dueToday.filter((task) => !isDone(task))
   const completedToday = dueToday.filter(isDone)
@@ -68,10 +76,13 @@ export function Dashboard() {
             <header className="today-panel-heading"><h2 id="today-priority-title">Gợi ý nên làm trước</h2>{(c.taskLoading || c.priorityLoading) && priorityReady && <span className="today-updating" role="status">Đang cập nhật…</span>}</header>
             {c.taskError && <ReadError message={(c.tasks ? 'Đang hiển thị lần tải trước. ' : '') + c.taskError} retry={c.reload} loading={c.taskLoading} />}
             {c.priorityError && <ReadError message={(c.priorityRule ? 'Đang dùng quy tắc lần tải trước. ' : '') + c.priorityError} retry={c.reload} loading={c.priorityLoading} />}
-            {!priorityReady && !c.taskError && !c.priorityError ? <Loading label="Đang tải gợi ý ưu tiên…" /> : priorityReady && ranked.length ? <ol className="today-priority-list">{(allRecommendations ? ranked : ranked.slice(0, 5)).map(({ task }, index) => <li key={task.ma} className={index === 0 ? 'today-first-choice' : ''}>
-              <span className="today-rank" aria-label={`Ưu tiên ${index + 1}`}>{String(index + 1).padStart(2, '0')}</span>
-              <div className="today-recommendation"><button className="today-task-title" onClick={() => setSelected(task)}>{task.tieuDe}</button><TaskMeta task={task} /></div><button type="button" className="today-open" aria-label={'Xem nhiệm vụ: ' + task.tieuDe} onClick={() => setSelected(task)}><Icon name="arrow-right" size={16} /></button>
-            </li>)}</ol> : priorityReady && !c.taskError ? <Empty title="Chưa có việc cần gợi ý" /> : null}
+            {!priorityReady && !c.taskError && !c.priorityError ? <Loading label="Đang tải gợi ý ưu tiên…" /> : priorityReady && ranked.length ? Array.from(urgencyGroups, ([group, rows]) => <section key={group} aria-labelledby={`today-urgency-${group}`}>
+              <h3 className="today-urgency-heading" id={`today-urgency-${group}`}>{urgencyLabels[group]}</h3>
+              <ol className="today-priority-list" start={rows[0].rank}>{rows.map(({ task, rank }) => <li key={task.ma} className={rank === 1 ? 'today-first-choice' : ''}>
+                <span className="today-rank" aria-label={`Ưu tiên ${rank}`}>{String(rank).padStart(2, '0')}</span>
+                <div className="today-recommendation"><button className="today-task-title" onClick={() => setSelected(task)}>{task.tieuDe}</button><TaskMeta task={task} /><p className="today-priority-reason">{priorityReasons(task, c.now, c.priorityRule?.cauHinh).join(" · ")}</p></div><button type="button" className="today-open" aria-label={'Xem nhiệm vụ: ' + task.tieuDe} onClick={() => setSelected(task)}><Icon name="arrow-right" size={16} /></button>
+              </li>)}</ol>
+            </section>) : priorityReady && !c.taskError ? <Empty title="Chưa có việc cần gợi ý" /> : null}
             {priorityReady && ranked.length > 5 && <button className="today-show-more" aria-expanded={allRecommendations} onClick={() => setAllRecommendations((value) => !value)}>{allRecommendations ? 'Thu gọn còn 5 gợi ý' : `Xem tất cả ${ranked.length} gợi ý`}<Icon name={allRecommendations ? 'chevron-left' : 'chevron-right'} size={14} /></button>}
           </section>
 

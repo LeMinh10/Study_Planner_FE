@@ -1,6 +1,22 @@
-.ht-attachments ul { list-style: none; padding: 0; margin: 8px 0; }
-.ht-attachments li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border, #e7ebf3); }
-.ht-attachment-name { min-width: 0; flex: 1; text-align: left; color: var(--primary, #4b63ed); overflow-wrap: anywhere; background: transparent; border: 0; cursor: pointer; }
-.ht-attachment-name:hover { text-decoration: underline; }
-.ht-attachments li small { white-space: nowrap; color: var(--text-muted, #77849b); }
-.ht-attachments > small { display: block; margin-top: 6px; }
+.ht-attachments ul { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 9px; }
+.ht-attachments li { display: grid; min-width: 0; overflow-wrap: anywhere; border: 1px solid #e7ebf3; border-radius: 11px; background: #fff; }
+.ht-attachment-meta { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 8px 10px; }
+.ht-attachment-file-type { flex: 0 0 auto; min-width: 34px; max-width: 53px; overflow: hidden; padding: 6px 4px; border-radius: 7px; background: #eef1ff; color: #4054a7; text-align: center; font-size: 9px; font-weight: 700; }
+.ht-attachment-info { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.ht-attachment-info .ht-attachment-name { display: block; min-width: 0; text-align: left; overflow-wrap: anywhere; background: transparent; border: 0; padding: 0; font: inherit; font-size: 12px; color: #293447; }
+.ht-attachment-info button.ht-attachment-name { color: #364dba; cursor: pointer; }
+.ht-attachment-info button.ht-attachment-name:hover { text-decoration: underline; }
+.ht-attachments li small { color: #58677d; font-size: 11px; }
+.ht-attachment-actions { flex: 0 0 auto; }
+.ht-attachment-actions summary { display: grid; place-items: center; width: 30px; height: 30px; }
+.ht-attachment-image { min-width: 0; padding: 8px 8px 0; }
+.ht-attachment-image-small { width: min(100%, 168px); }
+.ht-attachment-image button.ht-attachment-preview { display: block; width: 100%; padding: 0; border: 0; border-radius: 8px; background: #f4f6fb; overflow: hidden; cursor: zoom-in; }
+.ht-attachment-preview img { display: block; width: 100%; height: auto; max-height: 234px; object-fit: contain; }
+.ht-attachment-image-small img { max-height: 112px; }
+.ht-attachment-preview-note { display: block; padding: 8px; background: #f4f6fb; border-radius: 8px; }
+dialog.ht-attachment-lightbox { position: fixed; inset: 0; box-sizing: border-box; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 50px clamp(12px, 5vw, 64px) 24px; border: 0; background: transparent; overflow: hidden; }
+dialog.ht-attachment-lightbox[open] { display: grid; place-items: center; }
+.ht-attachment-lightbox::backdrop { background: rgb(15 19 29 / 84%); }
+.ht-attachment-lightbox img { display: block; width: auto; height: auto; max-width: 100%; max-height: min(100%, calc(100dvh - 74px)); object-fit: contain; }
+dialog.ht-attachment-lightbox button.ht-attachment-lightbox-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #ffffff55; border-radius: 9px; color: #fff; background: #111827b3; cursor: pointer; }
