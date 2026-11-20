@@ -17,30 +17,53 @@ const task = (ma, dueHours, more = {}) => ({ ma, maHocKy: 11, maMonHoc: 101, maN
   thoiLuongDuKienPhut: 60, thoiLuongConLaiPhut: 60, coNhiemVuCon: false, nhacTruocGio: null, ...more })
 const event = (ma, start, end, more = {}) => ({ ma, loai: 'LichHoc', maNguon: 10, maMonHoc: 101, maHocKy: 11, tieuDe: ma, batDau: start, ketThuc: end, mauSac: null, trangThai: null, ...more })
 test('urgency groups have exact inclusive thresholds and use the effective inherited deadline', () => {
-  for (const [hours, group] of [[-0.001, 0], [0, 1], [6, 1], [6.001, 2], [24, 2], [24.001, 3], [72, 3], [72.001, 4], [168, 4], [168.001, 5], [null, 6]]) {
+  for (const [hours, group] of [[-0.001, 0], [0, 1], [6, 1], [6.001, 1], [24, 1], [24.001, 2], [72, 2], [72.001, 3], [168, 3], [168.001, 4], [null, 5]]) {
     assert.equal(model.urgency(task(1, hours), now), group, String(hours))
   }
   const inherited = task(2, 4, { hanHoanThanh: null, maNhiemVuCha: 1, maNhiemVuNguonHan: 1 })
   assert.equal(model.urgency(inherited, now), 1)
   assert(model.priorityReasons(inherited, now).some((reason) => reason.includes('kế thừa')))
 })
-test('ranking is deterministic: due time before importance, then work in progress and ID', () => {
+test('ranking is deterministic within a group: importance, deadline, work in progress and ID', () => {
   const items = [task(9, null, { mucDoUuTien: 'High' }), task(8, 100, { mucDoUuTien: 'High' }), task(7, 8, { mucDoUuTien: 'High' }),
     task(6, 2, { mucDoUuTien: 'Low' }), task(5, 4, { mucDoUuTien: 'High' }), task(4, 4, { mucDoUuTien: 'High', trangThai: 'InProgress', tienDo: 20 }),
     task(3, -1, { mucDoUuTien: 'Low' }), task(2, 4, { mucDoUuTien: 'High' }), task(1, 1, { trangThai: 'Completed', tienDo: 100 }), task(10, -5, { coNhiemVuCon: true })]
   const original = structuredClone(items)
-  assert.deepEqual(model.recommend(items, now).map(({ task }) => task.ma), [3, 6, 4, 2, 5, 7, 8, 9])
+  assert.deepEqual(model.recommend(items, now).map(({ task }) => task.ma), [3, 4, 2, 5, 7, 6, 8, 9])
   assert.deepEqual(items, original, 'Ranking must not mutate shared/API records')
-  assert.deepEqual(model.recommend([...items].reverse(), now).map(({ task }) => task.ma), [3, 6, 4, 2, 5, 7, 8, 9])
+  assert.deepEqual(model.recommend([...items].reverse(), now).map(({ task }) => task.ma), [3, 4, 2, 5, 7, 6, 8, 9])
   const sameDay = [task(1, 12, { mucDoUuTien: 'High' }), task(2, 7), task(3, 12, { mucDoUuTien: 'Low' })]
-  assert.deepEqual(model.recommend(sameDay, now).map(({ task }) => task.ma), [2, 1, 3], '17:00 Medium precedes 22:00 High; equal deadlines use importance')
+  assert.deepEqual(model.recommend(sameDay, now).map(({ task }) => task.ma), [1, 2, 3], 'Within 24 hours, High precedes Medium even with a later deadline')
 })
-test('urgency recalculates with time while earlier deadlines keep precedence over importance', () => {
-  const items = [task(1, 7, { mucDoUuTien: 'High' }), task(2, 5, { mucDoUuTien: 'Low' })]
+test('all 36 urgency group pairs rank the earlier group first and high importance wins within a group', () => {
+  const groupHours = [-1, 24, 48, 96, 240, null]
+  for (const [highGroup, highHours] of groupHours.entries()) {
+    for (const [lowGroup, lowHours] of groupHours.entries()) {
+      const high = task(1, highHours, { mucDoUuTien: 'High' })
+      const low = task(2, lowHours, { mucDoUuTien: 'Low' })
+      assert.equal(model.recommend([low, high], now)[0].task.ma, highGroup <= lowGroup ? 1 : 2)
+    }
+  }
+})
+test('acceptance cases from the discussion use the six-group default rule', () => {
+  const scenarios = [
+    { id: 'HN-01', a: task(1, 360, { mucDoUuTien: 'High' }), b: task(2, 24, { mucDoUuTien: 'Low' }), first: 2 },
+    { id: 'HN-02', a: task(1, 48, { mucDoUuTien: 'Low' }), b: task(2, 72, { mucDoUuTien: 'High' }), first: 2 },
+    { id: 'HN-03', a: task(1, 240, { mucDoUuTien: 'High' }), b: task(2, 216, { mucDoUuTien: 'Low' }), first: 1 },
+    { id: 'HN-04', a: task(1, 5, { mucDoUuTien: 'High' }), b: task(2, 1, { mucDoUuTien: 'Low' }), first: 1 },
+    { id: 'GH-01', a: task(1, 360, { mucDoUuTien: 'High', daGhim: true }), b: task(2, 5, { mucDoUuTien: 'Low' }), first: 2 },
+  ]
+  for (const { id, a, b, first } of scenarios) {
+    assert.equal(model.recommend([a, b], now)[0].task.ma, first, id)
+  }
+})
+test('crossing 24 hours can change ranking and custom criteria only apply within a group', () => {
+  const items = [task(1, 25, { mucDoUuTien: 'High', trangThai: 'InProgress', tienDo: 50 }), task(2, 23, { mucDoUuTien: 'Low' })]
+  assert.equal(model.recommend(items, now, { phienBanSchema: 1, tieuChi: ['InProgress', 'Deadline'] })[0].task.ma, 2)
   assert.equal(model.recommend(items, now)[0].task.ma, 2)
-  assert.equal(model.recommend(items, now + hour)[0].task.ma, 2)
+  assert.equal(model.recommend(items, now + hour)[0].task.ma, 1)
   assert.equal(model.urgency(items[0], now + hour), 1)
-  assert.deepEqual(model.priorityReasons(items[0], now), ['Đến hạn trong 24 giờ', 'Mức quan trọng cao'])
+  assert.deepEqual(model.priorityReasons(items[0], now + hour), ['Đến hạn trong 24 giờ', 'Mức quan trọng cao', 'Đang thực hiện'])
 })
 test('Today scopes the selected semester and personal work without mixing other semesters', () => {
   assert.equal(model.taskInScope(task(1, 2), '11'), true)

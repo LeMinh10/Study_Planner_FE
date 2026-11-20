@@ -10,7 +10,7 @@ export function createTodayFixture() {
       task(2, 'Hoàn thiện giao diện đăng nhập', '2026-11-10T12:00:00+07:00'),
       task(3, 'Nộp báo cáo đồ án', '2026-11-10T15:00:00+07:00', { mucDoUuTien: 'High', trangThai: 'InProgress', tienDo: 40 }),
       task(4, 'Làm bài tập React', '2026-11-10T18:00:00+07:00', { mucDoUuTien: 'High' }),
-      task(5, 'Ôn tập kiểm tra tiếng Anh', '2026-11-11T09:00:00+07:00', { loai: 'Revision' }),
+      task(5, 'Ôn tập kiểm tra tiếng Anh', '2026-11-11T11:00:00+07:00', { loai: 'Revision', mucDoUuTien: 'High' }),
       task(6, 'Đọc tài liệu bổ sung', null, { mucDoUuTien: 'High' }),
       task(7, 'Bài đã hoàn thành', '2026-11-10T23:59:00+07:00', { trangThai: 'Completed', tienDo: 100 }),
       task(8, 'Nhiệm vụ cha không được xếp trùng', '2026-11-10T11:00:00+07:00', { coNhiemVuCon: true }),
@@ -52,7 +52,8 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   assert.equal(await evaluate('document.querySelector(".today-metrics strong").textContent'), '—')
   await waitFor(ready)
   fixture.state.delay = 0
-  assert.deepEqual(await evaluate('[...document.querySelectorAll(".today-priority-list .today-task-title")].map(x=>x.textContent)'), ['Nộp bài CSDL còn quá hạn', 'Hoàn tất bước kiểm thử', 'Gửi hồ sơ học bổng', 'Hoàn thiện giao diện đăng nhập', 'Nộp báo cáo đồ án'])
+  assert.equal(await evaluate('document.querySelectorAll(".today-priority-reason").length'), 5, 'Each recommendation explains its priority')
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".today-priority-list .today-task-title")].map(x=>x.textContent)'), ['Nộp bài CSDL còn quá hạn', 'Gửi hồ sơ học bổng', 'Nộp báo cáo đồ án', 'Làm bài tập React', 'Hoàn thiện giao diện đăng nhập'])
   assert.equal(await evaluate('document.querySelector(".today-progress").innerText.includes("1/6")'), true)
   assert.equal(await evaluate('document.querySelectorAll(".today-agenda-list > li").length'), 3)
   assert.equal(await evaluate('document.querySelector(".today-class-hours strong").textContent'), '11:00')
@@ -62,6 +63,9 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   assert(!await evaluate('!!document.querySelector(".today-reason, .today-policy, .today-context, .today-short-reason")'))
   await click('.today-priorities > .today-show-more')
   await waitFor('document.querySelectorAll(".today-priority-list > li").length === 8')
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".today-urgency-heading")].map(heading => heading.textContent)'),
+    ['Đã quá hạn', 'Đến hạn trong 24 giờ', 'Còn trên 1 đến 3 ngày', 'Chưa có hạn'])
+  assert.equal(await evaluate('document.querySelector("#today-urgency-2").nextElementSibling.querySelector(".today-task-title").textContent'), 'Ôn tập kiểm tra tiếng Anh')
   await click('.today-priorities > .today-show-more')
   await click('.today-task-tabs button:nth-child(2)')
   assert.equal(await evaluate('document.querySelectorAll(".today-daily-list article").length'), 1)

@@ -24,7 +24,7 @@ export function AdminPriorityRulesPage() {
   const [loadError, setLoadError] = useState('')
   const [actionError, setActionError] = useState('')
   const [notice, setNotice] = useState('')
-  const [name, setName] = useState('Ưu tiên theo hạn')
+  const [name, setName] = useState('Ưu tiên trong nhóm độ gấp')
   const [order, setOrder] = useState<PriorityCriterion[]>([...criteria])
   const [selected, setSelected] = useState<readonly PriorityCriterion[]>(defaultPriorityConfig.tieuChi)
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
@@ -32,7 +32,7 @@ export function AdminPriorityRulesPage() {
   const generation = useRef(0)
   const config: PriorityConfig = { phienBanSchema: 1, tieuChi: order.filter(item => selected.includes(item)) }
   const ready = enabled && !!active && !!list && !loading && !loadError && !busy
-  const sequence = (rule: PriorityRule) => rule.cauHinh.tieuChi.map(item => criterionLabels[item]).join(' → ')
+  const sequence = (rule: PriorityRule) => ['Nhóm độ gấp', ...rule.cauHinh.tieuChi.map(item => criterionLabels[item])].join(' → ')
   const refresh = () => setRevision(value => value + 1)
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export function AdminPriorityRulesPage() {
 
   function edit(rule?: PriorityRule) {
     const source = rule?.cauHinh ?? defaultPriorityConfig
-    setName(rule?.ten ?? 'Ưu tiên theo hạn')
+    setName(rule?.ten ?? 'Ưu tiên trong nhóm độ gấp')
     setOrder([...source.tieuChi, ...criteria.filter(item => !source.tieuChi.includes(item))])
     setSelected([...source.tieuChi]); setActionError(''); setNotice('')
   }
@@ -93,7 +93,7 @@ export function AdminPriorityRulesPage() {
       {actionError && <p className="priority-error" role="alert">{actionError} <button type="button" disabled={loading || busy} onClick={() => { setActionError(''); refresh() }}>Tải dữ liệu mới</button></p>}
       {notice && <p className="admin-feedback" role="status">{notice}</p>}
       {loading && <p className="priority-message" role="status">Đang tải quy tắc…</p>}
-      {active && <section className="priority-active" aria-label="Quy tắc đang áp dụng"><div><span>Đang áp dụng</span><h2>{active.ten}</h2><p>{sequence(active)}</p></div></section>}
+      {active && <section className="priority-active" aria-label="Quy tắc đang áp dụng"><div><span>Đang áp dụng</span><h2>{active.ten}</h2><p>{sequence(active)}</p><p>Hôm nay luôn xếp theo nhóm độ gấp trước. Các tiêu chí bên dưới sắp thứ tự giữa các nhiệm vụ cùng nhóm.</p></div></section>}
       <div className="priority-editor-grid">
         <form className="priority-editor priority-card" onSubmit={submit}>
           <header><h2>Tạo quy tắc</h2><button type="button" className="priority-text-button" disabled={!ready} onClick={() => edit()}>Dùng mặc định</button></header>

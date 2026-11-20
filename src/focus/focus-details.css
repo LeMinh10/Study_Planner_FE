@@ -1,6 +1,116 @@
 .focus-more{position:relative}.focus-more-menu{position:absolute;right:0;top:calc(100% + 7px);width:196px;background:white;border:1px solid #e7ebf3;border-radius:12px;padding:6px;box-shadow:0 7px 27px #25395820;z-index:20}.focus-more-menu button{display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px;border:0;background:transparent;color:#61718c;text-align:left;border-radius:7px;font-size:12px}.focus-more-menu button:hover{background:#f3f6ff;color:#4e6bff}.focus-record button{font:inherit;text-align:left;border:0;background:transparent;padding:0;min-width:0}.focus-record-open{align-self:start}.focus-record .focus-record-time{display:block;font-size:10px;color:#9da6b5;margin:0 0 5px}.focus-record .focus-record-task{display:block;font-size:12px;font-weight:500;color:#465571;overflow-wrap:anywhere}.focus-record .focus-record-task[data-linked=true]:hover{color:#4e6bff;text-decoration:underline;text-underline-offset:3px}.focus-record .focus-record-duration{font-size:10px;color:#9da5b4;white-space:nowrap;padding-top:5px;align-self:start}.focus-record-body{min-width:0}.focus-record-body>p{font-size:10px;color:#919bab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:5px 0 0}.focus-record-task-name{display:inline-flex;align-items:center;gap:8px;background:transparent;border:0;padding:0;color:#4e6bff;text-align:left;font:inherit;overflow-wrap:anywhere}.focus-record-task-name:hover{text-decoration:underline;text-underline-offset:3px}.focus-dialog footer .focus-link{border:0;background:transparent;padding:5px 0;margin-right:auto;color:#4e6bff}.focus-task-preview{width:min(620px,calc(100vw - 28px));padding:25px 28px}.focus-task-summary{display:flex;flex-wrap:wrap;align-items:center;gap:7px;color:#8393b0;font-size:11px;background:#f6f8ff;padding:10px 12px;border-radius:8px;margin-bottom:20px}.focus-task-summary strong{color:#5472e4;font-weight:500}.focus-task-summary>span:last-child{margin-left:auto;color:#9ca8bc;font-size:10px}.focus-task-preview h3.focus-task-preview-title{font-size:21px;font-weight:600;line-height:1.5;letter-spacing:-.3px;color:#34435e;margin:0 0 11px;overflow-wrap:anywhere}.focus-task-meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:#8d9ab0;font-size:10px;margin-bottom:18px}.focus-task-meta>span{display:inline-flex;gap:5px;align-items:center}.focus-task-meta>span:first-child{background:#edf2ff;border-radius:15px;padding:2px 8px;color:#6d84d7}.focus-task-progress{display:flex;align-items:center;gap:14px;margin-bottom:21px;color:#939eb1;font-size:10px}.focus-task-progress strong{font-weight:500;color:#4e6bff;margin-left:4px}.focus-task-progress progress{flex:1;width:auto;height:4px;border:0;border-radius:4px;background:#edf0f8;accent-color:#6983f7}.focus-task-progress progress::-webkit-progress-value{background:#6983f7}.focus-task-progress progress::-webkit-progress-bar{background:#edf0f8}.focus-task-description{white-space:pre-wrap;overflow-wrap:anywhere;color:#78869f;font-size:12px;line-height:1.85;max-height:220px;overflow:auto;margin:4px 0 23px}.focus-task-checklist,.focus-task-children{border-top:1px solid #edf0f7;padding:15px 0;margin-top:13px}.focus-task-preview h4{color:#9ba6b9;font-size:10px;font-weight:500;margin:0 0 12px}.focus-task-checklist>div,.focus-task-children>div{display:flex;align-items:center;gap:9px;color:#6e7e98;font-size:12px;margin:11px 0}.focus-task-checklist input{width:14px;min-height:14px;margin:0;accent-color:#6c85ed}.focus-task-checklist input:checked+span{text-decoration:line-through;color:#a6b0c0}.focus-task-children small{margin-left:auto;font-size:10px;color:#9aa9bf}.focus-task-scope{display:flex;align-items:center;gap:7px;color:#9aa6ba;font-size:10px;border-top:1px solid #edf0f7;padding-top:16px;margin-top:16px}.focus-task-preview footer a{display:inline-flex;align-items:center;gap:6px}
-.focus-statistics{width:min(960px,calc(100vw - 28px));padding:25px 27px;background:#fbfcff}.focus-statistics>header{margin-bottom:18px}.focus-statistics>header h2{font-size:20px}.focus-stat-filters{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:15px}.focus-stat-filters>div{display:flex;gap:3px;padding:3px;background:#edf0f7;border-radius:20px}.focus-stat-filters button{border:0;background:transparent;border-radius:18px;padding:6px 16px;color:#8694ac;font-size:11px}.focus-stat-filters button[aria-pressed=true]{background:white;color:#4e6bff;box-shadow:0 1px 5px #304b8a0b}.focus-stat-filters label{display:flex;flex-direction:row;align-items:center;margin:0;gap:9px;white-space:nowrap}.focus-stat-filters input{width:147px;min-height:32px;font-size:11px;padding:6px 9px;background:#fff}.focus-stat-period{font-size:10px;color:#9da8ba;margin-bottom:12px}.focus-stat-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:17px}.focus-stat-kpis>div{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:white;border:1px solid #edf0f7;border-radius:11px;min-height:95px;padding:17px 10px;box-shadow:0 2px 6px #4b5b7a03}.focus-stat-kpis strong{font-size:22px;font-weight:500;letter-spacing:-.4px;color:#5472f0;line-height:1.3;text-align:center}.focus-stat-kpis span{font-size:10px;color:#a0aabe}.focus-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.focus-stat-chart-card{background:#fff;border:1px solid #edf0f7;border-radius:12px;min-width:0;padding:19px}.focus-statistics h3{font-size:12px;font-weight:500;margin:0 0 20px;color:#6d7e99}.focus-trend{display:flex;align-items:stretch;gap:5px;height:190px;border-bottom:1px solid #f0f2f7;padding:0 3px}.focus-trend>div{flex:1;min-width:0;display:flex;flex-direction:column}.focus-trend-track{display:flex;align-items:flex-end;justify-content:center;flex:1;border-bottom:1px solid #e8edf8;background:linear-gradient(to top,transparent 49%,#f5f7fa 50%,transparent 51%)}.focus-trend-track>span{display:block;width:65%;max-width:35px;min-width:3px;background:linear-gradient(#879eff,#5b7afd);border-radius:4px 4px 0 0}.focus-trend small{height:28px;text-align:center;color:#9eabc0;font-size:9px;padding-top:9px;white-space:nowrap}.focus-distribution{display:flex;flex-direction:column;align-items:center;gap:22px}.focus-donut{width:135px;height:135px;border-radius:50%;padding:10px;flex-shrink:0}.focus-donut>div{height:100%;width:100%;border-radius:50%;background:white;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px}.focus-donut strong{font-size:16px;color:#5b6c8d;font-weight:500;text-align:center;line-height:1.35;padding:0 7px}.focus-donut span{font-size:9px;color:#a3adc1}.focus-distribution-legend{width:100%;display:flex;flex-direction:column;gap:10px}.focus-distribution-legend>div{display:flex;align-items:center;gap:8px;min-width:0;font-size:10px}.focus-distribution-legend i{display:block;width:8px;height:8px;border-radius:50%;flex-shrink:0}.focus-distribution-legend button{background:transparent;border:0;color:#6d7f9e;font-size:11px;text-align:left;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}.focus-distribution-legend button:disabled{opacity:1;color:#98a5b9}.focus-distribution-legend button:not(:disabled):hover{text-decoration:underline;color:#4e6bff}.focus-distribution-legend>div>span{color:#9ba9c0;font-variant-numeric:tabular-nums}.focus-stat-empty{font-size:12px;color:#929fb4;text-align:center;padding:24px 14px 8px}.focus-stat-footnote{font-size:10px;color:#a0abc0;margin:15px 2px 0}.focus-statistics>footer{margin-top:18px}.focus-statistics>footer .focus-primary{border-radius:8px;padding-inline:25px}
+.focus-statistics{width:min(960px,calc(100vw - 28px));padding:25px 27px;background:#fbfcff}.focus-statistics>header{margin-bottom:18px}.focus-statistics>header h2{font-size:20px}.focus-stat-filters{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:15px}.focus-stat-filters>div{display:flex;gap:3px;padding:3px;background:#edf0f7;border-radius:20px}.focus-stat-filters button{border:0;background:transparent;border-radius:18px;padding:6px 16px;color:#8694ac;font-size:11px}.focus-stat-filters button[aria-pressed=true]{background:white;color:#4e6bff;box-shadow:0 1px 5px #304b8a0b}.focus-stat-filters label{display:flex;flex-direction:row;align-items:center;margin:0;gap:9px;white-space:nowrap}.focus-stat-filters input{width:147px;min-height:32px;font-size:11px;padding:6px 9px;background:#fff}.focus-stat-period{font-size:10px;color:#9da8ba;margin-bottom:12px}.focus-stat-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:17px}.focus-stat-kpis>div{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:white;border:1px solid #edf0f7;border-radius:11px;min-height:95px;padding:17px 10px;box-shadow:0 2px 6px #4b5b7a03}.focus-stat-kpis strong{font-size:22px;font-weight:500;letter-spacing:-.4px;color:#5472f0;line-height:1.3;text-align:center}.focus-stat-kpis span{font-size:10px;color:#a0aabe}.focus-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.focus-stat-chart-card{background:#fff;border:1px solid #edf0f7;border-radius:12px;min-width:0;padding:19px}.focus-statistics h3{font-size:12px;font-weight:500;margin:0 0 20px;color:#6d7e99}.focus-trend{display:flex;align-items:stretch;gap:5px;height:190px;border-bottom:1px solid #f0f2f7;padding:0 3px}.focus-trend>div{flex:1;min-width:0;display:flex;flex-direction:column}.focus-trend-track{display:flex;align-items:flex-end;justify-content:center;flex:1;border-bottom:1px solid #e8edf8;background:linear-gradient(to top,transparent 49%,#f5f7fa 50%,transparent 51%)}.focus-trend-track>span{display:block;width:65%;max-width:35px;min-width:3px;background:linear-gradient(#879eff,#5b7afd);border-radius:4px 4px 0 0}.focus-trend small{height:28px;text-align:center;color:#9eabc0;font-size:9px;padding-top:9px;white-space:nowrap}.focus-distribution{display:flex;flex-direction:column;align-items:center;gap:22px}.focus-donut{width:135px;height:135px;border-radius:50%;padding:10px;flex-shrink:0}.focus-donut>div{height:100%;width:100%;border-radius:50%;background:white;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px}.focus-donut strong{font-size:16px;color:#5b6c8d;font-weight:500;text-align:center;line-height:1.35;padding:0 7px}.focus-donut span{font-size:9px;color:#a3adc1}.focus-distribution-legend{width:100%;display:flex;flex-direction:column;gap:10px}.focus-distribution-legend>div{display:flex;align-items:center;gap:8px;min-width:0;font-size:10px}.focus-distribution-legend i{display:block;width:8px;height:8px;border-radius:50%;flex-shrink:0}.focus-distribution-legend button{background:transparent;border:0;color:#6d7f9e;font-size:11px;text-align:left;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}.focus-distribution-legend button:disabled{opacity:1;color:#98a5b9}.focus-distribution-legend button:not(:disabled):hover{text-decoration:underline;color:#4e6bff}.focus-distribution-legend>div>span{color:#9ba9c0;font-variant-numeric:tabular-nums}.focus-stat-empty{font-size:12px;color:#929fb4;text-align:center;padding:24px 14px 8px}.focus-statistics>footer{margin-top:18px}.focus-statistics>footer .focus-primary{border-radius:8px;padding-inline:25px}
 @media(min-width:900px){.focus-distribution{flex-direction:row;align-items:center;min-height:189px}.focus-distribution-legend{flex:1;min-width:0}.focus-stat-chart-card{padding:19px 18px}}
 @media(max-width:650px){.focus-statistics{padding:21px 18px}.focus-stat-kpis{grid-template-columns:1fr 1fr;gap:8px}.focus-stat-grid{grid-template-columns:1fr}.focus-stat-kpis strong{font-size:20px}.focus-task-preview{padding:23px 20px}.focus-task-summary>span:last-child{margin-left:23px}.focus-stat-filters{align-items:stretch}.focus-stat-filters>div{justify-content:center}.focus-trend{height:160px}.focus-distribution{flex-direction:row}.focus-stat-filters label{flex:1;justify-content:flex-end}.focus-stat-period{line-height:1.7}}
+
+.focus-dialog.focus-task-picker {
+  width:min(322px, calc(100vw - 24px));
+  height:min(424px, calc(100dvh - 24px));
+  padding:14px;
+  border-color:#e6e7eb;
+  border-radius:13px;
+  color:#444650;
+  box-shadow:0 8px 24px #27314524, 0 1px 5px #27314510;
+}
+.focus-task-picker[open] { display:flex; flex-direction:column; overflow:hidden; }
+.focus-dialog-anchored { position:fixed; inset:auto; margin:0; }
+.focus-dialog-anchored::backdrop { background:transparent; backdrop-filter:none; }
+.focus-task-picker > :not(.focus-picker-results) { flex-shrink:0; }
+.focus-task-picker > header { margin:0 0 10px; }
+.focus-task-picker > header h2 { font-size:15px; }
+.focus-task-picker .focus-picker-tabs { gap:4px; margin:0 0 12px; }
+.focus-task-picker .focus-picker-tabs button { min-height:27px; padding:4px 11px; }
+.focus-task-picker .focus-search { margin:0 0 6px; }
+.focus-task-picker .focus-search > input { min-height:35px; padding:6px 9px 6px 32px; background:#f3f4f6; }
+.focus-task-picker .focus-search > svg {
+  inset-inline-start:9px;
+  top:50%;
+  transform:translateY(-50%);
+  pointer-events:none;
+  color:#9298a4;
+}
+.focus-task-picker .focus-picker-filter {
+  align-self:flex-start;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  max-width:100%;
+  min-height:33px;
+  padding:4px 6px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:#30333c;
+  font-size:13px;
+  font-weight:600;
+}
+.focus-picker-filter:hover, .focus-picker-filter[aria-expanded=true] { background:#f4f5f7; }
+.focus-picker-filter > svg { flex:none; color:#858a95; }
+.focus-picker-filter[aria-expanded=true] > svg:last-child { transform:rotate(90deg); }
+.focus-picker-filter > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.focus-picker-results { position:relative; display:flex; flex:1; min-height:0; }
+.focus-task-picker .focus-task-options {
+  flex:1;
+  min-width:0;
+  min-height:0;
+  max-height:none;
+  margin:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+}
+.focus-task-picker .focus-task-options[data-filter-open=true] { overflow:hidden; }
+.focus-picker-filter-dismiss { position:absolute; inset:0; border:0; background:transparent; }
+.focus-picker-filter-list {
+  position:absolute;
+  inset:0 auto auto 0;
+  width:min(212px, 100%);
+  max-height:100%;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  padding:4px;
+  border:1px solid #e6e7eb;
+  border-radius:10px;
+  background:white;
+  box-shadow:0 4px 12px #202a3d22;
+}
+.focus-picker-filter-list button, .focus-picker-row {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  width:100%;
+  min-height:34px;
+  padding:4px 6px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:inherit;
+  text-align:start;
+}
+.focus-picker-filter-list button { font-size:12px; }
+.focus-picker-filter-list button > span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.focus-picker-filter-list button > svg { flex:none; }
+.focus-picker-filter-list button:hover, .focus-picker-row:hover { background:#f4f6fb; }
+.focus-picker-filter-list button[aria-pressed=true] { color:#4163e8; background:#eef2ff; }
+.focus-picker-filter-list h3, .focus-task-picker .focus-picker-heading {
+  margin:7px 6px 2px;
+  color:#656e80;
+  font-size:11px;
+  font-weight:600;
+}
+.focus-picker-filter-list small { display:block; color:#6c7586; font-size:10px; }
+.focus-task-picker .focus-picker-row { font-size:13px; }
+.focus-picker-row .focus-task-dot { width:13px; height:13px; border-color:#a7acb5; border-width:1px; }
+.focus-picker-row[aria-expanded] .focus-picker-task-name { font-weight:550; }
+.focus-picker-tree-arrow { display:grid; place-items:center; width:9px; flex:none; color:#777f8d; }
+.focus-picker-row[aria-expanded=true] .focus-picker-tree-arrow svg { transform:rotate(90deg); }
+.focus-picker-task-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.focus-picker-row time { flex:none; font-size:11px; color:#687283; font-variant-numeric:tabular-nums; }
+.focus-picker-row time[data-overdue=true] { color:#be3b36; }
+.focus-task-picker .focus-picker-free { color:#6c7687; }
+.focus-picker-parent { margin:0 0 9px; color:#52617b; overflow-wrap:anywhere; }
+.focus-task-picker .focus-empty { margin:0; padding:10px 6px; }
+.focus-task-picker .focus-picker-more { border:0; background:transparent; color:#4163e8; padding:6px 8px; font-size:12px; }
 
 .focus-task-saved{color:#7383a0;font-size:11px;margin:0 0 12px}.ht-detail-body>.focus-task-summary{margin-bottom:18px}

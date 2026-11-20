@@ -10,7 +10,7 @@ import { FocusDock } from '../focus/FocusDock'
 const destinations: { path: string; title: string; icon: IconName }[] = [
   { path: '/today', title: 'Hôm nay', icon: 'sun' },
   { path: '/tasks', title: 'Nhiệm vụ', icon: 'list' },
-  { path: '/calendar', title: 'Lịch học', icon: 'calendar' },
+  { path: '/planning', title: 'Lập kế hoạch', icon: 'calendar' },
   { path: '/focus', title: 'Tập trung', icon: 'headphones' },
 ]
 const secondaryDestinations: typeof destinations = [
@@ -18,7 +18,7 @@ const secondaryDestinations: typeof destinations = [
   { path: '/statistics', title: 'Tiến độ học tập', icon: 'chart' },
   { path: '/schedule', title: 'Thời khóa biểu', icon: 'clock' },
 ]
-const searchPages = [...destinations, ...secondaryDestinations, { path: '/semesters', title: 'Học kỳ', icon: 'layers' as const }, { path: '/profile', title: 'Hồ sơ của tôi', icon: 'user' as const }]
+const searchPages = [...destinations, ...secondaryDestinations, { path: '/calendar', title: 'Lịch học', icon: 'calendar' as const }, { path: '/semesters', title: 'Học kỳ', icon: 'layers' as const }, { path: '/profile', title: 'Hồ sơ của tôi', icon: 'user' as const }]
 
 function sidebarLinkClass({ isActive }: { isActive: boolean }) {
   return 'nav-item' + (isActive ? ' active' : '')
@@ -36,13 +36,14 @@ export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const params = new URLSearchParams(location.search)
+  const planningTab = ['/planning', '/calendar'].includes(location.pathname) || ['overview', 'calendar', 'planning', 'free', 'classes', 'sessions'].includes(params.get('tab') ?? '') || location.pathname === '/tasks' && params.get('layout') === 'calendar'
   const workspaceMode = location.pathname === '/' || location.pathname === '/tasks'
-  const sidebarCollapsed = sidebarPreference ?? (workspaceMode || location.pathname === '/calendar' || location.pathname === '/focus')
-  const coreWorkspace = ['/tasks', '/calendar', '/schedule'].includes(location.pathname)
+  const coreWorkspace = ['/tasks', '/calendar', '/schedule', '/planning'].includes(location.pathname)
+  const sidebarCollapsed = sidebarPreference ?? (workspaceMode || coreWorkspace || location.pathname === '/focus')
   const subjects = data.subjects.filter((subject) => subject.semesterId === data.selectedSemesterId)
   const scopedSubject = workspaceMode ? data.subjects.find((subject) => subject.id === params.get('subject')) : undefined
   const layout = ['board', 'calendar'].includes(params.get('layout') ?? '') ? params.get('layout')! : 'list'
-  const title = scopedSubject?.name ?? (location.pathname === '/subjects/new' ? 'Thêm môn học' : searchPages.find((page) => page.path === location.pathname)?.title) ?? 'Nhiệm vụ'
+  const title = planningTab ? 'Lập kế hoạch' : scopedSubject?.name ?? (location.pathname === '/subjects/new' ? 'Thêm môn học' : searchPages.find((page) => page.path === location.pathname)?.title) ?? 'Nhiệm vụ'
   const semester = data.semesters.find((item) => item.id === data.selectedSemesterId)
   const normalized = query.trim().toLocaleLowerCase('vi')
   const matches = searchPages.filter((page) => page.title.toLocaleLowerCase('vi').includes(normalized))
@@ -92,11 +93,14 @@ export function AppLayout() {
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onPointer) }
   }, [])
 
-  return <div className={'app-layout student-layout flow-layout' + (workspaceMode ? ' workspace-mode' : '') + (sidebarCollapsed ? ' sidebar-collapsed' : '')}>
+  return <div className={'app-layout student-layout flow-layout' + (workspaceMode ? ' workspace-mode' : '') + (coreWorkspace ? ' flow-learning-shell' : '') + (sidebarCollapsed ? ' sidebar-collapsed' : '')}>
     <a className="skip-link" href="#main-content">Đến nội dung chính</a>
     <aside id="student-sidebar" className="sidebar" aria-label="Không gian học tập">
       <div className="flow-sidebar-brand"><Link to="/" className="brand" aria-label="Study Planner – Hôm nay"><Brand /></Link></div>
-      <nav aria-label="Menu chính">{destinations.map((page) => <NavLink key={page.path} to={page.path} className={sidebarLinkClass} title={page.title} aria-label={page.title}><Icon name={page.icon} size={17} /><span className="sidebar-label">{page.title}</span></NavLink>)}</nav>
+      <nav aria-label="Menu chính">{destinations.map(page => {
+        const active = page.path === '/planning' ? planningTab : page.path === '/tasks' ? location.pathname === '/tasks' && !planningTab : location.pathname === page.path
+        return <Link key={page.path} to={page.path} className={sidebarLinkClass({ isActive: active })} aria-current={active ? 'page' : undefined} title={page.title} aria-label={page.title}><Icon name={page.icon} size={17} /><span className="sidebar-label">{page.title}</span></Link>
+      })}</nav>
       <section className="flow-space-tree sidebar-label" aria-label="Danh sách môn học">
         <div className="flow-tree-caption"><button type="button" className="sidebar-subject-toggle" aria-expanded={!subjectsCollapsed} aria-controls="sidebar-subject-list" aria-label={subjectsCollapsed ? 'Mở rộng môn học trong kỳ' : 'Thu gọn môn học trong kỳ'} onClick={() => setSubjectsCollapsed((collapsed) => !collapsed)}><span>Môn học trong kỳ</span><Icon name={subjectsCollapsed ? 'chevron-right' : 'chevron-left'} size={14} /></button></div>
         <NavLink to="/semesters" className={({ isActive }) => 'student-semester-link ' + sidebarLinkClass({ isActive })}>{semester?.name ?? 'Chưa có học kỳ'}</NavLink>

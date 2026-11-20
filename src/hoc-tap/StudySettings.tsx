@@ -50,7 +50,7 @@ export function StudySettingsForm({ token, sound, saveSound, onSaved, close }: {
   const data = settings.data
   const [saved, setSaved] = useState(false)
   return <div className="ht-shared-settings">
-    {settings.loading && !data && <p role="status">Đang tải cấu hình học…</p>}
+    {settings.loading && !data && <p role="status">Đang tải cài đặt…</p>}
     {settings.error && <p className="ht-error" role="alert">{settings.error} <button type="button" onClick={settings.refresh}>Tải lại cấu hình</button></p>}
     {data && <form onSubmit={async event => {
       event.preventDefault(); setSaved(false)
@@ -64,8 +64,8 @@ export function StudySettingsForm({ token, sound, saveSound, onSaved, close }: {
           <label>Giới hạn học mỗi ngày (phút)<input name="daily" type="number" min={15} max={720} required defaultValue={data.gioiHanHocMoiNgayPhut} /></label></div>
         {saveSound && <label className="focus-checkbox"><input type="checkbox" name="sound" defaultChecked={sound} />Âm báo khi hết giờ trên trình duyệt này</label>}
       </fieldset>
-      <p className="ht-study-caption">Dùng chung cho gợi ý lịch và Pomodoro. Áp dụng cho phiên mới; các phiên đã đặt và đồng hồ đang chạy được giữ nguyên.</p>
-      {saved && <p role="status" className="ht-settings-saved">Đã lưu cấu hình học.</p>}
+      <p className="ht-study-caption">Thời gian học và nghỉ áp dụng cho phiên Pomodoro mới và gợi ý lịch mới. Giới hạn mỗi ngày dùng khi xếp lịch.</p>
+      {saved && <p role="status" className="ht-settings-saved">Đã lưu cài đặt.</p>}
       <footer>{close && <button type="button" disabled={settings.saving} onClick={close}>Đóng</button>}<button className="ht-primary" type="submit" disabled={settings.loading || settings.saving}>{settings.saving ? 'Đang lưu…' : 'Lưu cài đặt'}</button></footer>
     </form>}
   </div>

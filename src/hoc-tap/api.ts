@@ -6,7 +6,7 @@ import { xacNhan } from './xacNhan'
 const loiDeHieu: Record<string, string> = {
   TASK_CYCLE: 'Không thể chuyển nhiệm vụ vào chính nó hoặc vào một bước nhỏ thuộc nhiệm vụ đó.',
   TASK_TREE_INVALID: 'Chưa tải đủ nhiệm vụ và các bước nhỏ. Hãy tải lại danh sách.',
-  TASK_TREE_LIMIT: 'Một nhiệm vụ có thể chia tối đa 10 cấp và tổng cộng 1.000 bước. Hãy tách bớt thành nhiệm vụ riêng.',
+  TASK_TREE_LIMIT: 'Nhóm nhiệm vụ đã vượt giới hạn cây. Hãy tách bớt thành nhiệm vụ riêng.',
   TASK_NOT_LEAF: 'Hãy chọn một việc chưa được chia nhỏ để đặt phiên tự học.',
   TASK_ROOT_REQUIRED: 'Hãy mở nhiệm vụ lớn nhất để đổi học kỳ hoặc môn cho cả nhóm việc.',
   TASK_PROGRESS_IS_DERIVED: 'Tiến độ được tính từ các bước nhỏ hoặc checklist. Hãy cập nhật các phần việc trong chi tiết nhiệm vụ.',
@@ -98,7 +98,7 @@ async function xacNhanAnhHuong(impact: AnhHuong, confirm: typeof xacNhan, schedu
   if (structureRequired && reopened + checklists + progress === 0) messages.push('Thay đổi các bước có thể mở lại nhiệm vụ đã hoàn thành và chuyển sang cách tính tiến độ từ các bước nhỏ.')
   if (reopened) messages.push('Thao tác này sẽ mở lại ' + reopened + ' nhiệm vụ đã hoàn thành, gồm các nhiệm vụ lớn bị ảnh hưởng.')
   if (checklists) messages.push('Checklist hiện có sẽ được giữ trong bước “Công việc chung”. Tiến độ nhiệm vụ lớn sẽ tính từ các bước nhỏ.')
-  if (progress) messages.push('Tiến độ và ước lượng hiện có sẽ được giữ trong bước “Phần việc đã thực hiện”. Tiến độ nhiệm vụ lớn sẽ tính từ các bước nhỏ.')
+  if (progress) messages.push('Tiến độ và ước lượng hiện có sẽ được giữ trong bước “Nhiệm vụ đã bắt đầu”. Tiến độ nhiệm vụ lớn sẽ tính từ các bước nhỏ.')
   if (count || scheduleRequired) messages.push('Thay đổi này sẽ hủy ' + (count || 'các') + ' phiên tự học đã lên lịch liên quan.')
   if (!await confirm({ tieuDe: structure ? 'Thay đổi các bước của nhiệm vụ?' : 'Thay đổi lịch tự học?', noiDung: messages.join(' '),
     nhanXacNhan: structure ? reopened ? 'Mở lại và tiếp tục' : 'Chuyển và tiếp tục' : 'Hủy phiên và tiếp tục', nguyHiem: count > 0 || scheduleRequired })) return null

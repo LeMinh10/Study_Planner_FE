@@ -4,6 +4,8 @@ import { Icon } from '../components/Icon'
 import { listUsers } from '../api/admin'
 import { AccountStatusButton } from './AccountStatusButton'
 import { useAdminResource } from './useAdminResource'
+import { StudentAccountEditor } from './StudentAccountEditor'
+import type { ManagedUser } from '../types/admin'
 
 function positiveInteger(value: string | null, fallback: number, maximum: number) {
   const number = Number(value)
@@ -20,6 +22,8 @@ export function StudentAccountsPage() {
   const createdFrom = params.get('TaoTu') || undefined
   const createdTo = params.get('TaoDen') || undefined
   const [message, setMessage] = useState('')
+  // undefined: đóng form; null: tạo mới; ManagedUser: sửa đúng hồ sơ đã đọc.
+  const [editor, setEditor] = useState<ManagedUser | null | undefined>(undefined)
   const load = useCallback((token: string, signal: AbortSignal) => listUsers(token, { search: query, page, pageSize, isActive: status === 'all' ? undefined : status === 'active', role, createdFrom, createdTo, signal }), [query, page, pageSize, status, role, createdFrom, createdTo])
   const { data, loading, error, reload } = useAdminResource(load)
   const pages = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || pageSize)))
@@ -46,7 +50,7 @@ export function StudentAccountsPage() {
   function updated(message: string) { setMessage(message); reload() }
 
   return <section className="admin-students" aria-labelledby="admin-students-title">
-    <div className="admin-page-heading"><h1 id="admin-students-title" className="admin-label admin-students-heading">QUẢN LÝ TÀI KHOẢN SINH VIÊN</h1></div>
+    <div className="admin-account-header"><div className="admin-page-heading"><h1 id="admin-students-title" className="admin-label admin-students-heading">QUẢN LÝ TÀI KHOẢN SINH VIÊN</h1></div><button type="button" className="button button-primary" onClick={() => setEditor(null)}>Thêm sinh viên</button></div>
     {message && <p className="admin-feedback" role="status">{message}</p>}
     <section className="admin-students-panel" aria-labelledby="admin-list-title">
       <div className="admin-list-heading"><h2 id="admin-list-title">Danh sách tài khoản</h2><span>{data ? `${data.total} tài khoản` : loading ? 'Đang tải…' : '—'}</span></div>
@@ -68,7 +72,7 @@ export function StudentAccountsPage() {
               <td>{student.name}</td><td>{student.email}</td><td>{student.studentId || '—'}</td><td>{student.role === 'admin' ? 'Quản trị viên' : 'Sinh viên'}</td>
               <td><span className={'admin-status ' + student.status}>{student.status === 'active' ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</span></td>
               <td>{new Date(student.createdAt).toLocaleDateString('vi-VN')}</td>
-              <td><div className="admin-account-actions"><Link to={`/admin/students/${student.id}${listSearch}`} className="admin-detail-button" aria-label={`Xem chi tiết ${student.role === 'admin' ? 'tài khoản' : 'sinh viên'} ${student.name}`}>Xem chi tiết<Icon name="chevron-right" size={14} /></Link><AccountStatusButton account={student} onUpdated={updated} /></div></td>
+              <td><div className="admin-account-actions"><Link to={`/admin/students/${student.id}${listSearch}`} className="admin-detail-button" aria-label={`Xem chi tiết ${student.role === 'admin' ? 'tài khoản' : 'sinh viên'} ${student.name}`}>Xem chi tiết<Icon name="chevron-right" size={14} /></Link>{student.role === 'sinhvien' && <button type="button" className="admin-detail-button" aria-label={`Sửa thông tin ${student.name}`} onClick={() => setEditor(student)}>Sửa thông tin</button>}<AccountStatusButton account={student} onUpdated={updated} /></div></td>
             </tr>) : <tr><td colSpan={7}><div className="admin-empty-state"><span><Icon name={filtering ? 'search' : 'user'} size={30} /></span><h3>{filtering ? 'Không tìm thấy tài khoản phù hợp' : 'Chưa có tài khoản'}</h3><p>{filtering ? 'Thử từ khóa khác hoặc thay đổi bộ lọc trạng thái.' : 'Danh sách tài khoản sẽ hiển thị tại đây khi có dữ liệu.'}</p>{filtering && <button type="button" className="button button-secondary" onClick={() => { setMessage(''); setParams({}) }}>Xóa bộ lọc</button>}</div></td></tr>}</tbody>
         </table>
       </div>
@@ -78,5 +82,6 @@ export function StudentAccountsPage() {
         <div><button type="button" aria-label="Trang trước" disabled={loading || !!error || page <= 1} onClick={() => changePage(page - 1)}><Icon name="chevron-left" size={16} />Trước</button><button type="button" aria-label="Trang sau" disabled={loading || !!error || !data || page >= pages} onClick={() => changePage(page + 1)}>Sau<Icon name="chevron-right" size={16} /></button></div>
       </div>
     </section>
+    {editor !== undefined && <StudentAccountEditor student={editor ?? undefined} onClose={() => setEditor(undefined)} onSaved={() => { setEditor(undefined); updated(editor ? 'Đã cập nhật thông tin sinh viên.' : 'Đã tạo tài khoản sinh viên.'); if (!editor) setParams({ VaiTro: 'Student' }) }} />}
   </section>
 }

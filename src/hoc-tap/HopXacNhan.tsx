@@ -6,6 +6,7 @@ export interface NoiDungXacNhan {
   noiDung: ReactNode
   chiTiet?: { nhan: string; giaTri: number | string }[]
   luuY?: string
+  nhanHuy?: string
   nhanXacNhan?: string
   nhanDangXuLy?: string
   nguyHiem?: boolean
@@ -27,7 +28,7 @@ export function HopXacNhan({ noiDung, ketThuc }: { noiDung: NoiDungXacNhan; ketT
     cancel.current?.focus()
     return () => {
       element?.close()
-      requestAnimationFrame(() => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus() })
+      requestAnimationFrame(() => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true }) })
     }
   }, [])
   return <dialog ref={dialog} className="ht-dialog ht-confirm" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId} onCancel={event => {
@@ -41,7 +42,7 @@ export function HopXacNhan({ noiDung, ketThuc }: { noiDung: NoiDungXacNhan; ketT
     {noiDung.luuY && <p className="ht-confirm-note">{noiDung.luuY}</p>}
     {error && <p role="alert" className="ht-error">{error}</p>}
     <footer>
-      <button ref={cancel} type="button" disabled={busy} onClick={() => ketThuc(false)}>Hủy</button>
+      <button ref={cancel} type="button" disabled={busy} onClick={() => ketThuc(false)}>{noiDung.nhanHuy ?? 'Hủy'}</button>
       <button type="button" className={noiDung.nguyHiem ? 'ht-confirm-delete' : 'ht-primary'} disabled={busy} onClick={async () => {
         if (sending.current) return
         sending.current = true

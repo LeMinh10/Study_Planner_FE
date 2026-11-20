@@ -23,6 +23,7 @@ export async function runPriorityChecks({ go, input, click, waitFor, evaluate, c
   await login('admin@example.com'); await waitFor('location.pathname === "/admin/overview"')
   await click('a[href="/admin/priority-rules"]'); await waitFor(editorReady)
   assert(!await evaluate('!!document.querySelector(".priority-preview, .priority-note")'))
+  assert(await evaluate('document.querySelector(".priority-active p").textContent.startsWith("Nhóm độ gấp → Mức quan trọng")'))
   await click('.priority-history nav button:last-child')
   await waitFor('document.querySelectorAll("[data-rule-id]").length === 2 && !document.querySelector(".priority-editor fieldset").disabled')
   await click('.priority-history nav button:first-child'); await waitFor(editorReady)
@@ -32,12 +33,10 @@ export async function runPriorityChecks({ go, input, click, waitFor, evaluate, c
     await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key, code })
   }
   await evaluate(`document.querySelector('[data-criterion="Deadline"] .criterion-drag').focus()`)
-  await press(' ', 'Space'); await press('ArrowDown', 'ArrowDown')
-  assert.deepEqual(await criterionOrder(), ['Importance', 'Deadline', 'InProgress'])
+  await press(' ', 'Space'); await press('ArrowUp', 'ArrowUp')
+  assert.deepEqual(await criterionOrder(), ['Deadline', 'Importance', 'InProgress'])
   await press('Escape', 'Escape')
-  assert.deepEqual(await criterionOrder(), ['Deadline', 'Importance', 'InProgress'], 'Keyboard cancellation restores the original order')
-  await click('[data-criterion="Importance"] .criterion-move-up')
-  assert.deepEqual(await criterionOrder(), ['Importance', 'Deadline', 'InProgress'])
+  assert.deepEqual(await criterionOrder(), ['Importance', 'Deadline', 'InProgress'], 'Keyboard cancellation restores the original order')
   await click('[data-criterion="Importance"] .criterion-move-down')
   const drag = await evaluate(`(() => {
     const handle = document.querySelector('[data-criterion="Importance"] .criterion-drag').getBoundingClientRect()

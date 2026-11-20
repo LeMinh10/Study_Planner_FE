@@ -1,4 +1,4 @@
-export const criteria = ['Deadline', 'Importance', 'InProgress'] as const
+export const criteria = ['Importance', 'Deadline', 'InProgress'] as const
 export type PriorityCriterion = typeof criteria[number]
 export interface PriorityConfig { phienBanSchema: 1; tieuChi: readonly PriorityCriterion[] }
 export interface PriorityRule {
@@ -8,7 +8,7 @@ export interface PriorityRule {
 export const criterionLabels: Record<PriorityCriterion, string> = {
   Deadline: 'Hạn hoàn thành', Importance: 'Mức quan trọng', InProgress: 'Đang thực hiện',
 }
-export const defaultPriorityConfig: PriorityConfig = { phienBanSchema: 1, tieuChi: ['Deadline', 'Importance', 'InProgress'] }
+export const defaultPriorityConfig: PriorityConfig = { phienBanSchema: 1, tieuChi: criteria }
 export const defaultPriorityRule: PriorityRule = { ma: 0, ten: 'Mặc định', phienBan: 0, dangSuDung: true, cauHinh: defaultPriorityConfig, ngayTao: null }
 export function isPriorityConfig(value: unknown): value is PriorityConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false

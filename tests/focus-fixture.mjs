@@ -1,5 +1,6 @@
 export function createFocusFixture({ tasks, sessions, revision, bump, zone }) {
   const records = []
+  const timeEdits = new Map()
   const controls = { failStatistics: false }
   let sequence = 1, offset = 0
   const now = () => Date.now() + offset
@@ -65,6 +66,25 @@ export function createFocusFixture({ tasks, sessions, revision, bump, zone }) {
       const task = tasks.find(t => t.ma === body.maNhiemVu)
       const row = { ma: sequence++, maNhiemVu: task?.ma ?? null, maPhienTuHoc: null, tieuDe: task?.tieuDe ?? 'Tập trung tự do', cheDo: body.cheDo, mucTieuGiay: body.mucTieuGiay, trangThai: 'Completed', soMiliGiayDaHoc: end - start, batDau: body.batDau, batDauDoan: null, ketThuc: body.ketThuc, ghiChu: body.ghiChu, nhapThuCong: true }
       records.push(row); bump(); return envelope(row)
+    }
+    const timeRecord = route.match(/^\/focus\/(\d+)\/time$/)
+    if (timeRecord) {
+      const row = records.find(r => r.ma === Number(timeRecord[1]) && r.trangThai === 'Completed')
+      if (!row) return failed('Không tìm thấy bản ghi đã lưu.')
+      const history = timeEdits.get(row.ma) ?? []
+      const snapshot = () => ({ batDau: row.batDau, ketThuc: row.ketThuc, soMiliGiayDaHoc: row.soMiliGiayDaHoc })
+      if (method === 'PUT') {
+        const start = Date.parse(body.batDau), end = Date.parse(body.ketThuc)
+        if (end <= start || end > now()) return { status: 400, response: { detail: 'Khoảng thời gian không hợp lệ.' } }
+        const before = snapshot()
+        Object.assign(row, { batDau: body.batDau, ketThuc: body.ketThuc, soMiliGiayDaHoc: end - start })
+        history.push({ suaLuc: iso(now()), truoc: before, sau: snapshot() })
+        timeEdits.set(row.ma, history)
+        const planned = sessions().find(s => s.ma === row.maPhienTuHoc)
+        if (planned) planned.soGiayDaHoc = Math.floor(row.soMiliGiayDaHoc / 1000)
+        bump()
+      }
+      return envelope({ banGhi: row, canNhapThoiLuong: false, lichSu: history })
     }
     const match = route.match(/^\/focus\/(\d+)\/(pause|resume|finish|note|discard)$/)
     const row = match && records.find(r => r.ma === Number(match[1]))

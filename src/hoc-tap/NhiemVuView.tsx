@@ -1,8 +1,9 @@
-import { TepDinhKemNhiemVu } from './TepDinhKemNhiemVu'
+import { useTepDinhKemNhiemVu } from './TepDinhKemNhiemVu'
 import './tep-dinh-kem.css'
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { FocusDialog } from '../focus/FocusDialog'
 import { Icon } from '../components/Icon'
 import { goi, LoiHocTap, thayDoi } from './api'
 import { xacNhan } from './xacNhan'
@@ -11,6 +12,12 @@ import { congNgay, gioNhap, hienGio, loaiViec, ngay, thoiDiemGui, trangThai, utc
 import type { AnhHuong, MucChecklist, NhiemVu, Trang } from './types'
 import { HoatDongNhiemVu } from './HoatDongNhiemVu'
 import { useNhiemVu } from './NhiemVuContext'
+
+const capToiDa = 5
+
+function capNhiemVu(task: NhiemVu, soToTienHienThi = 0) {
+  return 1 + (task.duongDanNhiemVuCha?.length ?? Math.max(soToTienHienThi, task.maNhiemVuCha === null ? 0 : 1))
+}
 
 export function ThemNhanh() {
   const c = useHocTap()
@@ -41,7 +48,9 @@ export function ThemNhanh() {
   </form>
 }
 
-async function doiHoanThanhNhiemVu(c: ReturnType<typeof useNhiemVu>, task: NhiemVu, version: number) {
+export async function doiHoanThanhNhiemVu(
+  c: ReturnType<typeof useNhiemVu>, task: Pick<NhiemVu, 'ma' | 'tieuDe' | 'tienDo' | 'coNhiemVuCon' | 'checklist'>, version: number,
+) {
   if (task.coNhiemVuCon || task.checklist?.length) { c.chonNhiemVu(task.ma); return null }
   const action = task.tienDo === 100 ? 'reopen' : 'complete'
   function save(status: 'complete' | 'reopen', tienDo: number, baseline: number, confirm?: typeof xacNhan) {
@@ -53,7 +62,14 @@ async function doiHoanThanhNhiemVu(c: ReturnType<typeof useNhiemVu>, task: Nhiem
   let affectedSessions = false
   const result = await save(action, 0, version, options => {
     affectedSessions = true
-    return xacNhan(options)
+    return xacNhan(options.tieuDe === 'Thay đổi lịch tự học?' ? {
+      ...options,
+      tieuDe: action === 'complete' ? 'Hoàn thành nhiệm vụ này?' : 'Mở lại nhiệm vụ này?',
+      noiDung: <><strong>{task.tieuDe}</strong><p>{options.noiDung}</p></>,
+      nhanHuy: 'Giữ nguyên',
+      nhanXacNhan: action === 'complete' ? 'Hoàn thành và hủy phiên' : 'Mở lại và hủy phiên',
+      luuY: 'Chọn Giữ nguyên để không thay đổi nhiệm vụ và lịch học.',
+    } : options)
   })
   if (!result) return null
   if (action === 'reopen') {
@@ -71,14 +87,17 @@ async function doiHoanThanhNhiemVu(c: ReturnType<typeof useNhiemVu>, task: Nhiem
 export type InlineChildDraft = { parent: number; after?: number }
 type CayNhiemVu = { revision: number; tasks: NhiemVu[] }
 
-export function NhiemVuView({ board = false, completed = false, openPath, inlineDraft, onInlineSaved, onAddChildInDetail, onShowCompleted }: {
+export function NhiemVuView({ board = false, completed = false, boardCompleted, openPath, inlineDraft, onInlineSaved, onAddChildInDetail }: {
   board?: boolean
   completed?: boolean
   openPath?: number[]
   inlineDraft?: InlineChildDraft
   onInlineSaved: (path: number[], draft?: InlineChildDraft) => void
   onAddChildInDetail: (path: number[]) => void
-  onShowCompleted: () => void
+  boardCompleted?: {
+    tasks: NhiemVu[]; total: number | null; page: number; pageCount: number
+    loading: boolean; error: string; setPage: (page: number) => void
+  }
 }) {
   const c = useHocTap()
   const [params] = useSearchParams()
@@ -181,13 +200,19 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
       return next
     })
   }
+  const topLevelPinned = new Set(c.tasks.filter(task => task.daGhim).map(task => task.ma))
   function row(task: NhiemVu, ancestors: number[] = [], source?: CayNhiemVu): ReactNode {
     const level = ancestors.length
+    const cap = capNhiemVu(task, level)
+    const canAddChild = cap < capToiDa
     const path = [...ancestors, task.ma]
     const tree = source ?? children.get(task.ma)
-    const flatCompleted = completed || params.get('status') === 'Completed'
-    const steps = tree?.tasks.filter(n => n.maNhiemVuCha === task.ma && n.trangThai !== 'Completed') ?? []
-    const rowDate = completed ? task.ngayHoanThanh : task.hanHieuLuc
+    const done = task.trangThai === 'Completed'
+    const flatCompleted = completed || (board && done) || params.get('status') === 'Completed'
+    // Một bước đã hiện ở đầu trang vẫn thuộc cây, nhưng chỉ có một hàng tương tác trên trang đó.
+    const steps = tree?.tasks.filter(n => n.maNhiemVuCha === task.ma && n.trangThai !== 'Completed' && !topLevelPinned.has(n.ma)) ?? []
+    const showCompletedDate = completed || (board && done)
+    const rowDate = showCompletedDate ? task.ngayHoanThanh : task.hanHieuLuc
     const rowReady = c.version !== null && (!source || source.revision === c.revision)
     const parent = ancestors.at(-1)
     const rowProgress = c.tienDoXemTruoc?.ma === task.ma ? c.tienDoXemTruoc.tienDo : task.tienDo
@@ -199,6 +224,7 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
       else openProgress(task, anchor, ancestors)
     }
     function nextDraft() {
+      if (cap > capToiDa) return
       if (parent !== undefined) return { parent, after: task.ma }
       if (task.maNhiemVuCha !== null) onAddChildInDetail([task.maNhiemVuCha])
     }
@@ -209,14 +235,13 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
       c.chonNhiemVu(task.ma)
     }
     function addChildInList() {
-      if (saving.current || !rowReady) return
-      if (level >= 10) { setError('Nhiệm vụ đã ở cấp sâu nhất.'); return }
+      if (saving.current || !rowReady || !canAddChild) return
       setEditing(undefined)
       setExpanded(current => new Set([...current, ...path]))
       if (draft?.parent === task.ma) inlineDraftInput.current?.focus()
       setDraft({ parent: task.ma })
     }
-    const draftRow = draft?.parent === task.ma && rowReady && (!task.coNhiemVuCon || tree?.revision === c.revision) && <form className="ht-inline-child ht-list-child-draft"
+    const draftRow = canAddChild && draft?.parent === task.ma && rowReady && (!task.coNhiemVuCon || tree?.revision === c.revision) && <form className="ht-inline-child ht-list-child-draft"
       style={{ paddingInlineStart: `min(${12 + (level + 1) * 20}px, 25%)` }} aria-label="Thêm bước nhỏ trong danh sách" onSubmit={event => {
         event.preventDefault()
         const version = c.version
@@ -231,7 +256,6 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
         readOnly={savingInline} onKeyDown={event => { if (event.key === 'Escape' && !savingInline) setDraft(undefined) }} />
       <button type="submit" disabled={savingInline || !c.zoneReady}>Thêm</button>
     </form>
-    const done = task.trangThai === 'Completed'
     const selected = params.get('task') === String(task.ma)
     const scopeName = c.subjects.find(s => Number(s.id) === task.maMonHoc)?.name
       ?? c.semesters.find(s => Number(s.id) === task.maHocKy)?.name ?? 'Việc cá nhân'
@@ -260,16 +284,18 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
         if (event.key !== 'F2') return
         event.preventDefault()
         editTitle()
-      }}><strong>{task.tieuDe}</strong>{!board && <small>{scopeName}</small>}</button>
+      }}><strong>{task.daGhim && <span className="ht-pin-mark" title="Đã ghim"><Icon name="pin" size={13} /><span className="sr-only">Đã ghim </span></span>}{task.tieuDe}</strong>{!board && <small>{level === 0 && task.daGhim ? task.tieuDeNhiemVuCha ?? scopeName : scopeName}</small>}</button>
     const progress = <button type="button" className="ht-progress-ring ht-progress-trigger" aria-label={progressLabel}
       title={task.coNhiemVuCon ? progressLabel + ' · Tính từ các bước nhỏ' : coChecklist ? progressLabel + ' · Xem checklist' : progressLabel} disabled={savingProgress || savingInline || !rowReady}
       onClick={event => editProgress(event.currentTarget)}><VongTienDo value={rowProgress} />{board && <span aria-hidden="true">{rowProgress}%</span>}</button>
     const priority = <span className={'ht-priority ht-priority-' + task.mucDoUuTien} title={'Ưu tiên ' + uuTien[task.mucDoUuTien]}>{uuTien[task.mucDoUuTien]}</span>
     const due = <span className={'ht-task-due' + (task.hanHieuLuc && Date.parse(task.hanHieuLuc) < Date.now() && task.tienDo < 100 ? ' ht-overdue' : '')}>
-      {board && rowDate && <Icon name="calendar" size={13} />}
-      {rowDate ? <HanNhiemVu value={rowDate} zone={c.zone} today={today} /> : completed ? '—' : 'Chưa đặt hạn'}
+      {board && rowDate && <Icon name={done ? 'check' : 'calendar'} size={13} />}
+      {board && done && rowDate && <span className="sr-only">Hoàn thành </span>}
+      {rowDate ? <HanNhiemVu value={rowDate} zone={c.zone} today={today} /> : showCompletedDate ? '—' : 'Chưa đặt hạn'}
     </span>
-    const actions = <ThaoTacNhiemVu task={task} baseline={savingInline || !rowReady ? null : c.version} onAddChild={addChildInList} onShareLink={setShareLink} />
+    const addChild = board && done ? () => onAddChildInDetail(path) : addChildInList
+    const actions = <ThaoTacNhiemVu task={task} baseline={savingInline || !rowReady ? null : c.version} onAddChild={canAddChild ? addChild : undefined} onShareLink={setShareLink} />
     return <div key={task.ma} className="ht-task-branch">
       {board ? <article className={'ht-board-card' + (done ? ' ht-task-completed' : '')} data-selected={selected || undefined}
         style={level ? { marginInlineStart: `min(${level * 12}px, 12%)` } : undefined}>
@@ -280,7 +306,7 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
         style={{ paddingInlineStart: `min(${12 + level * 20}px, 25%)` }}>
         {control}{title}{progress}{priority}{due}{actions}
       </div>}
-      {(!flatCompleted || draft?.parent === task.ma) && expanded.has(task.ma) && level < 10 && <>
+      {(!flatCompleted || draft?.parent === task.ma) && expanded.has(task.ma) && <>
         {!flatCompleted && steps.map(step => <Fragment key={step.ma}>
           {row(step, path, tree)}
           {draft?.after === step.ma && draftRow}
@@ -308,23 +334,36 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
   return <>
     {error && <p className="ht-error" role="alert">{error}</p>}
     {shareLink && <label className="ht-note">Sao chép liên kết nhiệm vụ <input className="ht-share-link" value={shareLink} readOnly onFocus={event => event.target.select()} /><button type="button" onClick={() => setShareLink('')}>Đóng</button></label>}
-    <div className="ht-list-caption"><span>{c.total} nhiệm vụ</span></div>
+    <div className="ht-list-caption">
+      {(!boardCompleted || boardCompleted.total !== null) && <span>{c.total + (boardCompleted?.total ?? 0)} nhiệm vụ</span>}
+    </div>
     {board ? <section className="ht-board" aria-label="Nhiệm vụ theo trạng thái" tabIndex={0}>
       {['NotStarted', 'InProgress', 'Completed'].map(status => {
-        const group = c.tasks.filter(task => task.trangThai === status)
+        const doneColumn = status === 'Completed' ? boardCompleted : undefined
+        const group = doneColumn?.tasks ?? c.tasks.filter(task => task.trangThai === status)
+        const count = doneColumn ? doneColumn.total : group.length
         return <section className="ht-board-column" data-status={status} key={status}>
           <header className="ht-board-heading">
             <span className="ht-board-dot" aria-hidden="true" />
             <h2>{trangThai[status]}</h2>
-            <span className="ht-board-count" title="Số nhiệm vụ trên trang này">{group.length}<span className="sr-only"> nhiệm vụ trên trang này</span></span>
+            {count !== null && <span className="ht-board-count" title={doneColumn ? 'Tổng số nhiệm vụ đã hoàn thành' : 'Số nhiệm vụ trên trang này'}>{count}<span className="sr-only"> nhiệm vụ</span></span>}
           </header>
           <div className="ht-board-stack">
-            {group.length ? group.map(task => row(task)) : <div className="ht-board-empty">
-              {status === 'Completed' && params.get('status') !== 'Completed'
-                ? <button type="button" onClick={onShowCompleted}>Xem danh sách đã hoàn thành <Icon name="chevron-right" size={14} /></button>
-                : <p>Chưa có nhiệm vụ</p>}
-            </div>}
+            {doneColumn?.error ? <div className="ht-board-empty">
+              <p role="alert">{doneColumn.error}</p><button type="button" onClick={c.reload}>Thử lại</button>
+            </div> : doneColumn?.loading ? <div className="ht-board-empty" role="status">Đang tải nhiệm vụ…</div>
+              : group.length ? group.map(task => row(task))
+                : <div className="ht-board-empty">{status === 'Completed' ? 'Chưa có nhiệm vụ đã hoàn thành' : 'Chưa có nhiệm vụ'}</div>}
           </div>
+          {doneColumn && doneColumn.pageCount > 1 && <nav className="ht-paging ht-task-paging ht-board-paging" aria-label="Trang nhiệm vụ đã hoàn thành">
+            <button type="button" aria-label="Trang đã hoàn thành trước" disabled={doneColumn.page <= 1} onClick={() => doneColumn.setPage(doneColumn.page - 1)}>
+              <Icon name="chevron-left" size={15} />
+            </button>
+            <span>Trang {doneColumn.page} / {doneColumn.pageCount}</span>
+            <button type="button" aria-label="Trang đã hoàn thành sau" disabled={doneColumn.page >= doneColumn.pageCount} onClick={() => doneColumn.setPage(doneColumn.page + 1)}>
+              <Icon name="chevron-right" size={15} />
+            </button>
+          </nav>}
         </section>
       })}
     </section> : c.tasks.length ? <div className="ht-task-list">{completed
@@ -332,7 +371,11 @@ export function NhiemVuView({ board = false, completed = false, openPath, inline
         <h2>{completionHeading(day, group[0])} <small title="Số nhiệm vụ của nhóm trên trang này">{group.length}</small></h2>
         {group.map(task => row(task))}
       </section>)
-      : c.tasks.map(task => row(task))}</div> : <div className="ht-empty"><h2>Chưa có nhiệm vụ phù hợp</h2><p>Thử đổi bộ lọc hoặc thêm một nhiệm vụ mới.</p></div>}
+      : c.tasks.map((task, index) => <Fragment key={task.ma}>
+        {index === 0 && task.daGhim && <h2 className="ht-pin-heading"><Icon name="pin" size={15} />Đã ghim</h2>}
+        {index > 0 && !task.daGhim && c.tasks[index - 1].daGhim && <h2 className="ht-pin-heading">Chưa ghim</h2>}
+        {row(task)}
+      </Fragment>)}</div> : <div className="ht-empty"><h2>Chưa có nhiệm vụ phù hợp</h2><p>Thử đổi bộ lọc hoặc thêm một nhiệm vụ mới.</p></div>}
     {quickProgress && <TienDoNhanh key={quickProgress.task.ma} task={quickProgress.task} anchor={quickProgress.anchor} busy={savingProgress}
       onSave={value => void saveProgress(value)} onClose={() => { if (!saving.current) setQuickProgress(null) }} />}
     {c.pageCount > 1 && <nav className="ht-paging ht-task-paging" aria-label="Phân trang nhiệm vụ">
@@ -448,11 +491,12 @@ function HanNhiemVu({ value, zone, today }: { value: string; zone: string; today
   </>
 }
 
-function ThaoTacNhiemVu({ task, baseline, branch, onAddChild, onShareLink, onDeleted, onOpenSessions, onOpenHistory, run }: {
+function ThaoTacNhiemVu({ task, baseline, branch, onAddChild, attachment, onShareLink, onDeleted, onOpenSessions, onOpenHistory, run }: {
   task: NhiemVu
   baseline: number | null
   branch?: NhiemVu[]
-  onAddChild: () => void
+  onAddChild?: () => void
+  attachment?: { canUpload: boolean; chooseFile: () => void }
   onShareLink: (url: string) => void
   onDeleted?: () => void
   onOpenSessions?: () => void
@@ -490,7 +534,15 @@ function ThaoTacNhiemVu({ task, baseline, branch, onAddChild, onShareLink, onDel
       }}><Icon name="dots" size={18} /></button>
     <div id={menuId} ref={menu} className="ht-row-actions-panel" popover="auto" aria-label={`Thao tác với ${task.tieuDe}`}>
       <div className="ht-row-actions-heading">Thao tác nhiệm vụ</div>
-      <button type="button" onClick={() => act(onAddChild)}><Icon name="plus" size={16} />Thêm bước nhỏ</button>
+      {(task.tienDo < 100 || task.daGhim) && <button type="button" onClick={() => act(version => void runAction(async () => {
+        const daGhim = !task.daGhim
+        const result = await goi<NhiemVu>(c.token, `/tasks/${task.ma}/pin`, { method: 'PATCH', body: { daGhim }, version })
+        c.thongBaoThanhCong(daGhim ? 'Đã ghim nhiệm vụ' : 'Đã bỏ ghim nhiệm vụ')
+        return result
+      }))}><Icon name="pin" size={16} />{task.daGhim ? 'Bỏ ghim nhiệm vụ' : 'Ghim nhiệm vụ'}</button>}
+      {onAddChild && <button type="button" onClick={() => act(onAddChild)}><Icon name="plus" size={16} />Thêm bước nhỏ</button>}
+      {attachment && <button type="button" disabled={!attachment.canUpload} title="Tối đa 10 MB/tệp, 20 tệp/nhiệm vụ"
+        onClick={() => act(attachment.chooseFile)}><Icon name="paperclip" size={16} />Đính kèm tệp</button>}
       <button type="button" onClick={() => act(version => c.modal(<SuaNhiemVu task={task} baseline={version} />))}><Icon name="edit" size={16} />Chỉnh sửa</button>
       {!task.coNhiemVuCon && !task.checklist?.length && <button type="button" onClick={() => act(version => c.modal(<DoiTienDo task={task} baseline={version} />))}><Icon name="chart" size={16} />Cập nhật tiến độ</button>}
       <hr />
@@ -504,6 +556,9 @@ function ThaoTacNhiemVu({ task, baseline, branch, onAddChild, onShareLink, onDel
         })
       })}><Icon name="layers" size={16} />{task.maNhiemVuCha ? 'Chuyển hoặc tách nhiệm vụ' : 'Chuyển vào nhiệm vụ lớn'}</button>
       {!task.maNhiemVuCha && <button type="button" onClick={() => act(version => c.modal(<DoiPhamVi task={task} baseline={version} />))}><Icon name="book" size={16} />Đổi học kỳ hoặc môn</button>}
+      {task.tienDo < 100 && <button type="button" onClick={() => act(() => c.modal(<ChonCheDoTapTrung task={task} />))}>
+        <Icon name="play" size={16} />Tập trung ngay
+      </button>}
       <button type="button" onClick={() => act(() => { c.xemPhienNhiemVu(task); onOpenSessions?.() })}><Icon name="clock" size={16} />Xem phiên tự học</button>
       <button type="button" onClick={() => act(async () => {
         const link = lienKetNhiemVu(task.ma)
@@ -629,6 +684,7 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
   const [emptyChecklist, setEmptyChecklist] = useState(false)
   const [checklistDirty, setChecklistDirty] = useState(false)
   const [draftOpen, setDraftOpen] = useState(false)
+  const [collapsedSteps, setCollapsedSteps] = useState<Set<number>>(() => new Set())
   const [draftTitle, setDraftTitle] = useState('')
   const [draftError, setDraftError] = useState('')
   const [needsRefresh, setNeedsRefresh] = useState(false)
@@ -712,7 +768,7 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
     if (await saveContent(null, lines.map(tieuDe => ({ tieuDe, daXong: false })))) setNoteDraft(null)
   }
   async function addChild() {
-    if (!result || !fresh || busy || needsRefresh || savingChild.current || !c.zoneReady) return
+    if (!result || !fresh || !canAddChild || busy || needsRefresh || savingChild.current || !c.zoneReady) return
     const tieuDe = draftTitle.trim()
     if (!tieuDe) { setDraftError('Hãy nhập tên bước nhỏ.'); return }
     savingChild.current = true
@@ -736,6 +792,44 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
     }
   }
   const task = result?.task.ma === ma ? result.task : undefined
+  const attachment = useTepDinhKemNhiemVu({ ma: task?.ma ?? null, token: c.token, revision: c.revision,
+    version: result?.version ?? null, disabled: busy || !fresh, onBusy: setBusy, onSaved: c.reload })
+  const canAddChild = !!task && capNhiemVu(task) < capToiDa
+  const stepsByParent = new Map<number, NhiemVu[]>()
+  for (const step of result?.branch ?? []) {
+    if (step.maNhiemVuCha === null || step.ma === ma) continue
+    const siblings = stepsByParent.get(step.maNhiemVuCha)
+    if (siblings) siblings.push(step)
+    else stepsByParent.set(step.maNhiemVuCha, [step])
+  }
+  function renderSteps(parent: number, version: number, level = 0): ReactNode {
+    return stepsByParent.get(parent)?.map(step => {
+      const hasSteps = stepsByParent.has(step.ma)
+      const expanded = hasSteps && !collapsedSteps.has(step.ma)
+      const openChild = () => { if (inline) c.chonNhiemVu(step.ma); else c.modal(<ChiTietNhiemVu key={step.ma} ma={step.ma} />) }
+      return <Fragment key={step.ma}>
+        <div className={'ht-detail-child-row' + (step.tienDo === 100 ? ' ht-detail-child-done' : '')}
+          style={{ paddingInlineStart: `min(${level * 18}px, 25%)` }}>
+          {hasSteps ? <button type="button" className="ht-detail-step-toggle" aria-expanded={expanded}
+            aria-label={(expanded ? 'Thu gọn ' : 'Mở rộng ') + step.tieuDe} onClick={() => setCollapsedSteps(current => {
+              const next = new Set(current)
+              if (next.has(step.ma)) next.delete(step.ma)
+              else next.add(step.ma)
+              return next
+            })}><Icon name="chevron-right" size={11} /></button> : <span className="ht-detail-step-toggle" aria-hidden="true" />}
+          {step.coNhiemVuCon || step.checklist?.length
+            ? <button type="button" className="ht-detail-child-icon" aria-label={'Xem các bước của ' + step.tieuDe} onClick={openChild}><Icon name="task-group" size={15} /></button>
+            : <input type="checkbox" aria-label={(step.tienDo === 100 ? 'Mở lại ' : 'Hoàn thành ') + step.tieuDe}
+              checked={step.tienDo === 100} disabled={busy || !fresh}
+              onChange={() => void runDetailAction(() => doiHoanThanhNhiemVu(c, step, version))} />}
+          <button type="button" className="ht-child-link" onClick={openChild}>{step.tieuDe}</button>
+          {step.tienDo > 0 && step.tienDo < 100 && <span className="ht-child-percent">{step.tienDo}%</span>}
+          {step.hanHieuLuc && <HanNhiemVu value={step.hanHieuLuc} zone={c.zone} today={ngay(Date.now(), c.zone)} />}
+        </div>
+        {expanded && renderSteps(step.ma, version, level + 1)}
+      </Fragment>
+    })
+  }
   const checklistMode = !task?.coNhiemVuCon && (emptyChecklist || !!task?.checklist?.length)
   const switchLabel = checklistMode ? 'Chuyển sang mô tả' : 'Chuyển sang checklist'
   const scopeName = task ? c.subjects.find(s => Number(s.id) === task.maMonHoc)?.name ?? c.semesters.find(s => Number(s.id) === task.maHocKy)?.name ?? 'Nhiệm vụ cá nhân' : 'Chi tiết nhiệm vụ'
@@ -747,8 +841,8 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
   const detail = <><header className="ht-detail-top">
       {!task && <span>Chi tiết nhiệm vụ</span>}
       <div className="ht-detail-header-actions">
-        {task && result && <ThaoTacNhiemVu task={task} baseline={fresh && !busy ? result.version : null} branch={result.branch}
-          onAddChild={focusDraft} onShareLink={setShareLink} onDeleted={closeDetail} onOpenSessions={inline ? undefined : c.close} onOpenHistory={() => setHistoryOpen(true)}
+        {task && result && <ThaoTacNhiemVu task={task} baseline={fresh && !busy ? result.version : null} branch={result.branch} attachment={attachment}
+          onAddChild={canAddChild ? focusDraft : undefined} onShareLink={setShareLink} onDeleted={closeDetail} onOpenSessions={inline ? undefined : c.close} onOpenHistory={() => setHistoryOpen(true)}
           run={runDetailAction} />}
         <button type="button" className="ht-detail-close" title="Đóng" disabled={busy} onClick={closeDetail}><Icon name="close" size={17} /><span className="sr-only">Đóng</span></button>
       </div>
@@ -766,7 +860,7 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
     {error && <p className="ht-error" role="alert">{error} <button type="button" onClick={c.reload}>Tải dữ liệu mới</button></p>}
     {task && result && <>
       <div className="ht-detail-title">
-        <h2>{task.tieuDe}</h2>
+        <h2>{task.daGhim && <span className="ht-pin-mark" title="Đã ghim"><Icon name="pin" size={16} /><span className="sr-only">Đã ghim </span></span>}{task.tieuDe}</h2>
         {!task.coNhiemVuCon && <button type="button" className="ht-content-mode" title={switchLabel} aria-label={switchLabel}
           disabled={busy || !fresh} onClick={() => void switchContentMode()}>
           <Icon name={checklistMode ? 'edit' : 'list'} size={17} />
@@ -779,22 +873,11 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
       </> : <GhiChuNhiemVu key={task.ma} value={task.moTa ?? ''} draft={noteDraft} setDraft={setNoteDraft}
         readOnly={busy} canSave={fresh && !busy} onSave={saveNote} />}
       {shareLink && <label className="ht-note">Sao chép liên kết nhiệm vụ <input className="ht-share-link" aria-label="Liên kết nhiệm vụ" value={shareLink} readOnly onFocus={event => event.target.select()} /></label>}
-      <section className="ht-detail-section"><h3>Các bước nhỏ</h3>
-        {task.coNhiemVuCon && <p className="ht-note ht-derived-progress">Tiến độ {progress}% được tính từ các bước nhỏ trực tiếp, gồm cả bước đã hoàn thành. Cập nhật từng bước để thay đổi tiến độ nhiệm vụ này.</p>}
-        {result.branch.filter(n => n.maNhiemVuCha === task.ma).map(n => {
-          const openChild = () => { if (inline) c.chonNhiemVu(n.ma); else c.modal(<ChiTietNhiemVu key={n.ma} ma={n.ma} />) }
-          return <div className={'ht-detail-child-row' + (n.tienDo === 100 ? ' ht-detail-child-done' : '')} key={n.ma}>
-            {n.coNhiemVuCon || n.checklist?.length
-              ? <button type="button" className="ht-detail-child-icon" aria-label={'Xem các bước của ' + n.tieuDe} onClick={openChild}><Icon name="task-group" size={15} /></button>
-              : <input type="checkbox" aria-label={(n.tienDo === 100 ? 'Mở lại ' : 'Hoàn thành ') + n.tieuDe}
-                checked={n.tienDo === 100} disabled={busy || !fresh}
-                onChange={() => void runDetailAction(() => doiHoanThanhNhiemVu(c, n, result.version))} />}
-            <button type="button" className="ht-child-link" onClick={openChild}>{n.tieuDe}</button>
-            {n.tienDo > 0 && n.tienDo < 100 && <span className="ht-child-percent">{n.tienDo}%</span>}
-            {n.hanHieuLuc && <HanNhiemVu value={n.hanHieuLuc} zone={c.zone} today={ngay(Date.now(), c.zone)} />}
-          </div>
-        })}
-        {draftOpen ? <>
+      {attachment.content}
+      {(task.coNhiemVuCon || canAddChild) && <section className="ht-detail-section"><h3>Các bước nhỏ</h3>
+        {task.coNhiemVuCon && <p className="ht-note ht-derived-progress">Tiến độ tự cập nhật theo các bước nhỏ.</p>}
+        {renderSteps(task.ma, result.version)}
+        {canAddChild && (draftOpen ? <>
           <form className="ht-inline-child" aria-label="Thêm bước nhỏ" onSubmit={event => { event.preventDefault(); void addChild() }}>
             <input ref={draftInput} autoFocus name="tenBuocNho" aria-label="Tên bước nhỏ" placeholder="Nhập tên bước nhỏ rồi nhấn Enter"
               value={draftTitle} onChange={event => setDraftTitle(event.target.value)} maxLength={200} required readOnly={busy} />
@@ -802,9 +885,8 @@ export function ChiTietNhiemVu({ ma, inline = false, draftRequest, onChildrenSav
           </form>
           {draftError && <p className="ht-error" role="alert">{draftError}{needsRefresh && <button type="button" onClick={() => { setDraftError(''); c.reload() }}>Tải dữ liệu mới</button>}</p>}
           <button type="button" className="ht-text-action" disabled={busy || !fresh} onClick={() => c.modal(<SuaNhiemVu parent={task} baseline={result.version} onChildrenSaved={onChildrenSaved} />)}>Thêm nhiều bước hoặc tùy chọn</button>
-        </> : <button type="button" className="ht-text-action" disabled={busy || !fresh} onClick={focusDraft}>+ Thêm bước nhỏ</button>}
-      </section>
-      <TepDinhKemNhiemVu key={task.ma} ma={task.ma} token={c.token} revision={c.revision} version={result.version} disabled={busy || !fresh} onBusy={setBusy} onSaved={c.reload} />
+        </> : <button type="button" className="ht-text-action" disabled={busy || !fresh} onClick={focusDraft}>+ Thêm bước nhỏ</button>)}
+      </section>}
       <div className="ht-detail-context"><span><Icon name="book" size={16} />{scopeName}</span><span className="ht-status-label">{trangThai[task.trangThai]}</span></div>
       <details className="ht-detail-section ht-task-metadata">
         <summary>Thông tin nhiệm vụ</summary>
@@ -943,6 +1025,22 @@ function capNhatTienDo(token: string, ma: number, tienDo: number, version: numbe
   return thayDoi<NhiemVu>(token, `/tasks/${ma}/progress`, 'PATCH', body, version, {
     path: `/tasks/${ma}/change-preview`, body: { thaoTac: 'progress', noiDung: body },
   })
+}
+
+function ChonCheDoTapTrung({ task }: { task: NhiemVu }) {
+  const { close } = useNhiemVu()
+  const navigate = useNavigate()
+  function moDongHo(mode: 'Pomodoro' | 'Stopwatch') {
+    close()
+    navigate('/focus?' + new URLSearchParams({ task: String(task.ma), mode }))
+  }
+  return <FocusDialog title="Tập trung ngay" close={close}>
+    <p>{task.tieuDe}</p>
+    <footer>
+      <button type="button" onClick={() => moDongHo('Stopwatch')}>Đếm lên</button>
+      <button type="button" className="focus-primary" onClick={() => moDongHo('Pomodoro')}>Pomodoro</button>
+    </footer>
+  </FocusDialog>
 }
 
 export function DoiTienDo({ task, baseline }: { task: NhiemVu; baseline: number }) {

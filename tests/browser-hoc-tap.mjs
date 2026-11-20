@@ -80,8 +80,8 @@ try {
   let nextTask = 5
   const histories = []
   let taskReadFailure = false
-  function remember(task, action, before = null) {
-    histories.push({ ma: histories.length + 1, maNhiemVu: task.ma, tieuDeNhiemVu: task.tieuDe, hanhDong: action, nguonThayDoi: 'User', ngayThayDoi: new Date().toISOString(), duLieuTruoc: before, duLieuSau: JSON.stringify(task) })
+  function remember(task, action, before = null, after = task) {
+    histories.push({ ma: histories.length + 1, maNhiemVu: task.ma, tieuDeNhiemVu: task.tieuDe, hanhDong: action, nguonThayDoi: 'User', ngayThayDoi: new Date().toISOString(), duLieuTruoc: before, duLieuSau: JSON.stringify(after) })
   }
   function branch(id) {
     const ids = new Set([id])
@@ -93,6 +93,7 @@ try {
   let classes = []
   let confirmClassOverlap = true
   let sessions = []
+  const trashedTasks = []
   let applied = false
   let loseApplyResponse = true
   const envelope = duLieu => ({ phienBan: revision, duLieu })
@@ -106,7 +107,8 @@ try {
     void cdp('Page.handleJavaScriptDialog', { accept: false })
   })
   handlers.set('Runtime.exceptionThrown', ({ exceptionDetails }) => errors.push(exceptionDetails.exception?.description ?? exceptionDetails.text))
-  const attachments = []; const attachmentControls = { failUpload: false }
+  const attachments = []; const attachmentControls = { failUpload: false, nextUpload: null }
+  const attachmentBytes = new Map(); let nextAttachment = 1
   handlers.set('Fetch.requestPaused', async ({ requestId, request }) => {
     try {
       const url = new URL(request.url)
@@ -119,16 +121,44 @@ try {
       calls.push({ route, query: url.searchParams.toString(), method, body, headers: request.headers })
       let status = 200, response
       const focusResponse = focusFixture.handle(url, method, body)
-      const progressResponse = taskProgressFixture.handle(route, method, body)
+      const childrenMatch = method === 'POST' ? route.match(/^\/tasks\/(\d+)\/children$/) : null
+      const parent = childrenMatch ? tasks.find(task => task.ma === Number(childrenMatch[1])) : null
+      const beforeSplit = parent && JSON.stringify(parent)
+      const calendarAffected = process.env.CORE_CALENDAR_DEADLINES_ONLY === '1' && route.endsWith('/change-preview') && body?.thaoTac === 'complete'
+        ? sessions.filter(row => row.maNhiemVu === Number(route.split('/')[2]) && row.trangThai === 'Planned') : null
+      const progressResponse = calendarAffected ? { status: 200, response: envelope({ maPhienBiHuy: calendarAffected.map(row => row.ma), phienBiAnhHuong: [], canKetThucPhienDangHoc: false }) } : taskProgressFixture.handle(route, method, body)
+      if (parent && progressResponse?.status === 201) remember(parent,
+        JSON.parse(beforeSplit).trangThai === 'Completed' && parent.trangThai !== 'Completed' ? 'Reopened' : 'Updated', beforeSplit,
+        { ...parent, loaiHoatDong: 'StepsAdded', cacBuocDaThem: body.danhSach.map(step => step.tieuDe) })
       const planningResponse = planningFixture.handle(url, method, body, request.headers)
       if (/^\/tasks\/\d+\/attachments(?:\/\d+(?:\/download)?)?$/.test(route)) {
+        const id = Number(route.split('/')[4])
         if (route.endsWith('/download')) {
-          await cdp('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{name:'Content-Type',value:'application/octet-stream'},{name:'Content-Disposition',value:'attachment; filename="Bao cao.pdf"'}], body: Buffer.from('%PDF-test').toString('base64') }); return
+          const bytes = attachmentBytes.get(id)
+          await cdp('Fetch.fulfillRequest', { requestId, responseCode: bytes ? 200 : 404,
+            responseHeaders: [{ name: 'Content-Type', value: 'application/octet-stream' }, { name: 'Content-Disposition', value: 'attachment' }],
+            body: (bytes ?? Buffer.alloc(0)).toString('base64') })
+          return
         }
-        if (method === 'POST' && attachmentControls.failUpload) { attachmentControls.failUpload=false;status=503;response={detail:'Kho tệp đang bận. Hãy thử lại.'} }
-        else if (method === 'POST') { revision++; const file={ma:1,tenTep:'Bao cao.pdf',kichThuocByte:30,ngayTao:new Date().toISOString()};attachments.push(file);status=201;response=envelope(file) }
-        else if (method === 'DELETE') { revision++;attachments.splice(0);status=204 }
-        else response=envelope(attachments)
+        if (method === 'POST' && attachmentControls.failUpload) {
+          attachmentControls.failUpload = false; status = 503; response = { detail: 'Kho tệp đang bận. Hãy thử lại.' }
+        } else if (method === 'POST') {
+          const { name, bytes } = attachmentControls.nextUpload ?? { name: 'Bao cao.pdf', bytes: Buffer.from('%PDF-test') }
+          attachmentControls.nextUpload = null
+          const file = { ma: nextAttachment++, tenTep: name, kichThuocByte: bytes.length, ngayTao: new Date().toISOString() }
+          attachmentBytes.set(file.ma, bytes)
+          revision++; attachments.push(file); status = 201; response = envelope(file)
+          const ownerTask = tasks.find(task => task.ma === Number(route.split('/')[2]))
+          if (ownerTask) remember(ownerTask, 'Updated', null, { loaiHoatDong: 'AttachmentAdded', tenTep: file.tenTep })
+        } else if (method === 'DELETE') {
+          const offset = attachments.findIndex(file => file.ma === id)
+          if (offset >= 0) {
+            const [removed] = attachments.splice(offset, 1); attachmentBytes.delete(id); revision++
+            const ownerTask = tasks.find(task => task.ma === Number(route.split('/')[2]))
+            if (ownerTask) remember(ownerTask, 'Updated', null, { loaiHoatDong: 'AttachmentRemoved', tenTep: removed.tenTep })
+          }
+          status = offset >= 0 ? 204 : 404
+        } else response = envelope(attachments)
       }
       else if (planningResponse) { status = planningResponse.status; response = planningResponse.response }
       else if (progressResponse) { status = progressResponse.status; response = progressResponse.response }
@@ -142,13 +172,14 @@ try {
       }
       else if (route === '/auth/login') response = { tokenTruyCap: token, loaiToken: 'Bearer', hetHanLuc: new Date(Date.now() + 3600000).toISOString(), nguoiDung: user }
       else if (route === '/users/me') response = user
-      else if (route === '/priority-rules/active') response = { ma: 0, ten: 'Mặc định', phienBan: 0, dangSuDung: true, cauHinh: { phienBanSchema: 1, tieuChi: ['Deadline', 'Importance', 'InProgress'] }, ngayTao: null }
+      else if (route === '/priority-rules/active') response = { ma: 0, ten: 'Mặc định', phienBan: 0, dangSuDung: true, cauHinh: { phienBanSchema: 1, tieuChi: ['Importance', 'Deadline', 'InProgress'] }, ngayTao: null }
       else if (route === '/notifications' && method === 'GET') response = { danhSach: [], trang: Number(url.searchParams.get('trang') ?? 1), kichThuocTrang: 20, tongSo: 0, tongChuaDoc: 0, muiGio: user.muiGio, docDenLuc: new Date().toISOString() }
       else if (route === '/semesters') response = page([{ ma: 103, ten: 'Học kỳ thực hành', ngayBatDau: '2026-01-01', ngayKetThuc: '2027-12-31' }])
       else if (route === '/semesters/103/courses') response = page([{ ma: 207, maHocKy: 103, ten: 'Cơ sở dữ liệu', kyHieu: 'CSDL', soTinChi: 3, giangVien: null, mauSac: '#306BB5' }])
       else if (route === '/tasks' && method === 'GET') {
         const q = url.searchParams
-        let list = tasks.filter(t => (q.get('chiLa') === 'true' || ['today', 'upcoming', 'overdue', 'undated', 'completed'].includes(q.get('cheDo')) ? !t.coNhiemVuCon : !t.maNhiemVuCha))
+        const pinFirst = q.get('ghimTruoc') === 'true' && q.get('cheDo') !== 'completed' && q.get('trangThai') !== 'Completed'
+        let list = tasks.filter(t => (q.get('chiLa') === 'true' || ['today', 'upcoming', 'overdue', 'undated', 'completed'].includes(q.get('cheDo')) ? !t.coNhiemVuCon : !t.maNhiemVuCha || (pinFirst && t.daGhim)))
         if (q.has('maHocKy')) list = list.filter(t => String(t.maHocKy) === q.get('maHocKy'))
         if (q.has('maMonHoc')) list = list.filter(t => String(t.maMonHoc) === q.get('maMonHoc'))
         if (q.get('cheDo') === 'inbox') list = list.filter(t => t.maHocKy === null && t.maMonHoc === null)
@@ -157,6 +188,7 @@ try {
         for (const key of ['mucDoUuTien', 'loai', 'trangThai']) if (q.has(key)) list = list.filter(t => t[key] === q.get(key))
         if (q.get('tuKhoa')) list = list.filter(t => t.tieuDe.toLowerCase().includes(q.get('tuKhoa').toLowerCase()))
         if (q.get('sapXep') === 'created') list.sort((a, b) => b.ma - a.ma)
+        if (pinFirst) list.sort((a, b) => Number(!!b.daGhim) - Number(!!a.daGhim))
         response = envelope(page(list))
         if (taskReadFailure) { status = 503; response = { detail: 'Dịch vụ nhiệm vụ đang gián đoạn.' } }
       } else if (route === '/tasks' && method === 'POST') {
@@ -168,6 +200,11 @@ try {
         const parent = tasks.find(t => t.ma === Number(route.split('/')[2])); parent.coNhiemVuCon = true
         const children = body.danhSach.map(item => makeTask(nextTask++, { ...item, maNhiemVuCha: parent.ma }))
         tasks.push(...children); children.forEach(t => remember(t, 'Created')); revision++; response = envelope(children); status = 201
+      } else if (/^\/tasks\/\d+\/pin$/.test(route) && method === 'PATCH') {
+        const task = tasks.find(t => t.ma === Number(route.split('/')[2]))
+        task.daGhim = body.daGhim
+        revision++
+        response = envelope(task)
       } else if (/^\/tasks\/\d+\/progress$/.test(route)) {
         const task = tasks.find(t => t.ma === Number(route.split('/')[2])); const before = JSON.stringify(task); task.tienDo = body.tienDo; task.trangThai = body.tienDo === 100 ? 'Completed' : body.tienDo ? 'InProgress' : 'NotStarted'; remember(task, 'Updated', before); revision++; response = envelope(task)
       } else if (/^\/tasks\/\d+\/(parent|scope|complete|reopen)$/.test(route)) {
@@ -175,7 +212,15 @@ try {
         if (route.endsWith('/parent')) task.maNhiemVuCha = body.maNhiemVuCha
         else if (route.endsWith('/scope')) branch(task.ma).forEach(t => { t.maHocKy = body.maHocKy; t.maMonHoc = body.maMonHoc })
         else { task.tienDo = route.endsWith('/complete') ? 100 : 0; task.trangThai = task.tienDo === 100 ? 'Completed' : 'NotStarted' }
+        if (process.env.CORE_CALENDAR_DEADLINES_ONLY === '1' && route.endsWith('/complete') && body.huyPhienLienQuan) for (const row of sessions) if (row.maNhiemVu === task.ma && row.trangThai === 'Planned') row.trangThai = 'Cancelled'
         remember(task, 'Updated', before); revision++; response = envelope(task)
+      } else if (/^\/tasks\/\d+\/trash$/.test(route) && method === 'POST') {
+        if (failNextDelete) { failNextDelete = false; status = 503; response = { detail: 'Chưa chuyển vào thùng rác. Hãy thử lại.' } }
+        else {
+          const rows = branch(Number(route.split('/')[2])); const ids = new Set(rows.map(row => row.ma)); trashedTasks.push(...rows)
+          for (let index = tasks.length - 1; index >= 0; index--) if (ids.has(tasks[index].ma)) tasks.splice(index, 1)
+          revision++; response = envelope({ soNhiemVu: rows.length })
+        }
       } else if (/^\/tasks\/\d+\/deletion-preview$/.test(route)) response = envelope({ soNhiemVu: branch(Number(route.split('/')[2])).length, soLichNhac: 0, soThongBao: 0, soTep: 0, maPhienBiXoa: [] })
       else if (/^\/tasks\/\d+$/.test(route)) {
         const task = tasks.find(t => t.ma === Number(route.split('/')[2]))
@@ -239,6 +284,20 @@ try {
         }
         response = envelope(session)
       }
+      else if (route === '/calendar' && process.env.CORE_CALENDAR_DEADLINES_ONLY === '1') {
+        const date = new Intl.DateTimeFormat('en-CA', { timeZone: user.muiGio }).format(new Date())
+        const dateTime = time => date + 'T' + time + ':00+07:00'
+        const taskEvent = (task, loai, start, end = null) => ({
+          ma: loai + '-' + task.ma, loai, maNguon: task.ma, tieuDe: task.tieuDe,
+          batDau: dateTime(start), ketThuc: end && dateTime(end), trangThai: task.trangThai,
+          tienDoNhiemVu: task.tienDo, coTheDanhDauHoanThanh: !task.coNhiemVuCon && !task.checklist?.length,
+        })
+        response = envelope({ muiGio: user.muiGio, suKien: [
+          ...['16:50', '17:05', '18:00', '20:00'].map((time, index) => taskEvent(tasks[index], 'HanNhiemVu', time)),
+          taskEvent(tasks[2], 'SuKien', '10:00', '11:30'),
+          { ma: 'class-10', loai: 'LichHoc', maNguon: 10, tieuDe: 'Cơ sở dữ liệu', batDau: dateTime('09:00'), ketThuc: dateTime('10:00'), trangThai: null },
+        ] })
+      }
       else if (route === '/calendar') response = envelope({ muiGio: user.muiGio, suKien: sessions.filter(p => p.trangThai !== 'Cancelled').map(p => ({ ma: 'session-' + p.ma, loai: 'PhienTuHoc', maNguon: p.ma, maMonHoc: 207, tieuDe: tasks.find(t => t.ma === p.maNhiemVu).tieuDe, batDau: p.batDauDuKien, ketThuc: p.ketThucDuKien, trangThai: p.trangThai })) })
       else if (route === '/planning/preview') response = envelope({ tokenPreview: 'signed-fixture', cauHinhHoc: { phienHocPhut: 25, nghiGiuaPhienPhut: 5, gioiHanHocMoiNgayPhut: 180 }, maPhienThayThe: [], muiGio: user.muiGio, hetHanLuc: new Date(Date.now() + 600000).toISOString(), tongPhutCanXep: 50, tongPhutDaDat: 0, tongPhutDeXuat: 50, tongPhutChuaXep: 0, canhBao: [], phien: [{ maNhiemVu: tasks.find(t => t.tieuDe === 'Luyện truy vấn SQL').ma, tieuDe: 'Luyện truy vấn SQL', batDauDuKien: tomorrow + 'T12:00:00Z', ketThucDuKien: tomorrow + 'T12:50:00Z', lyDo: 'Còn 50 phút, phù hợp giờ rảnh' }] })
       else if (route === '/planning/apply') {
@@ -293,8 +352,17 @@ try {
     const plannedInterval = [earlySession.batDauDuKien, earlySession.ketThucDuKien]
     const progressBefore = task.tienDo
     await button('Bắt đầu ngay')
+    await waitFor('!!document.querySelector("#ht-focus-mode-heading")')
+    await button('Quay lại')
+    assert.equal(earlySession.trangThai, 'Planned')
+    assert.equal(focusFixture.active(), null)
+    await button('Bắt đầu ngay')
+    await click('button[role=radio][aria-label="Đếm lên"]')
+    assert.equal(earlySession.trangThai, 'Planned', 'Choosing a timer mode does not start studying until confirmed')
+    await button('Bắt đầu học')
     await waitFor('location.pathname === "/focus" && !!document.querySelector(".focus-note-panel")')
     assert.equal(earlySession.trangThai, 'InProgress')
+    assert.equal(focusFixture.active()?.cheDo, 'Stopwatch')
     assert.deepEqual([earlySession.batDauDuKien, earlySession.ketThucDuKien], plannedInterval)
     const actualStart = earlySession.batDauBamGio
     assert(Date.parse(actualStart) < Date.parse(earlySession.batDauDuKien))
@@ -320,7 +388,230 @@ try {
   await cdp('Page.navigate', { url: origin + '/login' })
   await field('input[name=taiKhoan]', user.email); await field('input[name=password]', 'Fixture123!'); await click('button[type=submit]')
   await waitFor('location.pathname === "/today"')
-  if (process.env.CORE_ATTACHMENTS_ONLY === '1') {
+  if (process.env.CORE_CALENDAR_DEADLINES_ONLY === '1') {
+    tasks[0].tieuDe = 'hihi'
+    tasks[1].tieuDe = 'Bản báo cáo đồ án phần kết quả kiểm thử và đánh giá'
+    tasks[2].tieuDe = 'Nộp bài tập SQL'
+    Object.assign(tasks[3], { tieuDe: 'Chuẩn bị đề cương môn học', tienDo: 100, trangThai: 'Completed', checklist: [{ tieuDe: 'Lập dàn ý', daXong: true }] })
+    await cdp('Page.navigate', { url: origin + '/calendar' })
+    const more = '.ht-calendar-deadlines .ht-calendar-more[popovertarget]'
+    await waitFor('!!document.querySelector(' + JSON.stringify(more) + ')')
+    assert(calls.some(call => call.route === '/calendar' && new URLSearchParams(call.query).get('gomHanKeThua') === 'true'))
+    assert(await evaluate('document.querySelector(".ht-calendar-deadlines").textContent.includes("hihi")'))
+    assert(await evaluate('getComputedStyle(document.querySelector(".ht-calendar-deadlines")).overflowY === "visible"'))
+    assert(await evaluate('getComputedStyle(document.querySelector(".ht-calendar-deadlines strong")).webkitLineClamp === "2"'))
+    const desktopScroll = await evaluate('innerWidth >= 1051')
+    if (desktopScroll) {
+      assert(await evaluate('(() => { const page=document.querySelector(".ht-page-main"); const grid=document.querySelector(".ht-time-grid-wrap"); return page.scrollHeight > page.clientHeight && getComputedStyle(page).overflowY === "scroll" && getComputedStyle(grid).overflowY === "visible" })()'))
+    }
+    await click(more)
+    await waitFor('document.querySelectorAll(".ht-calendar-deadline-popover:popover-open li").length === 4')
+    assert(await evaluate('document.querySelector(".ht-calendar-deadline-popover:popover-open").textContent.includes("Bản báo cáo đồ án phần kết quả kiểm thử và đánh giá")'))
+    assert.equal(await evaluate('document.querySelector(\'select[aria-label="Chế độ xem"]\').value'), 'week')
+    const popup = '.ht-calendar-deadline-popover:popover-open '
+    const complete = popup + 'input[aria-label="Hoàn thành Nộp bài tập SQL"]'
+    const reopen = popup + 'input[aria-label="Mở lại Nộp bài tập SQL"]'
+    const timed = '.ht-calendar-block.ht-event-SuKien'
+    const finishedColor = 'getComputedStyle(document.querySelector(' + JSON.stringify(timed) + ')).backgroundColor'
+    const activeColor = await evaluate(finishedColor)
+    assert(await evaluate('!document.querySelector(\'' + popup + 'input[aria-label="Hoàn thành hihi"]\')'))
+    assert(await evaluate('!document.querySelector(\'' + popup + 'input[aria-label="Mở lại Chuẩn bị đề cương môn học"]\')'))
+    assert(await evaluate('!document.querySelector(".ht-calendar-block.ht-event-LichHoc input")'))
+    await click(complete)
+    await waitFor('!!document.querySelector(' + JSON.stringify(reopen) + ') && document.querySelector(' + JSON.stringify(timed) + ').dataset.completed === "true"')
+    assert.notEqual(await evaluate(finishedColor), activeColor)
+    assert(await evaluate('!document.querySelector("dialog:modal")'))
+    assert.equal(tasks[2].tienDo, 100)
+    await click(reopen)
+    await waitFor('!!document.querySelector(' + JSON.stringify(complete) + ') && !document.querySelector(' + JSON.stringify(timed) + ').dataset.completed')
+    assert.equal(tasks[2].tienDo, 0)
+    await button('Đóng')
+    await waitFor('!document.querySelector(".ht-calendar-deadline-popover:popover-open")')
+    const relatedTask = tasks[1]
+    const pendingSessions = [900, 901].map((ma, index) => ({ ma, maNhiemVu: relatedTask.ma, batDauDuKien: new Date(Date.now() + (index + 1) * 3600000).toISOString(), ketThucDuKien: new Date(Date.now() + (index + 1) * 3600000 + 25 * 60000).toISOString(), trangThai: 'Planned' }))
+    sessions.push(...pendingSessions)
+    const target = '.ht-calendar-deadlines input[aria-label="Hoàn thành ' + relatedTask.tieuDe + '"]'
+    const scheduleScroll = desktopScroll ? '.ht-page-main' : '.ht-time-grid-wrap'
+    await evaluate('document.querySelector(' + JSON.stringify(scheduleScroll) + ').scrollTop = 450')
+    const positionBefore = await evaluate('document.querySelector(' + JSON.stringify(scheduleScroll) + ').scrollTop')
+    const writesBefore = calls.filter(call => call.route === '/tasks/' + relatedTask.ma + '/complete').length
+    await evaluate('document.querySelector(' + JSON.stringify(target) + ').focus({ preventScroll: true })')
+    await click(target)
+    await waitFor('document.querySelector(".ht-confirm-description")?.textContent.includes("2 phiên")')
+    assert.equal(relatedTask.trangThai, 'NotStarted', 'Opening the impact confirmation does not complete the task')
+    await button('Giữ nguyên')
+    await waitFor('!document.querySelector(".ht-confirm-host")')
+    assert.equal(calls.filter(call => call.route === '/tasks/' + relatedTask.ma + '/complete').length, writesBefore, 'Cancel sends no completion request')
+    assert(pendingSessions.every(row => row.trangThai === 'Planned'))
+    assert.equal(await evaluate('document.querySelector(' + JSON.stringify(target) + ').checked'), false)
+    assert.equal(await evaluate('document.querySelector(' + JSON.stringify(scheduleScroll) + ').scrollTop'), positionBefore, 'Returning focus after cancel keeps calendar scroll')
+    await click(target)
+    await waitFor('!!document.querySelector(".ht-confirm-host")')
+    await button('Hoàn thành và hủy phiên')
+    await waitFor('document.querySelector(' + JSON.stringify(target.replace('Hoàn thành ', 'Mở lại ')) + ')?.checked === true')
+    assert(pendingSessions.every(row => row.trangThai === 'Cancelled'))
+    assert.equal(calls.filter(call => call.route === '/tasks/' + relatedTask.ma + '/complete').at(-1).body.huyPhienLienQuan, true)
+    assert.equal(await evaluate('document.querySelector(' + JSON.stringify(scheduleScroll) + ').scrollTop'), positionBefore, 'Confirmed save also keeps the current time range visible')
+    const expandedHeight = await evaluate('document.querySelector(".ht-time-heading").offsetHeight')
+    await button('Thu gọn hạn')
+    await waitFor('!!document.querySelector(".ht-calendar-deadline-count") && !document.querySelector(".ht-calendar-deadlines")')
+    assert(await evaluate('document.querySelector(".ht-time-heading").offsetHeight') < expandedHeight)
+    const scrollSelector = desktopScroll ? '.ht-page-main' : '.ht-time-grid-wrap'
+    await evaluate('document.querySelector(' + JSON.stringify(scrollSelector) + ').scrollTop += ' + (desktopScroll ? 270 : 120))
+    assert(await evaluate('(() => { const grid=document.querySelector(' + JSON.stringify(scrollSelector) + ').getBoundingClientRect(); const count=document.querySelector(".ht-calendar-deadline-count").getBoundingClientRect(); return count.top >= grid.top && count.bottom <= grid.top + 75 })()'))
+    if (desktopScroll) {
+      assert(await evaluate('(() => { const top=document.querySelector(".ht-page-main").getBoundingClientRect().top; return document.querySelector(".ht-calendar-toolbar").getBoundingClientRect().bottom < top && Math.abs(document.querySelector(".ht-time-heading").getBoundingClientRect().top - top) <= 1 })()'))
+      if (process.env.CORE_DESKTOP_SCREENSHOT) {
+        const shot = await cdp('Page.captureScreenshot', { format: 'png' })
+        fs.writeFileSync(process.env.CORE_DESKTOP_SCREENSHOT, Buffer.from(shot.data, 'base64'))
+      }
+    }
+    await click('.ht-calendar-deadline-count')
+    await waitFor('document.querySelectorAll(".ht-calendar-deadline-popover:popover-open li").length === 4')
+    await button('Đóng')
+    if (desktopScroll) await evaluate('document.querySelector(".ht-page-main").scrollTop = 0')
+    await button('Hiện dải hạn')
+    await waitFor('!!document.querySelector(".ht-calendar-deadlines")')
+    await field('select[aria-label="Chế độ xem"]', 'day')
+    await waitFor('document.querySelector(".ht-time-grid")?.dataset.singleDay === "true" && document.querySelectorAll(".ht-calendar-deadlines > .ht-event").length === 2')
+    const dayLayout = await evaluate('(() => { const grid=document.querySelector(".ht-calendar-deadlines"); return { width:grid.clientWidth, display:getComputedStyle(grid).display, cards:[...grid.querySelectorAll(":scope > .ht-event")].map(card => ({ top:card.getBoundingClientRect().top, width:card.getBoundingClientRect().width })) } })()')
+    assert(Math.abs(dayLayout.cards[0].top - dayLayout.cards[1].top) < 1, JSON.stringify(dayLayout))
+    await field('select[aria-label="Chế độ xem"]', 'week')
+    await waitFor('!!document.querySelector(' + JSON.stringify(more) + ')')
+    await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 670, deviceScaleFactor: 1, mobile: true })
+    await evaluate('document.querySelector(' + JSON.stringify(more) + ').scrollIntoView({block:"nearest",inline:"nearest"})')
+    await click(more)
+    await waitFor('!!document.querySelector(".ht-calendar-deadline-popover:popover-open")')
+    await waitFor('(() => { const r=document.querySelector(".ht-calendar-deadline-popover:popover-open").getBoundingClientRect();return r.left >= 0 && r.right <= window.innerWidth + 1 && r.top >= 0 && r.bottom <= window.innerHeight + 1 })()')
+    if (process.env.CORE_SCREENSHOT) {
+      const shot = await cdp('Page.captureScreenshot', { format: 'png' })
+      fs.writeFileSync(process.env.CORE_SCREENSHOT, Buffer.from(shot.data, 'base64'))
+    }
+    await click('.ht-calendar-deadline-popover:popover-open .ht-calendar-deadline-item')
+    await waitFor('!!document.querySelector("dialog:modal .ht-detail-title") && !document.querySelector(".ht-calendar-deadline-popover:popover-open")')
+    assert(await evaluate('document.querySelector("dialog:modal .ht-detail-title h2").textContent === "hihi"'))
+    assert.deepEqual(errors, [])
+    await button('Đóng')
+    await field('select[aria-label="Chế độ xem"]', 'day')
+    await waitFor('document.querySelector(".ht-time-grid")?.dataset.singleDay === "true"')
+    await click('.ht-calendar-options summary')
+    await click('.ht-calendar-options input')
+    await waitFor('!document.querySelector(".ht-event[data-completed=true]")')
+    await evaluate('window.calendarBeforeReload = true')
+    await cdp('Page.reload')
+    await waitFor('window.calendarBeforeReload !== true && !!document.querySelector(".ht-calendar-options input") && !document.querySelector(".ht-calendar-options input").checked && !!document.querySelector(".ht-time-grid")')
+    assert.equal(await evaluate("document.querySelector('select[aria-label=\"Chế độ xem\"]').value"), 'day', 'Calendar view and completed-item visibility survive reload')
+    assert(!await evaluate('!!document.querySelector(".ht-event[data-completed=true]")'))
+    assert.deepEqual(errors, [])
+    console.log('PASS calendar: task completion/reopen, cancel versus confirm two sessions, unchanged checkbox on cancel, preserved scroll, view preferences, completed visibility, overflow, day view and mobile.')
+  } else if (process.env.CORE_TASK_SCROLL_ONLY === '1') {
+    for (let id = 900; id < 915; id++) {
+      tasks.push(makeTask(id, { tieuDe: 'Bước dài ' + id, maHocKy: null, maMonHoc: null, maNhiemVuCha: 1, loai: 'Personal' }))
+    }
+    await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 550, deviceScaleFactor: 1, mobile: false })
+    await cdp('Page.navigate', { url: origin + '/tasks?view=all&task=3' })
+    await waitFor('!!document.querySelector(".ht-detail-title")')
+    const sizes = 'Array.from(document.querySelectorAll(".ht-task-list, .ht-detail-body"), node => node.clientWidth)'
+    const initialSizes = await evaluate(sizes)
+    const divider = '.ht-detail-divider'
+    const line = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(divider)}); return {
+      width: getComputedStyle(el, '::before').width, hitWidth: el.clientWidth, children: el.childElementCount,
+      background: getComputedStyle(el).backgroundColor
+    } })()`)
+    assert.deepEqual(line, { width: '1px', hitWidth: 8, children: 0, background: 'rgba(0, 0, 0, 0)' })
+    assert(await evaluate('document.querySelector(".ht-page-main").scrollHeight === document.querySelector(".ht-page-main").clientHeight'))
+    assert(await evaluate('getComputedStyle(document.querySelector(".ht-tabs")).scrollbarColor === "rgba(0, 0, 0, 0) rgba(0, 0, 0, 0)"'))
+    assert(await evaluate('document.querySelector(".ht-tabs").scrollHeight > document.querySelector(".ht-tabs").clientHeight'))
+    await click('.ht-task-list .ht-parent-toggle')
+    await waitFor('document.querySelector(".ht-task-list").textContent.includes("Bước dài 914")')
+    assert(await evaluate('document.querySelector(".ht-page-main").scrollHeight > document.querySelector(".ht-page-main").clientHeight'))
+    assert.deepEqual(await evaluate(sizes), initialSizes)
+    await evaluate("Array.from(document.querySelectorAll('.ht-task-name')).find(b => b.querySelector('strong').textContent === 'aaa').click()")
+    await waitFor('document.querySelector(".ht-detail-title")?.textContent.includes("aaa")')
+    assert(await evaluate('document.querySelector(".ht-detail-panel").scrollHeight > document.querySelector(".ht-detail-panel").clientHeight'))
+    assert.deepEqual(await evaluate(sizes), initialSizes)
+    assert(await evaluate('(() => {const list=document.querySelector(".ht-page-main");const detail=document.querySelector(".ht-detail-panel");list.scrollTop=25;detail.scrollTop=30;return list.scrollTop===25 && detail.scrollTop===30 && document.scrollingElement.scrollTop===0})()'))
+    const handle = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(divider)}); const box = el.getBoundingClientRect(); return {
+      x: box.x + box.width / 2, y: box.y + box.height / 2, width: Number(el.getAttribute('aria-valuenow'))
+    } })()`)
+    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', buttons: 1, clickCount: 1, x: handle.x, y: handle.y })
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', button: 'left', buttons: 1, x: handle.x - 32, y: handle.y })
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', buttons: 0, clickCount: 1, x: handle.x - 32, y: handle.y })
+    await waitFor(`Number(document.querySelector(${JSON.stringify(divider)}).getAttribute('aria-valuenow')) === ${handle.width + 32}`)
+    await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 })
+    await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 })
+    await waitFor(`Number(document.querySelector(${JSON.stringify(divider)}).getAttribute('aria-valuenow')) === ${handle.width + 16}`)
+    await cdp('Emulation.setDeviceMetricsOverride', { width: 980, height: 550, deviceScaleFactor: 1, mobile: false })
+    await waitFor(`getComputedStyle(document.querySelector(${JSON.stringify(divider)})).display === "none"`)
+    await waitFor('getComputedStyle(document.querySelector(".ht-page-main")).overflowY === "visible"')
+    assert(await evaluate('getComputedStyle(document.querySelector(".ht-page-body")).overflowY === "auto"'))
+    assert(await evaluate('getComputedStyle(document.querySelector(".ht-detail-panel")).overflowY === "visible"'))
+    await cdp('Emulation.setDeviceMetricsOverride', { width: 700, height: 550, deviceScaleFactor: 1, mobile: false })
+    await waitFor('getComputedStyle(document.querySelector(".ht-page-body")).overflowY === "visible"')
+    assert(await evaluate('getComputedStyle(document.querySelector(".ht-task-workspace")).overflowY === "auto"'))
+    assert.deepEqual(errors, [])
+    console.log('PASS cuộn nhiệm vụ: danh sách/chi tiết dài và ngắn giữ kích thước, thanh bên gọn và vùng cuộn đúng trên desktop/cửa sổ hẹp.')
+  } else if (process.env.CORE_TASK_DEPTH_ONLY === '1') {
+    const depthTasks = []
+    for (let level = 1; level <= 6; level++) {
+      depthTasks.push(makeTask(900 + level, {
+        tieuDe: 'Lồng cấp ' + level,
+        maNhiemVuCha: depthTasks.at(-1)?.ma ?? null,
+        coNhiemVuCon: level < 6,
+        daGhim: level === 5,
+        duongDanNhiemVuCha: depthTasks.map(n => ({ ma: n.ma, tieuDe: n.tieuDe, hanHoanThanh: null })),
+      }))
+    }
+    tasks.push(...depthTasks)
+    const depth5Menu = '.ht-task-list .ht-row-actions-trigger[aria-label="Thao tác với Lồng cấp 5"]'
+    await cdp('Page.navigate', { url: origin + '/tasks' })
+    await click(depth5Menu)
+    await waitFor('!!document.querySelector(".ht-row-actions-panel:popover-open")')
+    assert.equal(await evaluate('document.querySelector(".ht-row-actions-panel:popover-open").textContent.includes("Thêm bước nhỏ")'), false)
+    await evaluate('document.querySelector(".ht-row-actions-panel:popover-open").hidePopover()')
+
+    await evaluate("Array.from(document.querySelectorAll('.ht-task-name')).find(b => b.querySelector('strong').textContent === 'Lồng cấp 1').click()")
+    await waitFor('document.querySelectorAll(".ht-detail-body .ht-child-link").length === 5')
+    const nestedTitles = await evaluate('Array.from(document.querySelectorAll(".ht-detail-body .ht-child-link"), b => b.textContent)')
+    assert.deepEqual(nestedTitles, ['Lồng cấp 2', 'Lồng cấp 3', 'Lồng cấp 4', 'Lồng cấp 5', 'Lồng cấp 6'])
+    assert(await evaluate('!document.querySelector(".ht-attachments") && document.querySelector(".ht-attachment-input").nextElementSibling.textContent.includes("Các bước nhỏ")'))
+    await click('.ht-detail-step-toggle[aria-label="Thu gọn Lồng cấp 2"]')
+    await waitFor('document.querySelectorAll(".ht-detail-body .ht-child-link").length === 1')
+    await click('.ht-detail-step-toggle[aria-label="Mở rộng Lồng cấp 2"]')
+    await waitFor('document.querySelectorAll(".ht-detail-body .ht-child-link").length === 5')
+    const openStep = title => evaluate(`Array.from(document.querySelectorAll('.ht-child-link')).find(b => b.textContent === ${JSON.stringify(title)}).click()`)
+    await openStep('Lồng cấp 4')
+    await waitFor('document.querySelector(".ht-detail-title")?.textContent.includes("Lồng cấp 4") && document.querySelectorAll(".ht-child-link").length === 2')
+    await button('+ Thêm bước nhỏ')
+    await waitFor(`!!document.querySelector(${JSON.stringify('.ht-detail-body form[aria-label="Thêm bước nhỏ"]')})`)
+    await openStep('Lồng cấp 5')
+    await waitFor('document.querySelector(".ht-detail-title")?.textContent.includes("Lồng cấp 5") && document.querySelectorAll(".ht-child-link").length === 1')
+    assert.equal(await evaluate('document.querySelector(".ht-detail-body").textContent.includes("Thêm bước nhỏ")'), false)
+    await openStep('Lồng cấp 6')
+    await waitFor('document.querySelector(".ht-detail-title")?.textContent.includes("Lồng cấp 6")')
+    assert.equal(await evaluate('document.querySelector(".ht-detail-body").textContent.includes("Các bước nhỏ")'), false)
+    assert.deepEqual(errors, [])
+    console.log('PASS giới hạn cấp trên giao diện: cây thu gọn/mở rộng, cấp 4 được thêm, cấp 5 ghim ẩn thao tác, cấp 6 cũ vẫn mở được.')
+  } else if (process.env.CORE_PIN_ONLY === '1') {
+    const branch = '.ht-task-list > .ht-task-branch'
+    const childMenu = '.ht-task-list [aria-label="Thao tác với aa"].ht-row-actions-trigger'
+    await cdp('Page.navigate', { url: origin + '/tasks' })
+    await click(branch + ' .ht-parent-toggle')
+    await click(childMenu)
+    await button('Ghim nhiệm vụ')
+    await waitFor('document.querySelector(".ht-pin-heading")?.textContent === "Đã ghim"')
+    assert(await evaluate(`document.querySelector(${JSON.stringify(branch + ' .ht-pin-mark')})?.closest('.ht-task-row').querySelector('strong').textContent.endsWith('aa')`))
+    assert.equal(await evaluate(`document.querySelectorAll(${JSON.stringify(childMenu)}).length`), 1, 'Pinned child renders as one row even while its parent is expanded')
+    await cdp('Page.reload')
+    await waitFor('document.querySelector(".ht-pin-heading")?.textContent === "Đã ghim"')
+    await click(branch + ' .ht-task-name')
+    await detailAction('Bỏ ghim nhiệm vụ')
+    await waitFor('!document.querySelector(".ht-pin-heading") && !document.querySelector(".ht-detail-title .ht-pin-mark")')
+    assert.equal(tasks.find(task => task.ma === 2).daGhim, false)
+    assert.equal(calls.filter(call => call.method === 'PATCH' && call.route === '/tasks/2/pin').length, 2)
+    assert.deepEqual(errors, [])
+    console.log('PASS ghim nhiệm vụ: menu bước nhỏ, lên đầu, một hàng khi cây đang mở, tải lại và bỏ ghim từ chi tiết.')
+  } else if (process.env.CORE_ATTACHMENTS_ONLY === '1') {
     await runAttachmentChecks({ origin, cdp, evaluate, waitFor, click, button, calls, errors, userDir, controls: attachmentControls })
   } else if (process.env.CORE_REMINDERS_ONLY === '1') {
     await runReminderChecks({ origin, cdp, evaluate, waitFor, click, button, calls, errors, settingsFixture: planningFixture.controls })
@@ -337,10 +628,65 @@ try {
     sessions = [{ ma: 999, maNhiemVu: task.ma, batDauDuKien: tomorrow + 'T10:00:00Z', ketThucDuKien: tomorrow + 'T10:50:00Z', trangThai: 'Planned' }]
     await cdp('Page.navigate', { url: origin + '/tasks?tab=sessions' })
     await waitFor('!!document.querySelector(".ht-item[data-session-id]")')
+    await click('[data-session-status=Completed]')
+    await waitFor('!document.querySelector(".ht-item[data-session-id]") && document.body.innerText.includes("Chưa có phiên trong nhóm này")')
+    await cdp('Page.reload')
+    await waitFor('document.querySelector("[data-session-status=Completed]")?.getAttribute("aria-pressed") === "true"')
+    await button('Xem tất cả phiên')
     await button('Mở phiên')
     await checkEarlySession(sessions[0], task)
+
+    const plannedStart = new Date(Date.now() - 5 * 60000).toISOString()
+    const plannedEnd = new Date(Date.now() + 20 * 60000).toISOString()
+    const pomodoroSession = { ma: 1000, maNhiemVu: task.ma, batDauDuKien: plannedStart, ketThucDuKien: plannedEnd, trangThai: 'Planned' }
+    sessions = [pomodoroSession]
+    await cdp('Page.reload')
+    await waitFor(`!!document.querySelector('.ht-item[data-session-id="1000"]')`)
+    await click('.ht-item[data-session-id="1000"] button.ht-primary')
+    await waitFor('!!document.querySelector("#ht-focus-mode-heading")')
+    if (process.env.FOCUS_SCREENSHOT_DIR) {
+      fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR, { recursive: true })
+      fs.writeFileSync(path.join(process.env.FOCUS_SCREENSHOT_DIR, 'planning-mode-desktop.png'), Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
+      await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
+      await waitFor('document.querySelector("dialog[open]").getBoundingClientRect().width <= innerWidth')
+      fs.writeFileSync(path.join(process.env.FOCUS_SCREENSHOT_DIR, 'planning-mode-mobile.png'), Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
+      await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false })
+    }
+    await evaluate("const radio = document.querySelector('button[role=radio][aria-label=\"Pomodoro\"]'); radio.focus(); radio.dispatchEvent(new KeyboardEvent(\"keydown\", { key: \"ArrowRight\", bubbles: true }))")
+    await waitFor("document.querySelector('button[role=radio][aria-label=\"Đếm lên\"]').getAttribute(\"aria-checked\") === \"true\"")
+    await click('button[role=radio][aria-label="Pomodoro"]')
+    assert.equal(focusFixture.active(), null)
+    await button('Bắt đầu học')
+    await waitFor('location.pathname === "/focus" && !!document.querySelector(".focus-note-panel")')
+    assert.equal(focusFixture.active()?.cheDo, 'Pomodoro')
+    assert.equal(focusFixture.active()?.maPhienTuHoc, pomodoroSession.ma)
+    assert.deepEqual([pomodoroSession.batDauDuKien, pomodoroSession.ketThucDuKien], [plannedStart, plannedEnd])
+    focusFixture.advance(3000)
+    await button('Kết thúc')
+    await button('Lưu và kết thúc')
+    await waitFor('!!document.querySelector(".focus-completion")')
+    const record = focusFixture.records.find(row => row.maPhienTuHoc === pomodoroSession.ma)
+    const before = record.soMiliGiayDaHoc
+    await click('.focus-record-open')
+    await button('Sửa thời gian')
+    await waitFor('!!document.querySelector("dialog input[name=end]")')
+    await field('input[name=end]', await evaluate('document.querySelector("dialog input[name=start]").value'))
+    await button('Lưu thời gian')
+    await waitFor('document.querySelector("dialog [role=alert]")?.textContent.includes("phải trước")')
+    const corrected = new Date(Date.parse(record.ketThuc) - 1000)
+    const local = new Intl.DateTimeFormat('sv-SE', { timeZone: user.muiGio, dateStyle: 'short', timeStyle: 'medium' }).format(corrected).replace(' ', 'T')
+    await field('input[name=end]', local + corrected.toISOString().slice(19, -1))
+    await button('Lưu thời gian')
+    await waitFor(`!!document.querySelector('dialog[aria-label="Chi tiết lần tập trung"]')`)
+    assert.equal(record.soMiliGiayDaHoc, before - 1000)
+    assert.equal(task.tienDo, 50)
+    await button('Sửa thời gian')
+    await click('dialog details summary')
+    await waitFor('document.querySelector("dialog details[open]").textContent.includes("Trước") && document.querySelector("dialog details[open]").textContent.includes("Sau")')
+    await button('Hủy')
+    await waitFor(`!!document.querySelector('dialog[aria-label="Chi tiết lần tập trung"]')`)
     assert.deepEqual(errors, [])
-    console.log('PASS session UI: early start, actual stopwatch, reload recovery, finish without automatic progress, optional progress update. ' + calls.length + ' fixture requests.')
+    console.log('PASS session UI: cancel mode selection, scheduled Stopwatch and Pomodoro, reload, progress, time edit validation and audit. ' + calls.length + ' fixture requests.')
   } else {
   await click('.sidebar a[href="/tasks"]')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("aaa")')
@@ -405,7 +751,7 @@ try {
     const buttons = Array.from(nav.querySelectorAll('button'))
     const boxes = buttons.map(button => button.getBoundingClientRect())
     const content = document.querySelector('.ht-page-body').getBoundingClientRect()
-    return getComputedStyle(nav).flexDirection === 'column' && buttons.length === 14 &&
+    return getComputedStyle(nav).flexDirection === 'column' && ['Nhiệm vụ', 'Bảng trạng thái'].every(label => buttons.some(button => button.textContent.trim() === label)) &&
       boxes.every((box, index) => index === 0 || box.top >= boxes[index - 1].bottom) &&
       nav.getBoundingClientRect().right <= content.left
   })()`), 'Learning navigation must be vertical and positioned to the left of content')
@@ -445,7 +791,7 @@ try {
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
   await click(checked)
   await waitFor('!document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
-  await button('Xóa bộ lọc')
+  await button('Tất cả nhiệm vụ')
   await waitFor('document.querySelector(".ht-task-list")?.textContent.includes("vbbbb")')
   await field('.ht-quick-add input', 'Ghi nhanh việc cá nhân')
   await button('Thêm nhanh')
@@ -486,7 +832,7 @@ try {
   await waitFor('getComputedStyle(document.querySelector(".ht-detail-divider")).display !== "none"')
   await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
   await evaluate('document.querySelector(".ht-detail-divider").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))')
-  await waitFor('document.querySelector(".ht-detail-divider").getAttribute("aria-valuenow") === "310"')
+  await waitFor('document.querySelector(".ht-detail-divider").getAttribute("aria-valuenow") === "400"')
   if (process.env.CORE_SCREENSHOT) {
     const shot = await cdp('Page.captureScreenshot', { format: 'png' })
     fs.writeFileSync(process.env.CORE_SCREENSHOT.replace('.png', '-personal.png'), Buffer.from(shot.data, 'base64'))
@@ -519,41 +865,15 @@ try {
   await button('Đóng'); await click('.ht-sidebar-sync')
   await waitFor('document.querySelector(".ht-detail-panel h2")?.textContent === "Việc cá nhân đã sửa"')
   const deletesBefore = calls.filter(call => call.method === 'DELETE').length
-  await detailAction('Xóa nhiệm vụ')
-  await waitFor('!!document.querySelector(".ht-confirm[open]")')
-  assert(await evaluate('document.querySelector(".ht-confirm").textContent.includes("Việc cá nhân đã sửa")'))
-  assert.equal(await evaluate('document.activeElement.textContent.trim()'), 'Hủy')
-  if (process.env.CORE_SCREENSHOT) {
-    const shot = await cdp('Page.captureScreenshot', { format: 'png' })
-    fs.writeFileSync(process.env.CORE_SCREENSHOT.replace('.png', '-delete.png'), Buffer.from(shot.data, 'base64'))
-  }
-  await button('Hủy')
-  await waitFor('!document.querySelector(".ht-confirm")')
-  assert(tasks.includes(quickTask))
-  assert.equal(calls.filter(call => call.method === 'DELETE').length, deletesBefore)
-  await detailAction('Xóa nhiệm vụ')
-  await waitFor('!!document.querySelector(".ht-confirm[open]")')
-  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
-  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
-  await waitFor('!document.querySelector(".ht-confirm")')
-  assert.equal(calls.filter(call => call.method === 'DELETE').length, deletesBefore)
-  await detailAction('Xóa nhiệm vụ')
-  await waitFor('!!document.querySelector(".ht-confirm[open]")')
-  await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
-  assert(await evaluate('(() => { const b = document.querySelector(".ht-confirm").getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth && b.bottom <= innerHeight; })()'))
-  await cdp('Emulation.setDeviceMetricsOverride', { width: Number(process.env.CORE_VIEWPORT_WIDTH ?? 1440), height: Number(process.env.CORE_VIEWPORT_HEIGHT ?? 1000), deviceScaleFactor: 1, mobile: false })
   failNextDelete = true
-  await button('Xóa nhiệm vụ')
-  await waitFor('document.querySelector(".ht-confirm [role=alert]")?.textContent.includes("Chưa xóa được")')
-  assert(tasks.includes(quickTask))
-  assert(!await evaluate('!!document.querySelector(".ht-success-toast")'))
-  await evaluate('(() => { const b = document.querySelector(".ht-confirm-delete"); b.click(); b.click(); })()')
-  await waitFor('document.querySelector(".ht-confirm-delete")?.disabled === true')
-  assert(await evaluate('Array.from(document.querySelector(".ht-confirm").querySelectorAll("button")).every(b => b.disabled)'))
+  await detailAction('Chuyển vào thùng rác')
+  await waitFor('document.querySelector(".ht-error")?.textContent.includes("Chưa chuyển vào thùng rác")')
+  assert(tasks.includes(quickTask) && !trashedTasks.includes(quickTask), 'A failed trash request retains the task')
+  await detailAction('Chuyển vào thùng rác')
   await waitFor('!document.querySelector(".ht-detail-panel") && !document.querySelector(".ht-task-list")?.textContent.includes("Việc cá nhân đã sửa")')
-  assert(!tasks.includes(quickTask))
-  assert.equal(calls.filter(call => call.method === 'DELETE').length, deletesBefore + 2)
-  await waitFor('document.querySelector(".ht-success-toast")?.textContent.includes("Đã xóa nhiệm vụ")')
+  assert(!tasks.includes(quickTask) && trashedTasks.includes(quickTask), 'Trash preserves the removed task instead of permanently deleting it')
+  assert.equal(calls.filter(call => call.method === 'DELETE').length, deletesBefore)
+  await waitFor('document.querySelector(".ht-success-toast")?.textContent.includes("vào thùng rác")')
   await click('.ht-sidebar-sync')
   await waitFor('!!document.querySelector(".ht-task-list")')
   await click('.flow-global-create:not(:disabled)')
@@ -564,13 +884,14 @@ try {
   assert(calls.some(call => call.route === '/tasks' && call.method === 'POST' && call.body.tieuDe === 'Làm bài tập tuần' && call.body.maMonHoc === 207 && call.body.maHocKy === 103))
   await waitFor('document.querySelector(".ht-detail-panel h2")?.textContent === "Làm bài tập tuần"')
   await click('button[aria-label="Thao tác với Làm bài tập tuần"]')
-  await click('.ht-row-actions-panel:popover-open button:first-of-type')
+  await button('Thêm bước nhỏ')
   await field('input[name=tenBuocNho]', 'Bước nhanh từ chi tiết')
   await evaluate('document.querySelector(".ht-inline-child").requestSubmit()')
   await waitFor('document.querySelector(".ht-detail-panel")?.textContent.includes("Bước nhanh từ chi tiết")')
   const quickStep = calls.findLast(call => call.route.endsWith('/children')).body.danhSach[0]
   assert.equal(quickStep.tieuDe, 'Bước nhanh từ chi tiết')
   assert.equal(new Intl.DateTimeFormat('en-GB', { timeZone: user.muiGio, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(quickStep.hanHoanThanh)), '23:59')
+  await button('+ Thêm bước nhỏ')
   await button('Thêm nhiều bước hoặc tùy chọn')
   await field('input[name=tieuDe]', 'Luyện truy vấn SQL')
   await field('input[name=thoiLuongDuKienPhut]', '50')
@@ -610,7 +931,7 @@ try {
   await field('select[name=nhomNhiemVu]', 'tach-rieng'); await submit()
   assert.equal(studying.maNhiemVuCha, null)
   await detailAction('Xem phiên tự học')
-  await waitFor('document.body.innerText.includes("Các phiên của “Luyện truy vấn SQL”")')
+  await waitFor('document.querySelector(".ht-study-view")?.textContent.includes("Luyện truy vấn SQL")')
   await button('+ Đặt phiên tự học')
   await field('input[name=batDau]', tomorrow + 'T20:00')
   await field('input[name=ketThuc]', tomorrow + 'T20:50'); await submit()
@@ -638,13 +959,21 @@ try {
   assert.equal(sessions.find(p => p.ma === 201).trangThai, 'Completed')
   await click('[data-session-id="202"] button'); await button('Xác nhận bỏ lỡ')
   assert.equal(sessions.find(p => p.ma === 202).trangThai, 'Missed')
+  await button('Đóng')
+  await click('.sidebar a[href="/planning"]')
+  await waitFor('!!document.querySelector(".ht-planning-overview")')
   await button('Giờ rảnh của tôi'); await button('+ Thêm giờ rảnh')
   await submit()
   assert.equal(availability.length, 1)
-  await button('Chỉnh sửa')
+  await button('Danh sách')
+  await button('Sửa lịch lặp')
   await field('input[name=gioKetThuc]', '22:00'); await submit()
   assert.equal(availability[0].gioKetThuc, '22:00:00')
-  await button('Lịch học theo môn'); await button('+ Thêm buổi học')
+  await button('Lịch học theo môn')
+  await field('select[aria-label="Lọc theo học kỳ"]', '103')
+  await field('select[aria-label="Lọc theo môn học"]', '207')
+  await button('+ Thêm buổi học')
+  await waitFor('!!document.querySelector("dialog[open] input[name=toanHocKy]")')
   assert(await evaluate('document.querySelector("input[name=toanHocKy]").checked'))
   assert(!await evaluate('!!document.querySelector("dialog input[name=ngayBatDau]")'))
   assert(!await evaluate('document.querySelector("dialog").textContent.includes("Để trống cả hai ngày")'))
@@ -690,11 +1019,13 @@ try {
   await waitFor('!!document.querySelector(".ht-proposal")')
   await button('Áp dụng 1 phiên đã chọn')
   await button('Áp dụng lịch')
-  await waitFor('document.body.innerText.includes("Mất kết nối")')
+  await waitFor('document.body.innerText.includes("Chưa rõ lịch đã được lưu chưa")')
   await cdp('Page.reload')
   await waitFor('document.body.innerText.includes("Có yêu cầu áp dụng chưa xác định kết quả")')
   await button('Thử lại cùng yêu cầu áp dụng')
-  await waitFor('new URLSearchParams(location.search).get("studyBatch") === "1" && document.querySelector(".ht-success-toast")?.textContent.includes("Đã lưu 1 phiên tự học")')
+  await waitFor('!!document.querySelector("#planning-complete-title")')
+  await button('Xem phiên tự học')
+  await waitFor('new URLSearchParams(location.search).get("studyBatch") === "1"')
   const applyCall = calls.find(call => call.route === '/planning/apply')
   assert(applyCall.headers['Idempotency-Key'] || applyCall.headers['idempotency-key'])
   assert.equal(applyCall.body.tokenPreview, 'signed-fixture')
@@ -726,7 +1057,8 @@ try {
     const screenshot = await cdp('Page.captureScreenshot', { format: 'png' })
     fs.writeFileSync(process.env.CORE_SCREENSHOT, Buffer.from(screenshot.data, 'base64'))
   }
-  await button('Nhiệm vụ')
+  await click('.sidebar a[href="/tasks"]')
+  await waitFor('!!document.querySelector(".ht-task-list")')
   if (process.env.CORE_SCREENSHOT) {
     const screenshot = await cdp('Page.captureScreenshot', { format: 'png' })
     fs.writeFileSync(process.env.CORE_SCREENSHOT.replace('.png', '-tasks.png'), Buffer.from(screenshot.data, 'base64'))
@@ -739,7 +1071,10 @@ try {
   taskReadFailure = false
   await button('Thử tải lại')
   await waitFor('!!document.querySelector(".ht-task-list")')
+  await click('.sidebar a[href="/planning"]')
+  await waitFor('!!document.querySelector(".ht-planning-overview")')
   await button('Giờ rảnh của tôi')
+  await button('Danh sách')
   await waitFor('!!document.querySelector(".ht-item")')
   await button('Xóa')
   await button('Xóa giờ rảnh')
@@ -747,7 +1082,8 @@ try {
   assert.equal(availability.length, 0)
   assert.deepEqual(errors, [])
   const writes = calls.filter(call => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(call.method) && call.route !== '/auth/login')
-  assert(writes.every(call => /^\/(tasks|availability-windows|calendar|planning|study-sessions)(\/|$)/.test(call.route) || /^\/courses\/\d+\/class-sessions$/.test(call.route) || /^\/class-sessions\/\d+$/.test(call.route)))
+  const unexpectedWrites = writes.filter(call => !(/^\/(tasks|availability-windows|calendar|planning|study-sessions)(\/|$)/.test(call.route) || /^\/courses\/\d+\/class-sessions$/.test(call.route) || /^\/class-sessions\/\d+$/.test(call.route) || /^\/focus\/(start|\d+\/(pause|resume|finish))$/.test(call.route)))
+  assert.deepEqual(unexpectedWrites.map(call => ({ route: call.route, method: call.method })), [], 'Only intended task, planning and focus operations may mutate fixture data')
   console.log('PASS core UI: named selectors, task creation, small steps, availability, planning preview/apply, session actions and month calendar. ' + calls.length + ' fixture requests. Academic/auth mutations stayed untouched.')
   }
   checksPassed = true

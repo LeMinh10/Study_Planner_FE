@@ -42,7 +42,7 @@ export function NotificationSettings({ back }: { back: () => void }) {
     }}>
       <fieldset disabled={saving || loading}>
         <label className="notification-hours">Nhắc nhiệm vụ trước hạn (giờ)<input name="nhacTruocGio" type="number" min={0} max={8760} step={1} required value={hours} onChange={event => setHours(event.target.value)} /></label>
-        <p>Áp dụng cho nhiệm vụ chưa đặt giờ nhắc riêng. Nhập 0 để nhắc đúng hạn; mặc định ban đầu là 24 giờ.</p>
+        <p>Dùng cho nhiệm vụ chưa có nhắc hạn riêng. Nhập 0 để nhắc đúng hạn. Mặc định là 24 giờ.</p>
         <label className="planning-reminder-toggle"><input name="nhacKeHoach" type="checkbox" checked={planning} onChange={event => setPlanning(event.target.checked)} />Nhắc rà soát tuần và giờ rảnh sắp hết hạn</label>
         <p>Nhắc kế hoạch khi bạn mở hoặc quay lại ứng dụng. Giờ rảnh vẫn lặp khi tắt nhắc.</p>
       </fieldset>

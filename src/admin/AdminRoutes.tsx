@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { RequireAuth } from '../components/RequireAuth'
 import { roleHome } from '../auth/session'
 import { AdminCatalogPage } from './AdminCatalogPage'
+import { AdminLearningPage } from './AdminLearningPage'
 import './admin.css'
 
 export function AdminRoutes() {
@@ -24,6 +25,7 @@ export function AdminRoutes() {
      <Route index element={<Navigate to={roleHome('admin')} replace />} />
      <Route element={<AdminLayout onLogout={logout} />}>
       <Route path="overview" element={<AdminOverviewPage />} />
+      <Route path="learning" element={<AdminLearningPage />} />
       <Route path="catalog" element={<AdminCatalogPage />} />
       <Route path="students" element={<StudentAccountsPage />} />
       <Route path="students/:studentId" element={<StudentDetailsPage />} />

@@ -1,0 +1,11 @@
+.account-editor { padding:24px; }
+.account-editor fieldset { padding:0; margin:0; border:0; min-width:0; }
+.account-editor label { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; font-size:13px; }
+.account-editor input { width:100%; min-height:42px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:var(--panel); }
+.account-editor-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.account-password { display:flex; align-items:center; gap:8px; }
+.account-password button { padding:8px; border:1px solid var(--line); border-radius:6px; }
+.account-editor small, .account-editor-note { color:var(--muted); font-size:12px; line-height:1.7; }
+.account-editor-error { color:var(--coral-ink); background:var(--coral-soft); padding:12px; margin-bottom:16px; border-radius:8px; }
+.admin-account-header { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+@media(max-width:600px) { .account-editor-grid { grid-template-columns:1fr; gap:0; } .admin-account-header { flex-wrap:wrap; } }
