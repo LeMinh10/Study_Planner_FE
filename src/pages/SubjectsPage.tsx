@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { CSSProperties } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { usePlanner } from '../contexts/PlannerContext'
 import { Icon } from '../components/Icon'
@@ -71,12 +70,12 @@ export function SubjectsPage() {
       : <>
         <div className="courses-result-count" role="status">{keyword ? `${subjects.length} kết quả cho “${search.trim()}”` : `${subjects.length} môn học trong học kỳ`}</div>
         <div className={`courses-grid${view === 'list' ? ' courses-list' : ''}`}>
-          {subjects.map((subject) => <article className={`course-card ${subject.color}`} key={subject.id} style={subject.colorHex ? { '--course-color': subject.colorHex } as CSSProperties : undefined}>
+          {subjects.map((subject) => <article className="course-card" key={subject.id}>
             <div className="course-card-top"><span className="course-card-icon"><Icon name="book" size={23} /></span><span className="course-card-code">{subject.code || 'Chưa có mã môn'}</span>
               <ActionMenu label={`Tùy chọn môn ${subject.name}`}><button disabled={!canManageSubjects} onClick={() => { setNotice(''); setEditing(subject) }}><Icon name="edit" size={15} />Chỉnh sửa môn học</button><button disabled={!canManageSubjects} className="danger-text" onClick={() => requestDelete('subject', subject.id)}><Icon name="trash" size={15} />Xóa môn học</button></ActionMenu>
             </div>
             <div className="course-card-main"><h2><Link to={`/tasks?subject=${subject.id}`}>{subject.name}</Link></h2><p className={!subject.teacher ? 'course-teacher-empty' : ''}><Icon name="user" size={15} /><span>{subject.teacher || 'Chưa cập nhật giảng viên'}</span></p></div>
-            <div className="course-card-footer"><span className="course-credits"><Icon name="layers" size={14} />{subject.credits ? `${subject.credits} tín chỉ` : 'Chưa có tín chỉ'}</span><Link to={`/tasks?subject=${subject.id}`} aria-label={`Xem môn ${subject.name}`}>Xem môn học<Icon name="arrow-right" size={16} /></Link></div>
+            <div className="course-card-footer"><span className="course-credits"><Icon name="layers" size={14} />{subject.credits ? `${subject.credits} tín chỉ` : 'Chưa có tín chỉ'}</span><Link to={`/tasks?subject=${subject.id}`} aria-label={`Xem môn ${subject.name}`}>Xem nhiệm vụ<Icon name="arrow-right" size={16} /></Link></div>
           </article>)}
           {!keyword && view === 'grid' && <button className="course-add-card" disabled={!canManageSubjects} onClick={addSubject}><span><Icon name="plus" size={25} /></span><strong>Thêm môn học</strong></button>}
         </div>

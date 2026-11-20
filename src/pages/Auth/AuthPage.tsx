@@ -73,7 +73,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
             {register ? <>
               <div className="form-grid">
                 <label>Họ và tên<input name="fullName" autoComplete="name" maxLength={200} required value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
-                <label>Email<input name="email" type="email" autoComplete="email" placeholder="ban@example.com" maxLength={320} required value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} /></label>
+                <label>Email<input name="email" type="email" autoComplete="email" placeholder="MSSV@caothang.edu.vn" maxLength={320} required value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} /></label>
               </div>
               <div className="form-grid">
                 <label>MSSV<input name="studentCode" type="text" maxLength={50} required value={studentCode} onChange={(event) => setStudentCode(event.target.value)} /></label>

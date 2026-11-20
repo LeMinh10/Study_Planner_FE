@@ -44,7 +44,6 @@ export function Dashboard() {
   const sessions = agenda(events, c.now, c.zone)
   const next = nextClass(events, c.now, c.zone)
   const today = ngay(c.now, c.zone)
-  const busy = c.taskLoading || c.calendarLoading || c.priorityLoading
   const metadataPending = c.academicLoading
   const taskReady = c.tasks !== undefined && !metadataPending
   const priorityReady = taskReady && c.priorityRule !== undefined
@@ -54,15 +53,14 @@ export function Dashboard() {
   const dailyList = tab === 'today' ? pendingToday : tab === 'overdue' ? overdue : completedToday
   const time = (value: string) => new Intl.DateTimeFormat('vi-VN', { timeZone: c.zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
   const subjectName = (task: NhiemVu) => task.maMonHoc ? c.academic.subjects.find((subject) => subject.id === String(task.maMonHoc))?.name ?? 'Môn học chưa tải' : task.maHocKy ? 'Việc chung của học kỳ' : 'Việc cá nhân'
-  const subjectColor = (task: NhiemVu) => c.academic.subjects.find((subject) => subject.id === String(task.maMonHoc))?.color ?? 'blue'
 
   function TaskMeta({ task }: { task: NhiemVu }) {
-    return <div className="today-task-meta"><span className={`subject-tag ${subjectColor(task)}`}>{subjectName(task)}</span><span><Icon name="clock" size={12} />{hienGio(task.hanHieuLuc, c.zone)}</span></div>
+    return <div className="today-task-meta"><span className="subject-tag">{subjectName(task)}</span><span><Icon name="clock" size={12} />{hienGio(task.hanHieuLuc, c.zone)}</span></div>
   }
 
   return <section className="today-page" aria-label="Tổng hợp Hôm nay">
     <PageHeading eyebrow={new Intl.DateTimeFormat('vi-VN', { timeZone: c.zone, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(c.now))} title="Hôm nay">
-      <button type="button" className="button button-secondary today-reload" disabled={!c.enabled || busy} onClick={c.reload}><Icon name="reset" size={15} />{busy ? 'Đang cập nhật…' : 'Cập nhật'}</button><Link to="/tasks" className="button button-primary">Quản lý nhiệm vụ<Icon name="arrow-right" size={15} /></Link>
+      <Link to="/tasks" className="button button-primary">Quản lý nhiệm vụ<Icon name="arrow-right" size={15} /></Link>
     </PageHeading>
     {!c.enabled ? <div className="today-login-notice">Đăng nhập để xem nhiệm vụ và lịch học.</div> : <>
       <div className="today-metrics" aria-label="Tổng quan trong ngày">
@@ -114,7 +112,7 @@ export function Dashboard() {
       </div>
     </>}
     {selectedTask && <Modal title={selectedTask.tieuDe} onClose={() => setSelected(null)} side><div className="today-detail">
-      <div className="today-detail-meta"><span className={`subject-tag ${subjectColor(selectedTask)}`}>{subjectName(selectedTask)}</span><span>{trangThai[selectedTask.trangThai]}</span></div>
+      <div className="today-detail-meta"><span className="subject-tag">{subjectName(selectedTask)}</span><span>{trangThai[selectedTask.trangThai]}</span></div>
       <dl><div><dt>Hạn hoàn thành</dt><dd>{hienGio(selectedTask.hanHieuLuc, c.zone)}</dd></div><div><dt>Mức quan trọng</dt><dd>{uuTien[selectedTask.mucDoUuTien]}</dd></div><div><dt>Loại nhiệm vụ</dt><dd>{loaiViec[selectedTask.loai]}</dd></div><div><dt>Tiến độ</dt><dd>{selectedTask.tienDo}%</dd></div></dl>
       {selectedTask.moTa && <section><h3>Mô tả</h3><p className="today-description">{selectedTask.moTa}</p></section>}
       <Link to={taskHref(selectedTask)} className="button button-primary" onClick={() => setSelected(null)}>Mở trong Nhiệm vụ<Icon name="arrow-right" size={15} /></Link>

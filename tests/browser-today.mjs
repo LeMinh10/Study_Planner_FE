@@ -46,7 +46,7 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   await cdp('Emulation.setTimezoneOverride', { timezoneId: 'America/Los_Angeles' })
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false })
   const has = (text) => 'document.body.innerText.includes(' + JSON.stringify(text) + ')'
-  const ready = 'document.querySelectorAll(".today-priority-list > li").length === 5 && !!document.querySelector(".today-class-hours") && !document.querySelector(".today-reload").disabled'
+  const ready = 'document.querySelectorAll(".today-priority-list > li").length === 5 && !!document.querySelector(".today-class-hours") && !document.querySelector(".today-updating")'
   await go('/login'); await login(); await waitFor('location.pathname === "/today"')
   await waitFor('!!document.querySelector(".today-skeleton")')
   assert.equal(await evaluate('document.querySelector(".today-metrics strong").textContent'), '—')
@@ -83,7 +83,7 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   assert(!await evaluate(has('Nộp bài CSDL còn quá hạn')))
   assert.equal(await evaluate('document.querySelector(".today-next-class h2").textContent'), 'Lớp của học kỳ II')
   await go('/today')
-  await waitFor('document.querySelector(".flow-active-semester select")?.value === "12" && document.querySelector(".today-next-class h2")?.textContent === "Lớp của học kỳ II" && !document.querySelector(".today-reload").disabled')
+  await waitFor('document.querySelector(".flow-active-semester select")?.value === "12" && document.querySelector(".today-next-class h2")?.textContent === "Lớp của học kỳ II" && !document.querySelector(".today-updating")')
   assert(await evaluate(has('Việc của học kỳ II')), 'A full reload must preserve the selected semester')
   await select('.flow-active-semester select', '11'); await waitFor(ready)
   await evaluate('sessionStorage.setItem("studyplanner.selected-semester.v1:an%40example.com", "999")')
@@ -122,7 +122,7 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   // Tiêu đề dài phải xuống dòng trong bảng Hôm nay, kể cả chuỗi không có khoảng trắng.
   const longTitle = 'Các bước thực hiện nhiệm vụ '.repeat(8) + 'a'.repeat(180)
   fixture.state.tasks[0].tieuDe = longTitle
-  await click('.today-reload')
+  await evaluate('window.dispatchEvent(new Event("studyplanner:refresh"))')
   await waitFor('document.querySelector(".today-priority-list .today-task-title")?.textContent === ' + JSON.stringify(longTitle))
   for (const width of [1440, 390]) {
     await cdp('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false })
@@ -145,7 +145,7 @@ export async function runTodayChecks({ go, click, select, waitFor, evaluate, cdp
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false })
 
   fixture.state.tasks = []; fixture.state.events = []
-  await click('.today-reload')
+  await evaluate('window.dispatchEvent(new Event("studyplanner:refresh"))')
   await waitFor(has('Chưa có việc cần gợi ý'))
   assert(await evaluate(has('Chưa có buổi học trong 7 ngày tới')))
   assert.equal(await evaluate('document.querySelector(".today-progress").innerText.includes("0/0")'), true)

@@ -49,10 +49,19 @@ export function createAcademicFixture() {
     }
     if (url.pathname === '/api/v1/semesters') {
       if (method === 'POST') {
+        if (state.saveFailure) return { status: 400, response: { detail: 'Không thể lưu học kỳ lúc này.' } }
         const created = { ...body, ma: nextId++ }; state.semesters.push(created)
         return { status: 201, response: created }
       }
       return { status: 200, response: page(state.semesters, url) }
+    }
+    const semesterPath = url.pathname.match(/^\/api\/v1\/semesters\/(\d+)$/)
+    if (semesterPath && method === 'PUT') {
+      const semester = state.semesters.find(item => item.ma === Number(semesterPath[1]))
+      if (!semester) return { status: 404, response: {} }
+      if (state.saveFailure) return { status: 400, response: { detail: 'Không thể lưu học kỳ lúc này.' } }
+      Object.assign(semester, body)
+      return { status: 200, response: semester }
     }
     return { status: 404, response: {} }
   } }
@@ -72,7 +81,7 @@ export async function runSubjectChecks({ go, input, click, select, waitFor, eval
   assert(await evaluate('document.querySelector(".courses-page .button-primary").disabled'))
   await waitFor('document.querySelectorAll(".course-card").length === 3')
   fixture.state.delay = 0
-  await runSidebarSubjectChecks({ go, click, waitFor, evaluate, cdp, fixture, screenshot })
+  if (!process.argv.includes('--subject-form')) await runSidebarSubjectChecks({ go, click, waitFor, evaluate, cdp, fixture, screenshot })
   assert.equal(await evaluate('document.querySelector(".courses-totals").innerText.replace(/\\s+/g, " ").trim()'), 'Môn học 3 Tổng tín chỉ 7')
   assert(!await evaluate('!!document.querySelector(".courses-page progress")'), 'No invented task completion metrics')
   await screenshot('subjects-desktop')
@@ -88,8 +97,34 @@ export async function runSubjectChecks({ go, input, click, select, waitFor, eval
   await waitFor('location.pathname === "/subjects/new" && !!document.querySelector(".course-create-page input[name=name]")')
   assert(!await evaluate('!!document.querySelector("dialog")'), 'Create a subject on its own page')
   assert.equal(await evaluate('document.querySelector("select[name=semesterId]").value'), '11')
+  const beforeInvalid = calls.filter(call => call.method === 'POST' && call.route.endsWith('/courses')).length
+  await input('name', '')
+  await input('code', 'IT@301'); await input('credits', '31'); await input('teacher', 'An123')
+  await evaluate('document.querySelector("input[name=teacher]").focus(); document.querySelector("input[name=teacher]").blur()')
+  assert.equal(await evaluate('document.querySelectorAll(".course-editor .form-error").length'), 0, 'No field errors before the first submit, including after blur')
+  assert.equal(await evaluate('document.querySelectorAll(".course-editor [aria-invalid=true]").length'), 0)
+  assert(await evaluate('[...document.querySelectorAll(".course-editor label")].every(label => !label.textContent.includes("không bắt buộc"))'))
+  assert(await evaluate('[...document.querySelectorAll(".course-editor label")].filter(label => /Tên môn học|Học kỳ/.test(label.textContent)).every(label => label.textContent.includes("*"))'))
+  await input('name', '   ')
+  await input('credits', '')
+  await click('.course-create-page button[type=submit]')
+  await waitFor('document.querySelector("#subject-name-error")?.textContent.includes("nhập tên")')
+  await waitFor('document.querySelector("#subject-credits-error")?.textContent.includes("nhập số tín chỉ")')
+  assert(await evaluate('(() => { const field = document.querySelector("input[name=credits]"); field.value = "29"; field.stepUp(); field.dispatchEvent(new Event("input", { bubbles: true })); return field.required && field.type === "number" && field.min === "1" && field.max === "30" && field.step === "1" && field.value === "30"; })()'))
+  assert.equal(await evaluate('document.activeElement.name'), 'name')
+  await input('name', 'Môn <script>')
+  await input('code', 'IT@301'); await input('credits', '1.5'); await input('teacher', 'An123')
+  await click('.course-create-page button[type=submit]')
+  await waitFor('document.querySelectorAll(".course-editor [aria-invalid=true]").length === 4')
+  assert.equal(calls.filter(call => call.method === 'POST' && call.route.endsWith('/courses')).length, beforeInvalid)
+  await input('name', '  cơ   SỞ dữ liệu '); await input('code', ' it301 ')
+  await input('credits', '31'); await input('teacher', '')
+  await click('.course-create-page button[type=submit]')
+  await waitFor('document.querySelector("#subject-name-error")?.textContent.includes("đã tồn tại") && document.querySelector("#subject-code-error")?.textContent.includes("đã tồn tại")')
+  await input('credits', '3')
   await input('name', 'Thiết kế giao diện'); await input('code', 'UX201'); await input('teacher', 'Lê Hoài An')
-  await click('input[type=radio][value=clay]')
+  await waitFor('document.querySelectorAll(".course-editor [aria-invalid=true]").length === 0')
+  assert(!await evaluate('!!document.querySelector("input[name=color]")'))
   await screenshot('subject-create-page')
   await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
   await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
@@ -105,7 +140,6 @@ export async function runSubjectChecks({ go, input, click, select, waitFor, eval
   fixture.state.saveFailure = false
   await click('.course-create-page button[type=submit]'); await waitFor('location.pathname === "/subjects" && document.querySelectorAll(".course-card").length === 4')
   assert((await evaluate('document.querySelector(".courses-success").textContent')).includes('Đã thêm môn học'))
-  assert.equal(fixture.state.courses.find((item) => item.ma === 200).mauSac, '#E58E73')
   await click('article:has(a[href="/tasks?subject=200"]) summary')
   await click('article:has(a[href="/tasks?subject=200"]) .action-menu-items button')
   await waitFor('!!document.querySelector("dialog input[name=name]")')
@@ -149,11 +183,19 @@ export async function runSubjectChecks({ go, input, click, select, waitFor, eval
   assert(await evaluate('document.querySelector(".courses-page .heading-actions .button-primary").disabled'))
   await screenshot('subjects-error')
   fixture.state.unavailable = false
-  await click('.courses-error button'); await waitFor('document.querySelectorAll(".course-card").length === 3')
-  await runWorkspaceChecks({ go, input, click, select, waitFor, evaluate, fixture, screenshot })
+  await click('.courses-error button')
+  await waitFor('!document.querySelector("#courses-semester").disabled')
+  await select('#courses-semester', '11')
+  await waitFor('document.querySelectorAll(".course-card").length === 3')
+  if (!process.argv.includes('--subject-form')) await runWorkspaceChecks({ go, input, click, select, waitFor, evaluate, fixture, screenshot })
   fixture.state.courses = []; fixture.state.semesters = []
   await go('/subjects/new'); await waitFor('document.body.innerText.includes("Bạn cần có học kỳ trước") && !document.querySelector(".course-create-page button[type=submit]")')
   await go('/subjects'); await waitFor('document.body.innerText.includes("Bắt đầu với một học kỳ") && !!document.querySelector(".courses-empty button:not(:disabled)")')
+  if (process.argv.includes('--subject-form')) {
+    assert.deepEqual(errors, [])
+    console.log('PASS: subject form required/optional fields, invalid characters, credit limits, duplicates, correction, create/edit, failed saves, semester scope, deletion and responsive layout. Screenshots: ' + screenshotRoot)
+    return
+  }
   await click('.courses-empty button'); await input('name', 'Học kỳ mới'); await input('startDate', '2026-09-01'); await input('endDate', '2027-01-31')
   await click('dialog button[type=submit]'); await waitFor('!document.querySelector("dialog") && document.body.innerText.includes("Học kỳ này chưa có môn học")')
   assert.equal(fixture.state.semesters.length, 1)

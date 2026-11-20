@@ -40,7 +40,7 @@ export function StatusBadge({ task }: { task: PlannerTask }) {
 export function SubjectBadge({ id }: { id: string }) {
   const { data } = usePlanner()
   const subject = data.subjects.find((item) => item.id === id)
-  return <span className={`subject-tag ${subject?.color ?? 'sage'}`}>{subject?.name ?? 'Môn học đã xóa'}</span>
+  return <span className="subject-tag">{subject?.name ?? 'Môn học đã xóa'}</span>
 }
 export function TaskRows({ tasks, showReason = false }: { tasks: PlannerTask[]; showReason?: boolean }) {
   const { openTask, now } = usePlanner()

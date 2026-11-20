@@ -73,10 +73,6 @@ h1 { font-size: clamp(28px, 2.4vw, 39px); font-weight: 500; letter-spacing: -1.5
 h2 { font-size: 17px; font-weight: 500; letter-spacing: -.4px; line-height: 1.5; }
 .subtle-button { border: 1px solid #dce2d1; border-radius: 4px; background: #fafbf5; color: #657957; padding: 5px 9px; font-size: 10px; white-space: nowrap; }
 .subtle-button:hover { background: #edf1e3; }
-.sage { --subject-bg: #edf2e5; --subject-border: #dee6d2; --subject-accent: #93a279; --subject-ink: #5d7248; }
-.clay { --subject-bg: #faf0e5; --subject-border: #efdfcb; --subject-accent: #c3a17c; --subject-ink: #89623a; }
-.lavender { --subject-bg: #f0edf6; --subject-border: #e2dced; --subject-accent: #ada1bb; --subject-ink: #7e6695; }
-.blue { --subject-bg: #eaf1f5; --subject-border: #d9e6ef; --subject-accent: #91b0c5; --subject-ink: #517a96; }
 .subject-symbol { display: grid; place-items: center; width: 38px; height: 41px; background: var(--subject-bg); border: 1px solid var(--subject-border); border-radius: 5px; color: var(--subject-ink); flex-shrink: 0; }
 .text-button { display: inline-flex; align-items: center; gap: 7px; color: #607650; background: transparent; border: 0; padding: 0; font-size: 11px; }
 .text-button:hover { text-decoration: underline; text-underline-offset: 4px; }

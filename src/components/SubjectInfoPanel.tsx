@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
 import { usePlanner } from '../contexts/PlannerContext'
 import type { Subject } from '../types/planner'
 import { formatDate } from '../utils/planner'
@@ -29,7 +28,7 @@ export function SubjectInfoPanel({ subject, onClose }: { subject: Subject; onClo
   if (editing) return <SubjectEditor subject={subject} onClose={() => setEditing(false)} onSaved={() => setNotice('Đã cập nhật thông tin môn học.')} />
 
   return <Modal title="Thông tin môn" side onClose={onClose}>
-    <div className={`subject-info-panel ${subject.color}`} style={subject.colorHex ? { '--course-color': subject.colorHex } as CSSProperties : undefined}>
+    <div className="subject-info-panel">
       <div className="subject-info-identity"><span className="course-card-icon"><Icon name="book" size={28} /></span><div><span>{subject.code || 'Chưa có mã môn'}</span><h2>{subject.name}</h2></div></div>
       {state.loading && <p className="subject-info-status" role="status">Đang tải thông tin môn học…</p>}
       {state.error && <div className="subject-info-error" role="alert"><p>{state.error}</p><button className="button button-secondary" disabled={academicBusy} onClick={() => { setState({ loading: true, error: '' }); setRevision((value) => value + 1) }}><Icon name="reset" size={15} />Thử lại</button></div>}
