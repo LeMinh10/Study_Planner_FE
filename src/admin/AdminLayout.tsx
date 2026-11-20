@@ -8,9 +8,10 @@ export function AdminLayout({ onLogout }: { onLogout: () => void }) {
   const { search } = useLocation()
   const isCatalog = useMatch('/admin/catalog')
   const isOverview = useMatch('/admin/overview')
+  const isLearning = useMatch('/admin/learning')
   const isPriorityRules = useMatch('/admin/priority-rules')
   const isStudentDetails = useMatch('/admin/students/:studentId')
-  const pageTitle = isCatalog ? 'Danh mục môn học & học kỳ' : isOverview ? 'Tổng quan' : isPriorityRules ? 'Quy tắc ưu tiên' : isStudentDetails ? 'Chi tiết sinh viên' : 'Tài khoản sinh viên'
+  const pageTitle = isLearning ? 'Theo dõi học tập' : isCatalog ? 'Danh mục môn học & học kỳ' : isOverview ? 'Tổng quan' : isPriorityRules ? 'Quy tắc ưu tiên' : isStudentDetails ? 'Chi tiết sinh viên' : 'Tài khoản sinh viên'
   return <div className="admin-layout">
     <a className="skip-link" href="#admin-content">Đến nội dung chính</a>
     <aside className="admin-sidebar">
@@ -19,6 +20,7 @@ export function AdminLayout({ onLogout }: { onLogout: () => void }) {
       <nav aria-label="Menu quản trị">
         <NavLink to="/admin/overview" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}><Icon name="overview" size={19} />Tổng quan</NavLink>
         <NavLink to="/admin/students" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}><Icon name="user" size={19} />Tài khoản sinh viên</NavLink>
+        <NavLink to="/admin/learning" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}><Icon name="chart" size={19} />Theo dõi học tập</NavLink>
         <NavLink to="/admin/priority-rules" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}><Icon name="flag" size={19} />Quy tắc ưu tiên</NavLink>
         <NavLink to="/admin/catalog" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}><Icon name="layers" size={19} />Danh mục môn học & học kỳ</NavLink>
       </nav>

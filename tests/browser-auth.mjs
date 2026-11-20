@@ -15,6 +15,8 @@ import { createPriorityFixture, runPriorityChecks } from './browser-priority-rul
 import { createOverviewFixture, overviewUsers, runOverviewChecks } from './browser-overview.mjs'
 import { createSessionLockFixture, runSessionLockChecks } from './browser-session-lock.mjs'
 import { createStatisticsFixture, runStatisticsChecks } from './browser-statistics.mjs'
+import { createLearningFixture, runLearningChecks } from './browser-admin-learning.mjs'
+import { createAccountEditorFixture, runAccountEditorChecks } from './browser-admin-accounts.mjs'
 import { createCatalogFixture, runCatalogChecks } from './browser-catalog.mjs'
 import { createSuggestionsFixture, runCourseSuggestionChecks } from './browser-course-suggestions.mjs'
 
@@ -29,8 +31,10 @@ const overviewOnly = process.argv.includes('--overview')
 const sessionLockOnly = process.argv.includes('--session-lock')
 const suggestionsOnly = process.argv.includes('--course-suggestions')
 const catalogOnly = process.argv.includes('--catalog')
+const learningOnly = process.argv.includes('--admin-learning')
+const accountEditorOnly = process.argv.includes('--admin-accounts')
 const statisticsOnly = process.argv.includes('--statistics')
-for (const useLocalMock of loginValidationOnly || subjectsOnly || todayOnly || notificationsOnly || priorityOnly || overviewOnly || sessionLockOnly || statisticsOnly || catalogOnly || suggestionsOnly ? [false] : [false, true]) {
+for (const useLocalMock of learningOnly || accountEditorOnly || loginValidationOnly || subjectsOnly || todayOnly || notificationsOnly || priorityOnly || overviewOnly || sessionLockOnly || statisticsOnly || catalogOnly || suggestionsOnly ? [false] : [false, true]) {
 const tempPrefix = path.join(os.tmpdir(), 'studyplanner-auth-test-')
 const userDir = fs.mkdtempSync(tempPrefix)
 const sessionLockFixture = createSessionLockFixture()
@@ -99,6 +103,8 @@ try {
   if (overviewOnly) managedUsers.splice(0, managedUsers.length, ...overviewUsers())
   const suggestionsFixture = createSuggestionsFixture()
   const catalogFixture = createCatalogFixture()
+  const learningFixture = createLearningFixture()
+  const accountEditorFixture = createAccountEditorFixture(() => managedUsers)
   const overviewFixture = createOverviewFixture(() => managedUsers)
   const token = (role) => 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expiresIn, role })).toString('base64url') + '.mock'
   let activeRole = 'sinhvien'
@@ -115,7 +121,7 @@ try {
       const body = request.postData ? JSON.parse(request.postData) : undefined
       calls.push({ route, query: requestUrl.search, method: request.method, body })
       let status = 200, response
-      const academicReply = await suggestionsFixture.handle(requestUrl, request.method) || await catalogFixture.handle(requestUrl, request.method, body, activeRole) || (statisticsOnly ? await statisticsFixture.handle(requestUrl, request.method) : null) || await overviewFixture.handle(requestUrl, request.method, activeRole) || await priorityFixture.handle(requestUrl, request.method, body) || notificationFixture.handle(requestUrl, request.method, body) || (todayFixture ? await todayFixture.handle(requestUrl, request.method) : null) || (academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null)
+      const academicReply = await learningFixture.handle(requestUrl, request.method, activeRole) || await accountEditorFixture.handle(requestUrl, request.method, body, activeRole) || await suggestionsFixture.handle(requestUrl, request.method) || await catalogFixture.handle(requestUrl, request.method, body, activeRole) || (statisticsOnly ? await statisticsFixture.handle(requestUrl, request.method) : null) || await overviewFixture.handle(requestUrl, request.method, activeRole) || await priorityFixture.handle(requestUrl, request.method, body) || notificationFixture.handle(requestUrl, request.method, body) || (todayFixture ? await todayFixture.handle(requestUrl, request.method) : null) || (academicFixture ? await academicFixture.handle(requestUrl, request.method, body) : null)
       if (academicReply) { status = academicReply.status; response = academicReply.response }
       else if (route === '/api/v1/auth/register') {
         if (registered) { status = 409; response = { thongBao: 'Email đã tồn tại.' } }
@@ -260,7 +266,11 @@ try {
     await input('password', password); await input('confirmPassword', password)
   }
 
-  if (loginValidationOnly) {
+  if (learningOnly) {
+    await runLearningChecks({ go, click, select, waitFor, evaluate, cdp, login, fixture: learningFixture, calls, errors })
+  } else if (accountEditorOnly) {
+    await runAccountEditorChecks({ go, click, input, waitFor, evaluate, cdp, login, fixture: accountEditorFixture, calls, errors })
+  } else if (loginValidationOnly) {
     await runLoginValidationChecks({ go, input, click, waitFor, evaluate, cdp, calls, errors, password })
   } else if (suggestionsOnly) {
     await runCourseSuggestionChecks({ go, login, input, click, select, waitFor, evaluate, cdp, fixture: suggestionsFixture, academic: academicFixture, calls, errors })

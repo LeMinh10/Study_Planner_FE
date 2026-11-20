@@ -5,11 +5,13 @@ import { getUser } from '../api/admin'
 import { ApiError } from '../api/client'
 import { AccountStatusButton } from './AccountStatusButton'
 import { useAdminResource } from './useAdminResource'
+import { StudentAccountEditor } from './StudentAccountEditor'
 
 export function StudentDetailsPage() {
   const { studentId = '' } = useParams()
   const { search } = useLocation()
   const [message, setMessage] = useState('')
+  const [editing, setEditing] = useState(false)
   const load = useCallback((token: string, signal: AbortSignal) => getUser(token, studentId, signal), [studentId])
   const { data: student, loading, error, reload } = useAdminResource(load)
   const notFound = error instanceof ApiError && [400, 404].includes(error.status)
@@ -38,7 +40,10 @@ export function StudentDetailsPage() {
         <div><dt>Ngày tạo tài khoản</dt><dd>{new Date(student.createdAt).toLocaleString('vi-VN')}</dd></div>
         <div><dt>Cập nhật lần cuối</dt><dd>{new Date(student.updatedAt).toLocaleString('vi-VN')}</dd></div>
       </dl>
+      {student.role === 'sinhvien' && <Link className="admin-detail-button" to={`/admin/learning?student=${studentId}`}>Xem học tập</Link>}
       <AccountStatusButton key={studentId} account={student} onUpdated={(message) => { setMessage(message); reload() }} />
+      {student.role === 'sinhvien' && <button type="button" className="admin-detail-button" onClick={() => setEditing(true)}>Sửa thông tin</button>}
     </article>}
+    {editing && student && <StudentAccountEditor student={student} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); setMessage('Đã cập nhật thông tin sinh viên.'); reload() }} />}
   </section>
 }

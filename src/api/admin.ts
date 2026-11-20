@@ -59,3 +59,32 @@ export async function setUserActive(token: string, id: string, active: boolean):
   if (typeof body.thongBao !== 'string' || typeof body.dangHoatDong !== 'boolean' || body.dangHoatDong !== active) throw new ApiError('Máy chủ chưa xác nhận trạng thái tài khoản được cập nhật.')
   return { message: body.thongBao, isActive: body.dangHoatDong }
 }
+
+export interface ManagedStudentInput {
+  name: string
+  email: string
+  studentId: string
+  schoolName: string
+  className: string
+  major: string
+  password?: string
+}
+
+// Chỉ gửi các trường hồ sơ được phép. Không nhận vai trò, hash mật khẩu hoặc
+// mã chủ sở hữu từ form, kể cả khi đối tượng đầu vào có thêm các trường đó.
+export async function saveManagedStudent(token: string, input: ManagedStudentInput, original?: ManagedUser): Promise<ManagedUser> {
+  const name = input.name.trim(), email = input.email.trim()
+  if (!name || name.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320 ||
+    input.studentId.trim().length > 50 || [input.schoolName, input.className, input.major].some(v => v.trim().length > 200)) throw new ApiError('Kiểm tra họ tên, email và độ dài thông tin hồ sơ.', 400)
+  if (!original && (!input.password || input.password.length < 8 || input.password.length > 128)) throw new ApiError('Mật khẩu tài khoản mới phải có từ 8 đến 128 ký tự.', 400)
+  if (original && original.role !== 'sinhvien') throw new ApiError('Biểu mẫu này chỉ chỉnh sửa hồ sơ sinh viên.', 403)
+  const payload = {
+    hoTen: name, email, maSoSinhVien: input.studentId.trim() || null,
+    tenTruong: input.schoolName.trim() || null, tenLop: input.className.trim() || null, nganhHoc: input.major.trim() || null,
+    // Sửa hồ sơ giữ trạng thái đã đọc; backend kiểm tra mốc cập nhật trong cùng
+    // giao dịch để không vô tình mở lại tài khoản vừa bị người khác khóa.
+    dangHoatDong: original ? original.status === 'active' : true,
+    ...(original ? { ngayCapNhatMongDoi: original.updatedAt } : { matKhau: input.password }),
+  }
+  return parseUser(await apiRequest(usersPath + (original ? '/' + userId(original.id) : ''), { token, method: original ? 'PUT' : 'POST', body: payload }))
+}
